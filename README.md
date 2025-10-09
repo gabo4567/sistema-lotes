@@ -1,6 +1,3 @@
----
-
-````markdown
 # 🟢 Sistema de Gestión del Lote de Trabajo y Turnos para Productores
 
 **Descripción:**  
