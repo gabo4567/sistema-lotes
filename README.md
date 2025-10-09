@@ -1,7 +1,3 @@
-¡Perfecto, Juan! 😄 Con toda la información que me diste, puedo armar un **README profesional, completo y con emojis** para tu repositorio. Te va a quedar listo para presentar o para que cualquiera que abra el repositorio entienda el proyecto.
-
-Aquí te paso el contenido listo para copiar y pegar en GitHub:
-
 ---
 
 ````markdown
