@@ -1,4 +1,4 @@
-# 📊 Diagramas - Sistema de Gestión del Lote de Trabajo y Turnos para Productores
+# 📊 Diagramas - Sistema de Gestión de Lotes de Tabaco y Turnos para Productores
 
 Esta carpeta contiene todos los **diagramas del sistema**, que ayudan a comprender la estructura, los casos de uso y los flujos de información entre los actores y el sistema.  
 
