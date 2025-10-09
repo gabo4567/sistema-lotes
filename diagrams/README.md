@@ -8,10 +8,10 @@ Esta carpeta contiene todos los **diagramas del sistema**, que ayudan a comprend
 
 | Diagrama | Descripción |
 |----------|-------------|
-| `caso_uso_general.png` | Diagrama de casos de uso general del sistema, mostrando los actores principales y las funcionalidades clave. |
-| `caso_uso_productor_admin.png` | Diagrama de casos de uso específico para productores y administradores, diferenciando las funcionalidades de la web y la app móvil. |
-| `secuencia_productor.png` | Diagrama de secuencia enfocado en el productor, mostrando la solicitud de turnos y la confirmación por el sistema. |
-| `entidad_relacion_general.png` | Diagrama de entidad-relación general del sistema, mostrando todas las entidades, atributos y relaciones clave. |
+| `Diagrama C-U General TFI.png` | Diagrama de casos de uso general del sistema, mostrando los actores principales y las funcionalidades clave. |
+| `Diagrama C-U Productor-Administrador.png` | Diagrama de casos de uso específico para productores y administradores, diferenciando las funcionalidades de la web y la app móvil. |
+| `Diagrama de Secuencia (Productor).png` | Diagrama de secuencia enfocado en el productor, mostrando la solicitud de turnos y la confirmación por el sistema. |
+| `Diagrama ER General del Sistema.png` | Diagrama de entidad-relación general del sistema, mostrando todas las entidades, atributos y relaciones clave. |
 
 ---
 
