@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "backend",
   "version": "1.0.0",
   "description": "Backend del sistema integrado de lotes de tabaco (Instituto Provincial del Tabaco - Goya, Corrientes)",
@@ -18,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0",
+    "firebase": "^12.5.0",
     "firebase-admin": "^13.5.0"
   },
   "devDependencies": {

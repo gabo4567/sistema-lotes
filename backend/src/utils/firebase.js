@@ -1,17 +1,26 @@
-const admin = require('firebase-admin');
-const { getFirestore } = require('firebase-admin/firestore');
-const path = require('path');
+// src/utils/firebase.js
+import admin from "firebase-admin";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
+
+// Resolver __dirname en ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Ruta absoluta al archivo de credenciales
-const serviceAccount = require(path.join(__dirname, '../../serviceAccountKey.json'));
+const serviceAccountPath = path.join(__dirname, "../../serviceAccountKey.json");
 
-// Inicializa Firebase solo una vez
+// Leer y parsear el archivo JSON manualmente
+const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+
+// Inicializar Firebase solo una vez
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
 }
 
-const db = getFirestore();
+const db = admin.firestore();
 
-module.exports = { db };
+export { admin, db };
