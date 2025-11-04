@@ -15,6 +15,8 @@ import productoresRoutes from "./routes/productores.routes.js";
 import ordenesRoutes from "./routes/ordenes.routes.js";
 import medicionesRoutes from "./routes/mediciones.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
+import informesRoutes from "./routes/informes.routes.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +35,10 @@ app.use("/api/mediciones", medicionesRoutes);
 console.log("📢 Intentando registrar las rutas de /api/turnos...");
 app.use("/api/turnos", turnosRoutes);
 console.log("✅ Rutas de turnos registradas correctamente");
+
+// 🧭 Nueva ruta de informes
+app.use("/api/informes", informesRoutes);
+console.log("✅ Rutas de informes registradas correctamente");
 
 app.get("/", (req, res) => {
   res.send("Servidor del Sistema de Lotes funcionando correctamente 🚀");

@@ -186,6 +186,7 @@ export const obtenerTurnosPorProductor = async (req, res) => {
   }
 };
 
+
 // 📅 Obtener turnos por rango de fechas
 export const obtenerTurnosPorRangoFechas = async (req, res) => {
   try {
@@ -197,13 +198,20 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
       });
     }
 
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    fin.setHours(23, 59, 59, 999);
+    // 👇 Forzar el uso de UTC y cubrir el día completo
+    const inicio = new Date(`${fechaInicio}T00:00:00.000Z`);
+    const fin = new Date(`${fechaFin}T23:59:59.999Z`);
+
+    console.log("DEBUG RANGO:",
+      "inicio =", inicio.toISOString(),
+      "| fin =", fin.toISOString()
+    );
 
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       return res.status(400).json({ message: "Formato de fecha inválido" });
     }
+
+    console.log("📅 Consultando rango:", inicio.toISOString(), "->", fin.toISOString());
 
     const snapshot = await db
       .collection("turnos")
@@ -213,7 +221,7 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
       .get();
 
     if (snapshot.empty) {
-      return res.status(404).json({ message: "Turno no encontrado" });
+      return res.status(404).json({ message: "No se encontraron turnos en el rango especificado" });
     }
 
     const turnos = snapshot.docs.map(doc => ({
@@ -230,6 +238,7 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
     });
   }
 };
+
 
 // 🧩 Función auxiliar: convierte Timestamps a ISO string
 const convertirTimestamps = (data) => {
