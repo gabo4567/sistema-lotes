@@ -1,4 +1,4 @@
-# 🟢 Sistema de Gestión del Lotes de Tabaco y Turnos para Productores
+# 🟢 Sistema de Gestión de Lotes de Tabaco y Turnos para Productores
 
 **Descripción:**  
 Aplicación web y móvil para la gestión integral de lotes de tabaco y turnos de productores, optimizando la comunicación entre los productores y el Instituto Provincial del Tabaco.
