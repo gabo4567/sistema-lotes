@@ -133,9 +133,10 @@ La API permite filtrar y ordenar resultados, además de incluir paginación bás
 
 ## 👥 Equipo de desarrollo
 
-Juan Gabriel Pared – Backend y documentación técnica
-
-Bautista Capovilla – Frontend y coordinación general
+| **Integrante**               | **Rol en el proyecto**                                                                                      |
+| :--------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| 🧑‍💻 **Juan Gabriel Pared** | Coordinación general del proyecto, desarrollo del **backend** y de la **aplicación móvil** para productores |
+| 💻 **Bautista Capovilla**    | Desarrollo de la **aplicación web** para administradores del sistema                                        |
 
 ---
 
