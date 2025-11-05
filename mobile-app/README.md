@@ -128,10 +128,10 @@ MobileApp/
 
 ## 👨‍💻 Responsables
 
-| Integrante             | Rol                        | Responsabilidad principal                                                             |
-| ---------------------- | -------------------------- | ------------------------------------------------------------------------------------- |
-| **Juan Gabriel Pared** | Backend & Mobile Developer | Coordinación general, desarrollo de la API y de la aplicación móvil para productores. |
-| **Bautista Capovilla** | Frontend Developer         | Desarrollo de la aplicación web para administradores del sistema.                     |
+| 👤 **Integrante**      | 💼 **Rol**                     | 🧩 **Responsabilidad principal**                                                      |
+| ---------------------- | ------------------------------ | ------------------------------------------------------------------------------------- |
+| **Juan Gabriel Pared** | **Backend & Mobile Developer** | Coordinación general, desarrollo de la API y de la aplicación móvil para productores. |
+| **Bautista Capovilla** | **Frontend Developer**         | Desarrollo de la aplicación web para administradores del sistema.                     |
 
 ---
 
