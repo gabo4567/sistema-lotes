@@ -146,6 +146,7 @@ backend/
 
 ## 📬 Contacto
 
-📧 [Instituto Provincial del Tabaco – Goya, Corrientes]
+Para consultas o más información, contactar con el **equipo organizador del proyecto**.
 
-🌐 Proyecto académico: Tecnicatura Universitaria en Programación – UTN FRRe
+---
+
