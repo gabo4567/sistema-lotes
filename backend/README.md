@@ -113,21 +113,21 @@ backend/
 
 ## 🧪 Pruebas y colección de Postman
 
-Importar el archivo sistema-lotes.postman_collection.json en Postman.
+- Importar el archivo sistema-lotes.postman_collection.json en Postman.
 
-Probar los endpoints autenticados generando un Access Token mediante login.
+- Probar los endpoints autenticados generando un Access Token mediante login.
 
-La API permite filtrar y ordenar resultados, además de incluir paginación básica.
+- La API permite filtrar y ordenar resultados, además de incluir paginación básica.
 
-📈 Futuras mejoras
+- 📈 Futuras mejoras
 
-🔐 Implementar roles y permisos avanzados por tipo de usuario
+- 🔐 Implementar roles y permisos avanzados por tipo de usuario
 
-📤 Generación automática de reportes en PDF
+- 📤 Generación automática de reportes en PDF
 
-📩 Notificaciones push a la app móvil
+- 📩 Notificaciones push a la app móvil
 
-🧭 Endpoints para métricas detalladas por campaña
+- 🧭 Endpoints para métricas detalladas por campaña
 
 ---
 
