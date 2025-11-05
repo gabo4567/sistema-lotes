@@ -1,4 +1,4 @@
-# 🟢 Sistema de Gestión del Lote de Trabajo y Turnos para Productores
+# 🟢 Sistema de Gestión de Lotes de Tabaco y Turnos para Productores
 
 **Descripción:**  
 Aplicación web y móvil para la gestión integral de lotes de tabaco y turnos de productores, optimizando la comunicación entre los productores y el Instituto Provincial del Tabaco.
@@ -95,8 +95,10 @@ sistema-lotes/
 
 ## 👥 Equipo de desarrollo
 
-* Juan Gabriel Pared
-* Bautista Capovilla
+| **Integrante**               | **Rol en el proyecto**                                                                                      |
+| :--------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| 🧑‍💻 **Juan Gabriel Pared** | Coordinación general del proyecto, desarrollo del **backend** y de la **aplicación móvil** para productores |
+| 💻 **Bautista Capovilla**    | Desarrollo de la **aplicación web** para administradores del sistema                                        |
 
 ---
 

@@ -1,0 +1,1049 @@
+{
+	"info": {
+		"_postman_id": "8f3756d5-274f-4017-b308-1921efda2fb3",
+		"name": "sistema-lotes",
+		"description": "Aplicación web y móvil para la gestión integral de lotes de tabaco y turnos de productores, optimizando la comunicación entre los productores y el Instituto Provincial del Tabaco.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "44719452",
+		"_collection_link": "https://juangabrielpared.postman.co/workspace/Juan-Gabriel-Pared's-Workspace~cbaa80e1-1ed9-49a5-8fea-ca86edeeb788/collection/44719452-8f3756d5-274f-4017-b308-1921efda2fb3?action=share&source=collection_link&creator=44719452"
+	},
+	"item": [
+		{
+			"name": "get users",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/users",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"users"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post users",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"nombre\": \"Juan Perez\",\r\n  \"email\": \"juan@example.com\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/users",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"users"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "sign up user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"nombre\": \"Juan Perez\",\r\n  \"email\": \"juan@example.com\",\r\n  \"password\": \"12345678\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/auth/register",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "login user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"email\": \"juan@example.com\",\r\n  \"password\": \"12345678\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/auth/login",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "crear lote",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"nombre\": \"Lote 2\",\r\n  \"productorId\": \"AdzPq9p9M9fKcm2JcbZ8gMD9rO52\",\r\n  \"superficie\": 3.5,\r\n  \"estadoCultivo\": \"siembra\",\r\n  \"coordenadas\": { \"lat\": -29.200, \"lng\": -59.675 },\r\n  \"fechaCreacion\": \"2025-11-03T00:00:00Z\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/lotes",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get lotes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/lotes",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get lote por id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/lotes/L8W1gaPFI2EPiECb6HVT",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes",
+						"L8W1gaPFI2EPiECb6HVT"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update lote",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"nombre\": \"Lote 1 Modificado\",\r\n  \"superficie\": 3.0,\r\n  \"estadoCultivo\": \"cosecha\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/lotes/L8W1gaPFI2EPiECb6HVT",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes",
+						"L8W1gaPFI2EPiECb6HVT"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete lote",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/lotes/utui0O8kJnVBROUfNeoN",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes",
+						"utui0O8kJnVBROUfNeoN"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post productor",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"nombre\": \"Juan Perez\",\r\n  \"email\": \"juan@example.com\",\r\n  \"telefono\": \"12345678\",\r\n  \"direccion\": \"Goya, Corrientes\",\r\n  \"fechaRegistro\": \"2025-11-03T00:00:00Z\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/productores",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get productores",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/productores",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get productor por id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/productores/imKf9nsd2zg3aSv2yRzf",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores",
+						"imKf9nsd2zg3aSv2yRzf"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update productor",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"telefono\": \"87654321\",\r\n  \"direccion\": \"Goya, Corrientes - Nuevo barrio\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/productores/imKf9nsd2zg3aSv2yRzf",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores",
+						"imKf9nsd2zg3aSv2yRzf"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete productor",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/productores/imKf9nsd2zg3aSv2yRzf",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores",
+						"imKf9nsd2zg3aSv2yRzf"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post orden",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"productorId\": \"AdzPq9p9M9fKcm2JcbZ8gMD9rO52\",\r\n  \"tipo\": \"Entrega de insumos\",\r\n  \"estado\": \"pendiente\",\r\n  \"fecha\": \"2025-11-10T08:00:00Z\",\r\n  \"detalles\": \"50 kg de fertilizante\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get ordenes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get orden por id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes/pHoelc4IioF9mKxHQZ9H",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes",
+						"pHoelc4IioF9mKxHQZ9H"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update orden",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"estado\": \"completada\",\r\n  \"detalles\": \"Entrega finalizada\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes/pHoelc4IioF9mKxHQZ9H",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes",
+						"pHoelc4IioF9mKxHQZ9H"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete orden",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes/pHoelc4IioF9mKxHQZ9H",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes",
+						"pHoelc4IioF9mKxHQZ9H"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "lotes inactivos",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/lotes/inactivos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"lotes",
+						"inactivos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "productor inactivo",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/productores/inactivos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"productores",
+						"inactivos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "orden inactiva",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/ordenes/inactivas",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"ordenes",
+						"inactivas"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post medicion",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"loteId\": \"NcGczAOhqXizkH28pufm\",\r\n  \"humedad\": 60,\r\n  \"temperatura\": 25,\r\n  \"observaciones\": \"Medición inicial de prueba\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get medicion",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "medicion inactiva",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones/inactivos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones",
+						"inactivos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "medicion por id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones/EyiXIMEXexciD7uhRzbZ",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones",
+						"EyiXIMEXexciD7uhRzbZ"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update medicion",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"humedad\": 65,\r\n  \"observaciones\": \"Actualización de prueba\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones/EyiXIMEXexciD7uhRzbZ",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones",
+						"EyiXIMEXexciD7uhRzbZ"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete medicion",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/mediciones/EyiXIMEXexciD7uhRzbZ",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"mediciones",
+						"EyiXIMEXexciD7uhRzbZ"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "post turno",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"productorId\": \"CIWhOpHyb4bzvqLvtcx9\",\r\n  \"fechaTurno\": \"2025-11-20T09:30:00\",\r\n  \"motivo\": \"Retiro de insumos agrícolas\",\r\n  \"tipoTurno\": \"Entrega\",\r\n  \"observaciones\": \"El productor debe traer documentación.\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/turnos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get api turno",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/ping",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"ping"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get turno",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/turnos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get turno por id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/yc7sFp8pINIteo59C5J9",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"yc7sFp8pINIteo59C5J9"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update turno",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"hora\": \"11:00\",\r\n  \"estado\": \"confirmado\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/yc7sFp8pINIteo59C5J9",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"yc7sFp8pINIteo59C5J9"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete turno",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/yc7sFp8pINIteo59C5J9",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"yc7sFp8pINIteo59C5J9"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get turno por estado",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"//\": \"Estados posibles para los turnos:\",\r\n  \"1\": \"pendiente\",\r\n  \"2\": \"confirmado\",\r\n  \"3\": \"cancelado\",\r\n  \"4\": \"completado\",\r\n  \"5\": \"vencido\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/estado/pendiente",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"estado",
+						"pendiente"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get turno por fecha",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/turnos/filtro/fechas?fechaInicio=2025-11-01&fechaFin=2025-11-30",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"turnos",
+						"filtro",
+						"fechas"
+					],
+					"query": [
+						{
+							"key": "fechaInicio",
+							"value": "2025-11-01"
+						},
+						{
+							"key": "fechaFin",
+							"value": "2025-11-30"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get informe",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/resumen-general",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"resumen-general"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get informe productor",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/productores-activos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"productores-activos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "informe ordenes por mes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/ordenes-por-mes?mes=2025-11",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"ordenes-por-mes"
+					],
+					"query": [
+						{
+							"key": "mes",
+							"value": "2025-11"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "informes a pdf",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/exportar/pdf?tipo=RESUMEN",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"exportar",
+						"pdf"
+					],
+					"query": [
+						{
+							"key": "tipo",
+							"value": "RESUMEN"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "informes a excel",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/exportar/excel?tipo=PRODUCTORES",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"exportar",
+						"excel"
+					],
+					"query": [
+						{
+							"key": "tipo",
+							"value": "PRODUCTORES"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "informe turno por estado",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/informes/turnos-por-estado?estado=pendiente",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"informes",
+						"turnos-por-estado"
+					],
+					"query": [
+						{
+							"key": "estado",
+							"value": "pendiente"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

@@ -1,53 +1,71 @@
-# 📂 Base de Datos - Sistema de Gestión del Lote de Trabajo y Turnos para Productores
+# 📂 Base de Datos - Sistema de Gestión de Lotes y Turnos para Productores
 
-Esta carpeta contiene **todos los archivos relacionados con la base de datos** del proyecto, incluyendo scripts de creación, esquemas y referencias para su uso en MySQL.
+Esta carpeta contiene los archivos de referencia del modelo de base de datos original del proyecto.
+Inicialmente, el sistema fue diseñado utilizando MySQL, pero en la versión actual se implementó completamente con Firebase como servicio principal de base de datos.
 
 ---
 
 ## 📁 Contenido de la carpeta
-
-| Archivo | Descripción |
-|---------|-------------|
-| `sistema_lotes.sql` | Script completo para crear la base de datos y todas las tablas necesarias para el sistema. Incluye relaciones, claves primarias y foráneas. |
-| `sistema_lotes_erd.sql` | Esquema SQL generado desde MySQL Workbench, que representa gráficamente las relaciones entre las tablas. |
-| `README.md` | Este archivo de documentación de la carpeta database. |
+Archivo	Descripción
+sistema_lotes.sql	Script completo que muestra cómo se diseñó originalmente la base de datos en MySQL. Incluye creación de tablas, claves primarias y foráneas.
+sistema_lotes_erd.sql	Esquema SQL generado desde MySQL Workbench, que representa gráficamente las relaciones entre las tablas.
+README.md	Este archivo de documentación actualizado.
 
 ---
 
-## 🛠️ Uso del script SQL
+## 🔥 Implementación actual
 
-### **1. Crear la base de datos y tablas**
-1. Abrir **MySQL Workbench** o cualquier cliente MySQL.  
-2. Conectarse al servidor MySQL donde se desea crear la base de datos.  
-3. Abrir el archivo `sistema_lotes.sql`.  
-4. Ejecutar todo el script para crear la base de datos `sistema_lotes` y todas las tablas relacionadas.  
+- Actualmente, el sistema utiliza Firebase como base de datos en tiempo real, lo que permite:
 
-### **2. Verificación**
-- Una vez ejecutado el script, se pueden visualizar las tablas creadas en la sección de **Schemas** de MySQL Workbench.  
-- Las tablas incluyen:  
-  - `Usuario`, `Productor`, `Notificaciones`, `Lote`, `Historial_Lote`  
-  - `Etapas_Produccion`, `Configuracion_Turnos`, `Turno`, `Carnet`, `Pago`  
-  - `Insumos_Generales`, `Registro_Sincronizacion`, `Informe`, `Informe_Productor`, `Informe_Turno`  
-  - Tablas de relación según el diagrama de entidad-relación general del sistema.  
+- Sincronización instantánea entre la aplicación web, móvil y el backend.
 
-### **3. Importar esquema ERD**
-1. Abrir `sistema_lotes_erd.sql` en MySQL Workbench.  
-2. Esto permite **visualizar gráficamente** todas las relaciones y claves foráneas de la base de datos.  
-3. Útil para comprender la estructura del sistema antes de implementar la lógica en backend y frontend.  
+- Operación offline con sincronización automática al reconectarse.
+
+- Autenticación segura mediante Firebase Authentication.
+
+- Almacenamiento en la nube con Firestore Database.
+
+- La estructura de datos en Firebase refleja la lógica del modelo relacional original, manteniendo las siguientes colecciones principales:
+
+  - usuarios
+
+  - productores
+
+  - lotes
+
+  - ordenes
+
+  - mediciones
+
+  - turnos
+
+  - informes
+
+---
+
+## 💾 Uso de los archivos SQL
+
+Aunque el sistema actual ya no utiliza MySQL, los archivos SQL se mantienen para documentación y trazabilidad del desarrollo.
+
+**Propósito	Descripción**
+- 📘 Referencia académica	Permite demostrar cómo se diseñó originalmente la base de datos en lenguaje SQL.
+- 🧩 Análisis estructural	Sirve para entender la estructura y relaciones lógicas entre entidades antes de la migración a Firebase.
+- 🧠 Evidencia de evolución	Refleja la transición tecnológica del proyecto hacia una arquitectura moderna basada en servicios en la nube.
 
 ---
 
 ## 📝 Notas importantes
-- Asegurarse de tener **MySQL 8+** o versión compatible.  
-- El script incluye claves primarias, foráneas y restricciones básicas de integridad referencial.  
-- Los datos iniciales no están incluidos; si se desea poblar la base, se pueden agregar scripts adicionales o usar la aplicación para insertar datos desde la interfaz web/móvil.  
+
+- No es necesario ejecutar los scripts SQL para el funcionamiento actual del sistema.
+
+- La base de datos en producción se gestiona desde Firebase Console.
+
+- Las operaciones CRUD se realizan mediante el backend en Node.js, utilizando el SDK oficial de Firebase.
 
 ---
 
-## 📬 Contacto
-Para dudas sobre la base de datos o integración con el sistema, contactar con el **equipo organizador del proyecto**.
+## 👥 Equipo de desarrollo
 
-- Juan Gabriel Pared  
-- Bautista Capovilla
+- 🧑‍💻 Juan Gabriel Pared – Coordinación general, backend y desarrollo móvil
 
----
+- 💻 Bautista Capovilla – Desarrollo de la aplicación web
