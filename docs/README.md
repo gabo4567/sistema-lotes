@@ -12,6 +12,7 @@ Aquí se incluyen los informes de avance, documentos técnicos, y el documento f
 ---
 
 ## 📁 Contenido esperado de la carpeta
+
 | Tipo de documento                              | Descripción                                                                                                         | Formato |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------- |
 | 🧩 **Análisis y especificación de requisitos** | Documentos donde se definieron los objetivos, alcance, requisitos funcionales y no funcionales del sistema.         | `.docx` |
