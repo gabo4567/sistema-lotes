@@ -28,14 +28,16 @@ Permite que tanto la aplicación web como la móvil interactúen de forma segura
 
 Actualmente, el backend cuenta con 43 endpoints funcionales distribuidos de la siguiente forma:
 
-Módulo	Endpoints	Descripción principal
-👤 Usuarios	5	Registro, login, verificación y roles
-🌾 Lotes	6	CRUD completo + filtrado por productor
-👨‍🌾 Productores	7	CRUD + vinculación con lotes
-📦 Órdenes	7	Creación, modificación y estado de órdenes
-🌡️ Mediciones	6	Registro de progreso y análisis del cultivo
-📅 Turnos	8	Solicitud, gestión, cancelación y conteo por estado
-📊 Informes	4	Estadísticas, exportación y métricas generales
+| **Módulo**            | **Endpoints** | **Descripción principal**                           |
+| :-------------------- | :-----------: | :-------------------------------------------------- |
+| 👤 **Usuarios**       |       5       | Registro, login, verificación y roles               |
+| 🌾 **Lotes**          |       6       | CRUD completo + filtrado por productor              |
+| 👨‍🌾 **Productores** |       7       | CRUD + vinculación con lotes                        |
+| 📦 **Órdenes**        |       7       | Creación, modificación y control de estado          |
+| 🌡️ **Mediciones**    |       6       | Registro de progreso y análisis del cultivo         |
+| 📅 **Turnos**         |       8       | Solicitud, gestión, cancelación y conteo por estado |
+| 📊 **Informes**       |       4       | Estadísticas, exportación y métricas generales      |
+
 
 🧪 La colección completa de Postman se encuentra en
 backend/sistema-lotes.postman_collection.json.
@@ -140,4 +142,5 @@ Bautista Capovilla – Frontend y coordinación general
 ## 📬 Contacto
 
 📧 [Instituto Provincial del Tabaco – Goya, Corrientes]
+
 🌐 Proyecto académico: Tecnicatura Universitaria en Programación – UTN FRRe
