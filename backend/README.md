@@ -81,33 +81,33 @@ backend/
 
 - Clonar el repositorio
 
-git clone https://github.com/gabo4567/sistema-lotes.git
-cd sistema-lotes/backend
+   git clone https://github.com/gabo4567/sistema-lotes.git
+   cd sistema-lotes/backend
 
 
 - Instalar dependencias
 
-npm install
+   npm install
 
 
 - Configurar variables de entorno
 
-Crear un archivo .env en la raíz del backend con las siguientes variables:
+   Crear un archivo .env en la raíz del backend con las siguientes variables:
 
-PORT=3000
-FIREBASE_PROJECT_ID=...
-FIREBASE_PRIVATE_KEY=...
-FIREBASE_CLIENT_EMAIL=...
-JWT_SECRET=...
+   PORT=3000
+   FIREBASE_PROJECT_ID=...
+   FIREBASE_PRIVATE_KEY=...
+   FIREBASE_CLIENT_EMAIL=...
+   JWT_SECRET=...
 
 
 - Iniciar el servidor
 
-npm start
+   npm start
 
 
 - Por defecto, el servidor se ejecuta en:
-http://localhost:3000
+   http://localhost:3000
 
 ---
 
