@@ -1,14 +1,14 @@
-#🟢 Backend – Sistema de Gestión de Lotes de Tabaco y Turnos para Productores
+# 🟢 Backend – Sistema de Gestión de Lotes de Tabaco y Turnos para Productores
 
-Descripción breve:
+**Descripción breve:**
 🚀 API REST desarrollada en Node.js + Express, que provee todos los servicios necesarios para la gestión integral de lotes de tabaco, productores, órdenes, mediciones, informes y turnos del Instituto Provincial del Tabaco (Goya, Corrientes).
 
-📌 Objetivo del backend
+## 📌 Objetivo del backend
 
 El backend es el núcleo del sistema, responsable de administrar la lógica de negocio, la autenticación y la persistencia de datos.
 Permite que tanto la aplicación web como la móvil interactúen de forma segura y eficiente, garantizando consistencia en la gestión de información de los productores.
 
-⚙️ Principales características
+## ⚙️ Principales características
 
 ✅ Autenticación y seguridad con JWT
 ✅ CRUD completo para las colecciones principales (usuarios, lotes, productores, órdenes, mediciones y turnos)
@@ -18,7 +18,7 @@ Permite que tanto la aplicación web como la móvil interactúen de forma segura
 ✅ Compatibilidad con Postman Collection incluida para testeo de endpoints
 ✅ Integración lista para sincronizar con Firebase y la app móvil
 
-🧩 Endpoints disponibles
+## 🧩 Endpoints disponibles
 
 Actualmente, el backend cuenta con 43 endpoints funcionales distribuidos de la siguiente forma:
 
@@ -34,7 +34,7 @@ Módulo	Endpoints	Descripción principal
 🧪 La colección completa de Postman se encuentra en
 backend/sistema-lotes.postman_collection.json.
 
-🛠️ Tecnologías utilizadas
+## 🛠️ Tecnologías utilizadas
 
 Node.js – entorno de ejecución de JavaScript
 
@@ -48,7 +48,7 @@ dotenv – manejo de variables de entorno
 
 Nodemon – recarga automática en desarrollo
 
-🧱 Estructura del backend
+## 🧱 Estructura del backend
 backend/
 │
 ├── src/
@@ -63,7 +63,7 @@ backend/
 ├── .env.example
 └── README.md
 
-🚀 Instalación y ejecución
+## 🚀 Instalación y ejecución
 
 Clonar el repositorio
 
@@ -95,7 +95,7 @@ npm start
 Por defecto, el servidor se ejecuta en:
 http://localhost:3000
 
-🧪 Pruebas y colección de Postman
+## 🧪 Pruebas y colección de Postman
 
 Importar el archivo sistema-lotes.postman_collection.json en Postman.
 
@@ -113,13 +113,13 @@ La API permite filtrar y ordenar resultados, además de incluir paginación bás
 
 🧭 Endpoints para métricas detalladas por campaña
 
-👥 Equipo de desarrollo
+## 👥 Equipo de desarrollo
 
 Juan Gabriel Pared – Backend y documentación técnica
 
 Bautista Capovilla – Frontend y coordinación general
 
-📬 Contacto
+## 📬 Contacto
 
 📧 [Instituto Provincial del Tabaco – Goya, Corrientes]
 🌐 Proyecto académico: Tecnicatura Universitaria en Programación – UTN FRRe
