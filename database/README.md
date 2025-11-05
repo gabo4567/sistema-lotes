@@ -51,13 +51,16 @@ Aunque el sistema actual ya no utiliza MySQL, los archivos SQL se mantienen para
 - 📘 Referencia académica	Permite demostrar cómo se diseñó originalmente la base de datos en lenguaje SQL.
 - 🧩 Análisis estructural	Sirve para entender la estructura y relaciones lógicas entre entidades antes de la migración a Firebase.
 - 🧠 Evidencia de evolución	Refleja la transición tecnológica del proyecto hacia una arquitectura moderna basada en servicios en la nube.
-- 📝 Notas importantes
 
-No es necesario ejecutar los scripts SQL para el funcionamiento actual del sistema.
+---
 
-La base de datos en producción se gestiona desde Firebase Console.
+## 📝 Notas importantes
 
-Las operaciones CRUD se realizan mediante el backend en Node.js, utilizando el SDK oficial de Firebase.
+- No es necesario ejecutar los scripts SQL para el funcionamiento actual del sistema.
+
+- La base de datos en producción se gestiona desde Firebase Console.
+
+- Las operaciones CRUD se realizan mediante el backend en Node.js, utilizando el SDK oficial de Firebase.
 
 ---
 
