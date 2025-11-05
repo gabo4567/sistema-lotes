@@ -46,17 +46,17 @@ backend/sistema-lotes.postman_collection.json.
 
 ## 🛠️ Tecnologías utilizadas
 
-Node.js – entorno de ejecución de JavaScript
+- Node.js – entorno de ejecución de JavaScript
 
-Express.js – framework para la creación de APIs REST
+- Express.js – framework para la creación de APIs REST
 
-Firebase Admin SDK – conexión y sincronización con base de datos
+- Firebase Admin SDK – conexión y sincronización con base de datos
 
-JWT (JSON Web Token) – autenticación y autorización segura
+- JWT (JSON Web Token) – autenticación y autorización segura
 
-dotenv – manejo de variables de entorno
+- dotenv – manejo de variables de entorno
 
-Nodemon – recarga automática en desarrollo
+- Nodemon – recarga automática en desarrollo
 
 ---
 
@@ -79,18 +79,18 @@ backend/
 
 ## 🚀 Instalación y ejecución
 
-Clonar el repositorio
+- Clonar el repositorio
 
 git clone https://github.com/gabo4567/sistema-lotes.git
 cd sistema-lotes/backend
 
 
-Instalar dependencias
+- Instalar dependencias
 
 npm install
 
 
-Configurar variables de entorno
+- Configurar variables de entorno
 
 Crear un archivo .env en la raíz del backend con las siguientes variables:
 
@@ -101,12 +101,12 @@ FIREBASE_CLIENT_EMAIL=...
 JWT_SECRET=...
 
 
-Iniciar el servidor
+- Iniciar el servidor
 
 npm start
 
 
-Por defecto, el servidor se ejecuta en:
+- Por defecto, el servidor se ejecuta en:
 http://localhost:3000
 
 ---
