@@ -50,7 +50,7 @@ Actualmente, los productores deben coordinar turnos y registrar información de 
 ## ⚙️ Instalación y uso
 
 ### **Backend**
-```bash
+```
 cd backend
 npm install
 npm start
@@ -58,7 +58,7 @@ npm start
 
 ### **Web App**
 
-```bash
+```
 cd web-app
 npm install
 npm start
@@ -66,7 +66,7 @@ npm start
 
 ### **Mobile App**
 
-```bash
+```
 cd mobile-app
 npm install
 npm run android   # Para Android
