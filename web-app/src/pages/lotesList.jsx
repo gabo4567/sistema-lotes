@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getLotes } from "../services/lotes.service";
+import { obtenerLotes } from "../services/lotes.service";
 
 const LotesList = () => {
   const [lotes, setLotes] = useState([]);
@@ -7,7 +7,7 @@ const LotesList = () => {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getLotes();
+        const data = await obtenerLotes();
         setLotes(data);
       } catch (err) {
         console.error(err);

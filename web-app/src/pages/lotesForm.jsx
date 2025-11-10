@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { createLote } from '../services/lotes.service'
+import { crearLote } from '../services/lotes.service'
 import Layout from '../components/Layout'
 
 
@@ -12,7 +12,7 @@ const [lng, setLng] = useState('')
 const handleSubmit = async (e)=>{
 e.preventDefault()
 try{
-await createLote({ nombre, lat: parseFloat(lat), lng: parseFloat(lng) })
+await crearLote({ nombre, lat: parseFloat(lat), lng: parseFloat(lng) })
 alert('Lote creado')
 }catch(e){console.error(e); alert('Error')}
 }
