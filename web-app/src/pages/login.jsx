@@ -24,12 +24,44 @@ const Login = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>Iniciar sesión</h2>
-      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" />
-      <input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="Contraseña" />
-      <button type="submit">Entrar</button>
-    </form>
+    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '5px' }}>
+      <form onSubmit={handleSubmit}>
+        <h2>Iniciar sesión</h2>
+        <div style={{ marginBottom: '10px' }}>
+          <input 
+            value={email} 
+            onChange={e=>setEmail(e.target.value)} 
+            placeholder="Email" 
+            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+            required
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <input 
+            value={password} 
+            onChange={e=>setPassword(e.target.value)} 
+            type="password" 
+            placeholder="Contraseña" 
+            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+            required
+          />
+        </div>
+        <button 
+          type="submit" 
+          style={{ 
+            width: '100%', 
+            padding: '10px', 
+            backgroundColor: '#007bff', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Entrar
+        </button>
+      </form>
+    </div>
   );
 };
 

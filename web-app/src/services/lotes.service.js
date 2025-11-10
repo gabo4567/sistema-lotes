@@ -1,11 +1,64 @@
-import api from "../api/axios";
+// Import Firebase services
+import { db } from "./firebase.js";
+import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
 
-export const obtenerLotes = async () => {
-  const res = await api.get("/lotes"); // coincide con tu backend: /api/lotes
-  return res.data;
-};
+// Funciones CRUD para lotes
+export const lotesService = {
+  // Obtener todos los lotes
+  async getLotes() {
+    try {
+      const lotesCollection = collection(db, "lotes");
+      const lotesSnapshot = await getDocs(lotesCollection);
+      const lotesList = lotesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      return lotesList;
+    } catch (error) {
+      console.error("Error al obtener lotes:", error);
+      throw error;
+    }
+  },
 
-export const crearLote = async (payload) => {
-  const res = await api.post("/lotes", payload);
-  return res.data;
+  // Crear un nuevo lote
+  async createLote(loteData) {
+    try {
+      const lotesCollection = collection(db, "lotes");
+      const docRef = await addDoc(lotesCollection, {
+        ...loteData,
+        createdAt: new Date().toISOString()
+      });
+      return { id: docRef.id, ...loteData };
+    } catch (error) {
+      console.error("Error al crear lote:", error);
+      throw error;
+    }
+  },
+
+  // Actualizar un lote
+  async updateLote(id, loteData) {
+    try {
+      const loteDoc = doc(db, "lotes", id);
+      await updateDoc(loteDoc, {
+        ...loteData,
+        updatedAt: new Date().toISOString()
+      });
+      return { id, ...loteData };
+    } catch (error) {
+      console.error("Error al actualizar lote:", error);
+      throw error;
+    }
+  },
+
+  // Eliminar un lote
+  async deleteLote(id) {
+    try {
+      const loteDoc = doc(db, "lotes", id);
+      await deleteDoc(loteDoc);
+      return id;
+    } catch (error) {
+      console.error("Error al eliminar lote:", error);
+      throw error;
+    }
+  }
 };
