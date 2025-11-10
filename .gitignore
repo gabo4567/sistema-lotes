@@ -1,0 +1,75 @@
+# ========================
+# 🧩 GENERAL DEL PROYECTO
+# ========================
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.log
+*.tmp
+*.bak
+
+# Variables de entorno
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Archivos de credenciales o claves privadas
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# ========================
+# 🧱 BACKEND (Node + Express)
+# ========================
+
+backend/node_modules/
+backend/.env
+backend/npm-debug.log
+backend/package-lock.json
+
+# ========================
+# 📱 MOBILE APP (React Native)
+# ========================
+
+mobile-app/node_modules/
+mobile-app/.expo/
+mobile-app/.expo-shared/
+mobile-app/dist/
+mobile-app/build/
+mobile-app/web-build/
+mobile-app/.env
+mobile-app/android/app/build/
+mobile-app/android/.gradle/
+mobile-app/ios/Pods/
+mobile-app/ios/build/
+mobile-app/ios/DerivedData/
+mobile-app/ios/*.xcworkspace
+
+# ========================
+# 💻 WEB APP (React)
+# ========================
+
+web-app/node_modules/
+web-app/build/
+web-app/.env
+web-app/.cache/
+
+# ========================
+# 🧩 EDITORES / IDEs
+# ========================
+
+.vscode/
+.idea/
+*.swp
+
+# ========================
+# 🧮 DEPENDENCIAS Y ARCHIVOS AUTO-GENERADOS
+# ========================
+
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
