@@ -21,7 +21,7 @@ export const lotesService = {
   },
 
   // Crear un nuevo lote
-  async createLote(loteData) {
+  async crearLote(loteData) {
     try {
       const lotesCollection = collection(db, "lotes");
       const docRef = await addDoc(lotesCollection, {
@@ -62,3 +62,6 @@ export const lotesService = {
     }
   }
 };
+
+// Export directo para facilitar el uso individual
+export const { crearLote, getLotes, updateLote, deleteLote } = lotesService;
