@@ -1,5 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './styles/index.css'; // tu CSS personalizado (ver abajo)
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -9,7 +11,6 @@ import LotesList from "./pages/lotesList";
 import LoteForm from "./pages/lotesForm";
 import TurnosList from "./pages/turnosList";
 import InsumosList from "./pages/insumosList";
-import "./styles/index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
