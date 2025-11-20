@@ -1,4 +1,5 @@
 // src/pages/Login.jsx
+
 import React, { useState, useContext } from "react";
 import api from "../api/axios";
 import { AuthContext } from "../contexts/AuthContext";
@@ -20,14 +21,16 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
       const res = await api.post("/auth/login", { email, password });
       const { token } = res.data;
+
       login(token);
-      navigate("/");
+      navigate("/home");
+
     } catch (err) {
       console.error(err);
-      // intenta leer mensaje del backend si existe
       const msg = err?.response?.data?.message || "Credenciales inválidas";
       setError(msg);
     } finally {
@@ -50,7 +53,9 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="mb-3">
-              <label htmlFor="email" className="form-label visually-hidden">Email</label>
+              <label htmlFor="email" className="form-label visually-hidden">
+                Email
+              </label>
               <input
                 id="email"
                 type="email"
@@ -64,7 +69,12 @@ const Login = () => {
             </div>
 
             <div className="mb-3">
-              <label htmlFor="password" className="form-label visually-hidden">Contraseña</label>
+              <label
+                htmlFor="password"
+                className="form-label visually-hidden"
+              >
+                Contraseña
+              </label>
               <input
                 id="password"
                 type="password"
@@ -85,10 +95,15 @@ const Login = () => {
               {loading ? "Ingresando..." : "Entrar"}
             </button>
 
-            {error && <div className="mensajeError" role="alert">{error}</div>}
+            {error && <div className="mensajeError">{error}</div>}
 
             <div className="text-center mt-3">
-              <a href="/reset-password" style={{ color: "var(--color-2)", fontWeight: 700 }}>¿Olvidaste tu contraseña?</a>
+              <a
+                href="/reset-password"
+                style={{ color: "var(--color-2)", fontWeight: 700 }}
+              >
+                ¿Olvidaste tu contraseña?
+              </a>
             </div>
           </form>
         </div>

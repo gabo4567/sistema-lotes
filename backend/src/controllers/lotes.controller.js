@@ -4,19 +4,21 @@ import { db } from "../utils/firebase.js";
 // Crear un lote
 export const createLote = async (req, res) => {
   try {
-    const { nombre, productorId, superficie, estadoCultivo, coordenadas, fechaCreacion } = req.body;
-    if (!nombre || !productorId || !superficie || !estadoCultivo || !coordenadas) {
-      return res.status(400).json({ error: "Faltan campos requeridos" });
+    const { ipt, superficie, ubicacion, poligono, metodoMarcado, observacionesTecnico } = req.body;
+    if (!ipt || !poligono || !Array.isArray(poligono) || poligono.length < 3 || !metodoMarcado) {
+      return res.status(400).json({ error: "Datos de lote inválidos" });
     }
 
     const newLote = {
-      nombre,
-      productorId,
-      superficie,
-      estadoCultivo,
-      coordenadas,
-      fechaCreacion: fechaCreacion || new Date(),
-      activo: true // ✅ Lote activo al crear
+      ipt: String(ipt),
+      superficie: superficie ? Number(superficie) : null,
+      ubicacion: ubicacion || null,
+      poligono,
+      metodoMarcado,
+      fechaCreacion: new Date(),
+      estado: "Pendiente",
+      observacionesTecnico: observacionesTecnico || "",
+      activo: true,
     };
 
     const docRef = await db.collection("lotes").add(newLote);
@@ -70,8 +72,15 @@ export const getLoteById = async (req, res) => {
 export const updateLote = async (req, res) => {
   try {
     const { id } = req.params;
+    const ref = db.collection("lotes").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Lote no encontrado" });
+    const current = snap.data();
+    if (current.estado === "Validado") {
+      return res.status(403).json({ error: "No se puede editar un lote validado" });
+    }
     const data = req.body;
-    await db.collection("lotes").doc(id).update(data);
+    await ref.update({ ...data, updatedAt: new Date() });
     res.json({ message: "✅ Lote actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar lote:", error);
@@ -83,10 +92,60 @@ export const updateLote = async (req, res) => {
 export const deleteLote = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection("lotes").doc(id).update({ activo: false });
+    const ref = db.collection("lotes").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Lote no encontrado" });
+    const current = snap.data();
+    if (current.estado === "Validado") {
+      return res.status(403).json({ error: "No se puede eliminar un lote validado" });
+    }
+    await ref.update({ activo: false, updatedAt: new Date() });
     res.json({ message: "✅ Lote desactivado correctamente (soft delete)" });
   } catch (error) {
     console.error("Error al desactivar lote:", error);
     res.status(500).json({ error: "Error al desactivar lote" });
+  }
+};
+
+export const getLotesByIpt = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const snapshot = await db.collection("lotes").where("ipt", "==", String(ipt)).get();
+    const lotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(lotes);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener lotes por IPT" });
+  }
+};
+
+export const cambiarEstadoLote = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado, observacionesTecnico } = req.body;
+    const permitidos = ["Pendiente", "Validado", "Rechazado"];
+    if (!permitidos.includes(estado)) return res.status(400).json({ error: "Estado inválido" });
+    const ref = db.collection("lotes").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Lote no encontrado" });
+    const lote = snap.data();
+    await ref.update({ estado, observacionesTecnico: observacionesTecnico || "" });
+    if (estado === "Validado") {
+      try {
+        const prodSnap = await db.collection("productores").where("ipt", "==", String(lote.ipt)).limit(1).get();
+        if (!prodSnap.empty) {
+          const prod = prodSnap.docs[0].data();
+          const tokens = Array.isArray(prod.pushTokens) ? prod.pushTokens : (prod.pushToken ? [prod.pushToken] : []);
+          if (tokens.length) {
+            const { sendExpoPush } = await import("../utils/expoPush.js");
+            await sendExpoPush(tokens, "Lote validado", "Tu lote ha sido validado", { loteId: id, ipt: lote.ipt });
+          }
+        }
+      } catch (e) {
+        console.error("Error enviando push:", e?.message);
+      }
+    }
+    res.json({ message: "Estado actualizado" });
+  } catch (error) {
+    res.status(500).json({ error: "Error al cambiar estado" });
   }
 };

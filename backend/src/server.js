@@ -24,7 +24,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // Rutas API
-app.use("/api/users", usersRoutes);
+app.use("/api/users", requireAuth, requireRole(["Administrador"]), usersRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/lotes", lotesRoutes);
 app.use("/api/productores", productoresRoutes);
@@ -53,3 +53,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`✅ Servidor backend escuchando en http://localhost:${PORT}`);
 });
+import { requireAuth, requireRole } from "./middlewares/auth.js";

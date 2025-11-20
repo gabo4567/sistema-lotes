@@ -13,6 +13,7 @@ import {
   obtenerTurnosPorEstado,
   obtenerTurnosPorProductor,
   obtenerTurnosPorRangoFechas,
+  disponibilidadTurno,
 } from "../controllers/turnos.controller.js";
 
 const router = Router();
@@ -34,5 +35,6 @@ router.delete("/:id", eliminarTurno);
 router.get("/estado/:estado", obtenerTurnosPorEstado);
 router.get("/productor/:productorId", obtenerTurnosPorProductor);
 router.get("/filtro/fechas", obtenerTurnosPorRangoFechas);
+router.get("/disponibilidad", disponibilidadTurno);
 
 export default router;

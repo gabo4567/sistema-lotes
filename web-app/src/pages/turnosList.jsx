@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getTurnos, cancelTurno } from '../services/turnos.service'
+import { getTurnos, setEstadoTurno } from '../services/turnos.service'
 import Layout from '../components/Layout'
 
 
@@ -12,10 +12,9 @@ try{ setTurnos(await getTurnos()) }catch(e){console.error(e)}
 })()},[])
 
 
-const handleCancel = async (id)=>{
-if(!confirm('Cancelar turno?')) return
-await cancelTurno(id)
-setTurnos(turnos.filter(t=>t.id!==id))
+const handleCambioEstado = async (id, nuevo)=>{
+  await setEstadoTurno(id, nuevo)
+  setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo } : t))
 }
 
 
@@ -24,12 +23,22 @@ return (
 <h2>Turnos</h2>
 <ul>
 {turnos.map(t=> (
-<li key={t.id} className="p-2 bg-white mb-2 rounded shadow flex justify-between">
-<div>{t.productor_nombre} — {t.fecha} — Etapa {t.etapa}</div>
-<div className="flex gap-2">
-<button className="btn" onClick={()=>handleCancel(t.id)}>Cancelar</button>
-</div>
-</li>
+  <li key={t.id} className="p-2 bg-white mb-2 rounded shadow flex justify-between">
+    <div>
+      <div>Productor: {t.productorId}</div>
+      <div>Fecha: {t.fechaTurno}</div>
+      <div>Tipo: {t.tipoTurno}</div>
+      <div>Estado: {t.estado}</div>
+    </div>
+    <div className="flex gap-2">
+      <select onChange={e=>handleCambioEstado(t.id, e.target.value)} defaultValue={t.estado}>
+        <option value="Solicitado">Solicitado</option>
+        <option value="Aprobado">Aprobado</option>
+        <option value="Cancelado">Cancelado</option>
+        <option value="Vencido">Vencido</option>
+      </select>
+    </div>
+  </li>
 ))}
 </ul>
 </Layout>

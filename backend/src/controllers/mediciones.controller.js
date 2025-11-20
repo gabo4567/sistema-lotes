@@ -4,14 +4,17 @@ import { db } from "../utils/firebase.js";
 // ➕ Crear una nueva medición
 export const crearMedicion = async (req, res) => {
   try {
-    const { loteId, fecha, humedad, temperatura, observaciones } = req.body;
-    if (!loteId) return res.status(400).json({ message: "Falta el loteId" });
+    const { productor, lote, fecha, tipo, valorNumerico, tecnicoResponsable, evidenciaUrl, observaciones } = req.body;
+    if (!productor || !lote || !fecha || !tipo) return res.status(400).json({ message: "Faltan campos requeridos" });
 
     const nuevaMedicion = {
-      loteId,
-      fecha: fecha || new Date(),
-      humedad: humedad || null,
-      temperatura: temperatura || null,
+      productor,
+      lote,
+      fecha,
+      tipo,
+      valorNumerico: valorNumerico != null ? Number(valorNumerico) : null,
+      tecnicoResponsable: tecnicoResponsable || "",
+      evidenciaUrl: evidenciaUrl || "",
       observaciones: observaciones || "",
       activo: true,
     };
@@ -27,8 +30,23 @@ export const crearMedicion = async (req, res) => {
 // 📋 Obtener todas las mediciones activas
 export const obtenerMediciones = async (req, res) => {
   try {
-    const snapshot = await db.collection("mediciones").where("activo", "==", true).get();
-    const mediciones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { productor, lote, tipo, fechaInicio, fechaFin } = req.query;
+    let ref = db.collection("mediciones").where("activo", "==", true);
+    if (productor) ref = ref.where("productor", "==", productor);
+    if (lote) ref = ref.where("lote", "==", lote);
+    if (tipo) ref = ref.where("tipo", "==", tipo);
+    const snapshot = await ref.get();
+    let mediciones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (fechaInicio || fechaFin) {
+      const fi = fechaInicio ? new Date(fechaInicio) : null;
+      const ff = fechaFin ? new Date(fechaFin) : null;
+      mediciones = mediciones.filter(m => {
+        const f = new Date(m.fecha);
+        if (fi && f < fi) return false;
+        if (ff && f > ff) return false;
+        return true;
+      });
+    }
     res.json(mediciones);
   } catch (error) {
     console.error("Error al obtener las mediciones:", error);

@@ -1,21 +1,39 @@
 // src/controllers/productores.controller.js
-import { db } from "../utils/firebase.js";
+import { db, admin } from "../utils/firebase.js";
+import { FieldValue } from "firebase-admin/firestore";
 
 // Crear productor
 export const createProductor = async (req, res) => {
   try {
-    const { nombre, email, telefono, direccion, fechaRegistro } = req.body;
-    if (!nombre || !email) {
+    const {
+      ipt,
+      nombreCompleto,
+      cuil,
+      email,
+      telefono,
+      domicilioCasa,
+      domicilioIngresoCoord,
+      estado,
+      plantasPorHa,
+    } = req.body;
+    if (!ipt || !nombreCompleto || !cuil) {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
     const newProductor = {
-      nombre,
-      email,
+      ipt: String(ipt),
+      nombreCompleto,
+      cuil: String(cuil),
+      email: email || "",
       telefono: telefono || "",
-      direccion: direccion || "",
-      fechaRegistro: fechaRegistro || new Date(),
-      activo: true // campo para soft delete
+      domicilioCasa: domicilioCasa || "",
+      domicilioIngresoCoord: domicilioIngresoCoord || null,
+      estado: estado || "Nuevo",
+      plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
+      requiereCambioContrasena: true,
+      historialIngresos: 0,
+      fechaRegistro: new Date(),
+      activo: true,
     };
 
     const docRef = await db.collection("productores").add(newProductor);
@@ -64,6 +82,21 @@ export const getProductorById = async (req, res) => {
   }
 };
 
+export const getProductorByIpt = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+    const doc = snap.docs[0];
+    const data = doc.data();
+    if (data.activo === false) return res.status(404).json({ error: "Productor no activo" });
+    res.json({ id: doc.id, ...data });
+  } catch (error) {
+    console.error("Error al obtener productor por IPT:", error);
+    res.status(500).json({ error: "Error al obtener productor por IPT" });
+  }
+};
+
 // Actualizar productor
 export const updateProductor = async (req, res) => {
   try {
@@ -86,5 +119,62 @@ export const deleteProductor = async (req, res) => {
   } catch (error) {
     console.error("Error al desactivar productor:", error);
     res.status(500).json({ error: "Error al desactivar productor" });
+  }
+};
+
+export const resetPasswordProductor = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+    const doc = snap.docs[0];
+    await doc.ref.update({ requiereCambioContrasena: true, passwordHash: admin.firestore.FieldValue.delete() });
+    res.json({ message: "Contraseña reseteada a CUIL en próximo ingreso" });
+  } catch (error) {
+    console.error("Error al resetear contraseña:", error);
+    res.status(500).json({ error: "Error al resetear contraseña" });
+  }
+};
+
+export const marcarReempadronado = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+    const doc = snap.docs[0];
+    await doc.ref.update({ estado: "Re-empadronado" });
+    res.json({ message: "Productor marcado como re-empadronado" });
+  } catch (error) {
+    console.error("Error al marcar re-empadronado:", error);
+    res.status(500).json({ error: "Error al marcar re-empadronado" });
+  }
+};
+
+export const historialIngresos = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+    const doc = snap.docs[0];
+    const data = doc.data();
+    res.json({ historialIngresos: data.historialIngresos || 0 });
+  } catch (error) {
+    console.error("Error al obtener historial de ingresos:", error);
+    res.status(500).json({ error: "Error al obtener historial de ingresos" });
+  }
+};
+
+export const setPushToken = async (req, res) => {
+  try {
+    const { ipt } = req.params;
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Token requerido" });
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+    const doc = snap.docs[0];
+    await doc.ref.update({ pushTokens: FieldValue.arrayUnion(token) });
+    res.json({ message: "Push token registrado" });
+  } catch (error) {
+    res.status(500).json({ error: "Error al registrar push token" });
   }
 };

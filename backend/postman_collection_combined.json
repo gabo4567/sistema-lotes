@@ -1,0 +1,40 @@
+{
+  "info": {
+    "_postman_id": "c6d2b5f5-2e6e-4c5f-9c6e-000000000001",
+    "name": "Sistema de Lotes (Web + Mobile)",
+    "description": "Colección Postman para probar backend de autenticación de productores, productores, lotes, turnos, mediciones e informes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "iptDemo", "value": "123456" },
+    { "key": "cuilDemo", "value": "20123456789" }
+  ],
+  "item": [
+    {"name":"Auth Web – Login","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"email\": \"admin@ipt.gov\",\n  \"password\": \"<clave>\"\n}"},"url":{"raw":"{{baseUrl}}/auth/login"}}},
+    {"name":"Auth Productor – Login","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"ipt\": \"{{iptDemo}}\",\n  \"password\": \"{{cuilDemo}}\"\n}"},"url":{"raw":"{{baseUrl}}/auth/login-productor"}}},
+    {"name":"Auth Productor – Cambiar contraseña","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"ipt\": \"{{iptDemo}}\",\n  \"oldPassword\": \"{{cuilDemo}}\",\n  \"newPassword\": \"MiClaveNueva123\"\n}"},"url":{"raw":"{{baseUrl}}/auth/productor/cambiar-password"}}},
+    {"name":"Productores – Crear (IPT/CUIL)","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"ipt\": \"{{iptDemo}}\",\n  \"nombreCompleto\": \"Juan Gabriel\",\n  \"cuil\": \"{{cuilDemo}}\",\n  \"email\": \"juan.gabriel@ejemplo.com\",\n  \"telefono\": \"+54 3777 123456\",\n  \"domicilioCasa\": \"Goya, Corrientes\",\n  \"domicilioIngresoCoord\": { \"lat\": -29.200, \"lng\": -59.675 },\n  \"estado\": \"Nuevo\",\n  \"plantasPorHa\": 5000\n}"},"url":{"raw":"{{baseUrl}}/productores"}}},
+    {"name":"Productores – Listar activos","request":{"method":"GET","url":{"raw":"{{baseUrl}}/productores"}}},
+    {"name":"Productores – Obtener por IPT","request":{"method":"GET","url":{"raw":"{{baseUrl}}/productores/ipt/{{iptDemo}}"}}},
+    {"name":"Productores – Historial ingresos","request":{"method":"GET","url":{"raw":"{{baseUrl}}/productores/{{iptDemo}}/historial"}}},
+    {"name":"Productores – Reset contraseña (flag)","request":{"method":"POST","url":{"raw":"{{baseUrl}}/productores/reset-password/{{iptDemo}}"}}},
+    {"name":"Productores – Marcar re-empadronado","request":{"method":"POST","url":{"raw":"{{baseUrl}}/productores/reempadronado/{{iptDemo}}"}}},
+    {"name":"Lotes – Crear (polígono)","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"ipt\": \"{{iptDemo}}\",\n  \"poligono\": [\n    { \"lat\": -29.200, \"lng\": -59.675 },\n    { \"lat\": -29.201, \"lng\": -59.674 },\n    { \"lat\": -29.200, \"lng\": -59.673 }\n  ],\n  \"metodoMarcado\": \"GPS\",\n  \"superficie\": 1.23,\n  \"ubicacion\": { \"lat\": -29.200, \"lng\": -59.675 }\n}"},"url":{"raw":"{{baseUrl}}/lotes"}}},
+    {"name":"Lotes – Listar por IPT","request":{"method":"GET","url":{"raw":"{{baseUrl}}/lotes/productor/{{iptDemo}}"}}},
+    {"name":"Lotes – Cambiar estado","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"estado\": \"Validado\",\n  \"observacionesTecnico\": \"Polígono correcto\"\n}"},"url":{"raw":"{{baseUrl}}/lotes/<LOTE_ID>/estado"}}},
+    {"name":"Turnos – Ver disponibilidad","request":{"method":"GET","url":{"raw":"{{baseUrl}}/turnos/disponibilidad?fechaSolicitada=2025-11-30&tipoTurno=Ingreso"}}},
+    {"name":"Turnos – Solicitar","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"ipt\": \"{{iptDemo}}\",\n  \"fechaSolicitada\": \"2025-11-30\",\n  \"tipoTurno\": \"Ingreso\",\n  \"motivo\": \"Prueba de solicitud\"\n}"},"url":{"raw":"{{baseUrl}}/turnos"}}},
+    {"name":"Turnos – Cambiar estado","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"estado\": \"Aprobado\",\n  \"motivo\": \"Confirmado por técnico\"\n}"},"url":{"raw":"{{baseUrl}}/turnos/<TURNO_ID>/estado"}}},
+    {"name":"Turnos – Listar por productor","request":{"method":"GET","url":{"raw":"{{baseUrl}}/turnos/productor/{{iptDemo}}"}}},
+    {"name":"Mediciones – Crear","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"productor\": \"{{iptDemo}}\",\n  \"lote\": \"<LOTE_ID>\",\n  \"fecha\": \"2025-11-30\",\n  \"tipo\": \"Plantas/ha\",\n  \"valorNumerico\": 4800,\n  \"tecnicoResponsable\": \"Tec1\",\n  \"evidenciaUrl\": \"http://ejemplo.com/foto.jpg\",\n  \"observaciones\": \"Ok\"\n}"},"url":{"raw":"{{baseUrl}}/mediciones"}}},
+    {"name":"Mediciones – Listar filtradas","request":{"method":"GET","url":{"raw":"{{baseUrl}}/mediciones?productor={{iptDemo}}&tipo=Plantas/ha"}}},
+    {"name":"Informes – Resumen general","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/resumen-general"}}},
+    {"name":"Informes – Productores activos","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/productores-activos"}}},
+    {"name":"Informes – Órdenes por mes","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/ordenes-por-mes"}}},
+    {"name":"Informes – Turnos por estado","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/turnos-por-estado"}}},
+    {"name":"Informes – Mediciones por lote","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/mediciones-por-lote"}}},
+    {"name":"Informes – Exportar PDF","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/exportar/pdf?tipo=resumen"}}},
+    {"name":"Informes – Exportar Excel","request":{"method":"GET","url":{"raw":"{{baseUrl}}/informes/exportar/excel?tipo=resumen"}}}
+  ]
+}

@@ -1,5 +1,7 @@
 // src/controllers/auth.controller.js
 import { db, admin } from "../utils/firebase.js";
+import crypto from "crypto";
+import { makeToken } from "../middlewares/auth.js";
 
 // Registrar usuario
 export const registerUser = async (req, res) => {
@@ -40,19 +42,92 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
-    // Firebase Admin no valida password directamente, se puede generar un token custom
     const user = await admin.auth().getUserByEmail(email);
-
-    // Generar un custom token (para autenticar desde la app)
-    const token = await admin.auth().createCustomToken(user.uid);
-
-    res.json({
-      message: "✅ Login exitoso",
-      uid: user.uid,
-      token,
-    });
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const role = userDoc.exists ? (userDoc.data().role || "Tecnico") : "Tecnico";
+    const webToken = makeToken({ uid: user.uid, email: user.email, role });
+    res.json({ token: webToken, role });
   } catch (error) {
     console.error("Error al hacer login:", error);
     res.status(500).json({ error: error.message });
+  }
+};
+
+const hashPassword = (password, salt) => {
+  return crypto.createHash("sha256").update(salt + ":" + password).digest("hex");
+};
+
+export const loginProductor = async (req, res) => {
+  try {
+    const { ipt, password } = req.body;
+    if (!ipt || !password) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) {
+      return res.status(404).json({ error: "Productor no encontrado" });
+    }
+    const doc = snap.docs[0];
+    const data = doc.data();
+    const estado = data.estado || "Nuevo";
+    if (["Vencido"].includes(estado)) {
+      return res.status(403).json({ error: "Estado no permite ingreso" });
+    }
+    const requiereCambio = Boolean(data.requiereCambioContrasena);
+    let ok = false;
+    if (requiereCambio) {
+      ok = String(password) === String(data.cuil);
+    } else {
+      const salt = String(data.ipt);
+      const hash = hashPassword(String(password), salt);
+      ok = hash && data.passwordHash && hash === data.passwordHash;
+    }
+    if (!ok) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+    const uid = `prod_${String(ipt)}`;
+    const token = await admin.auth().createCustomToken(uid, { role: "productor", ipt: String(ipt) });
+    await doc.ref.update({ historialIngresos: admin.firestore.FieldValue.increment(1) });
+    return res.json({ token, requiereCambioContrasena: requiereCambio });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const cambiarPasswordProductor = async (req, res) => {
+  try {
+    const { ipt, oldPassword, newPassword } = req.body;
+    if (!ipt || !oldPassword || !newPassword) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: "Contraseña demasiado débil" });
+    }
+    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (snap.empty) {
+      return res.status(404).json({ error: "Productor no encontrado" });
+    }
+    const doc = snap.docs[0];
+    const data = doc.data();
+    const requiereCambio = Boolean(data.requiereCambioContrasena);
+    let ok = false;
+    if (requiereCambio) {
+      ok = String(oldPassword) === String(data.cuil);
+    } else {
+      const salt = String(data.ipt);
+      const hash = hashPassword(String(oldPassword), salt);
+      ok = hash && data.passwordHash && hash === data.passwordHash;
+    }
+    if (!ok) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+    const salt = String(data.ipt);
+    const newHash = hashPassword(String(newPassword), salt);
+    await doc.ref.update({ passwordHash: newHash, requiereCambioContrasena: false });
+    const uid = `prod_${String(ipt)}`;
+    const token = await admin.auth().createCustomToken(uid, { role: "productor", ipt: String(ipt) });
+    return res.json({ message: "Contraseña actualizada", token });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };

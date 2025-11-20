@@ -6,7 +6,9 @@ import { Timestamp } from "firebase-admin/firestore";
 // ➕ Crear un nuevo turno
 export const crearTurno = async (req, res) => {
   try {
-    const { productorId, fechaTurno, motivo, tipoTurno, observaciones } = req.body;
+    let { productorId, ipt, fechaTurno, fechaSolicitada, motivo, tipoTurno, observaciones } = req.body;
+    productorId = productorId || ipt;
+    fechaTurno = fechaTurno || fechaSolicitada;
 
     if (!productorId || !fechaTurno) {
       return res.status(400).json({ message: "Faltan datos obligatorios: productorId o fechaTurno" });
@@ -113,17 +115,21 @@ export const actualizarTurno = async (req, res) => {
 export const cambiarEstadoTurno = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    let { estado, motivo } = req.body;
+    const mapEstados = {
+      Solicitado: "pendiente",
+      Aprobado: "confirmado",
+      Cancelado: "cancelado",
+      Vencido: "vencido",
+    };
+    estado = mapEstados[estado] || estado;
 
     const estadosPermitidos = ["pendiente", "confirmado", "cancelado", "completado", "vencido"];
     if (!estadosPermitidos.includes(estado)) {
       return res.status(400).json({ message: "Estado no válido" });
     }
 
-    await db.collection("turnos").doc(id).update({
-      estado,
-      updatedAt: Timestamp.now(),
-    });
+    await db.collection("turnos").doc(id).update({ estado, motivo: motivo || "", updatedAt: Timestamp.now() });
 
     res.json({ message: `Estado del turno actualizado a '${estado}'` });
   } catch (error) {
@@ -236,6 +242,33 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
       message: "Error al obtener turnos por rango de fechas",
       error,
     });
+  }
+};
+
+export const disponibilidadTurno = async (req, res) => {
+  try {
+    const { fechaSolicitada, tipoTurno } = req.query;
+    if (!fechaSolicitada || !tipoTurno) {
+      return res.status(400).json({ message: "Faltan parámetros" });
+    }
+    const fecha = new Date(`${fechaSolicitada}T00:00:00.000Z`);
+    if (isNaN(fecha.getTime())) return res.status(400).json({ message: "Fecha inválida" });
+    const inicio = new Date(fecha);
+    const fin = new Date(fecha);
+    inicio.setHours(0,0,0,0);
+    fin.setHours(23,59,59,999);
+    const snap = await db
+      .collection("turnos")
+      .where("fechaTurno", ">=", Timestamp.fromDate(inicio))
+      .where("fechaTurno", "<=", Timestamp.fromDate(fin))
+      .where("tipoTurno", "==", tipoTurno)
+      .where("activo", "==", true)
+      .get();
+    const capacidadPorDia = 10;
+    const disponible = snap.size < capacidadPorDia;
+    return res.json({ disponible });
+  } catch (error) {
+    return res.status(500).json({ message: "Error de disponibilidad" });
   }
 };
 
