@@ -5,6 +5,17 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
+  const normalizeRole = (r) => {
+    if (!r) return r;
+    const map = {
+      Administrador: "Administrador",
+      Tecnico: "Técnico",
+      "Técnico": "Técnico",
+      Supervisor: "Supervisor",
+    };
+    return map[r] || r;
+  };
+
   const decodeToken = (t) => {
     try {
       const parts = String(t).split(".");
@@ -22,7 +33,8 @@ export const AuthProvider = ({ children }) => {
     const t = localStorage.getItem("token");
     if (t) {
       const p = decodeToken(t);
-      setUser(p ? { token: t, ...p } : { token: t });
+      const role = normalizeRole(p?.role);
+      setUser(p ? { token: t, ...p, role } : { token: t });
     }
   }, []);
   
@@ -30,7 +42,8 @@ export const AuthProvider = ({ children }) => {
   const login = (token) => {
     localStorage.setItem("token", token);
     const p = decodeToken(token);
-    setUser(p ? { token, ...p } : { token });
+    const role = normalizeRole(p?.role);
+    setUser(p ? { token, ...p, role } : { token });
   };
 
   const logout = () => {

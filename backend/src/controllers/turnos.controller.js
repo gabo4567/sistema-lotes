@@ -6,59 +6,82 @@ import { Timestamp } from "firebase-admin/firestore";
 // ➕ Crear un nuevo turno
 export const crearTurno = async (req, res) => {
   try {
-    let { productorId, ipt, fechaTurno, fechaSolicitada, motivo, tipoTurno, observaciones } = req.body;
-    productorId = productorId || ipt;
-    fechaTurno = fechaTurno || fechaSolicitada;
-
-    if (!productorId || !fechaTurno) {
-      return res.status(400).json({ message: "Faltan datos obligatorios: productorId o fechaTurno" });
+    console.log("📅 Backend - crearTurno recibido:", req.body);
+    console.log("👤 Usuario autenticado:", req.user?.uid);
+    
+    let { tipoTurno, fechaSolicitada, fecha, ipt } = req.body;
+    const productorId = req.user.uid;
+    
+    // Si no hay IPT en el body, intentar obtenerlo de los claims de Firebase
+    if (!ipt && req.user.firebaseClaims) {
+      ipt = req.user.firebaseClaims.ipt;
+      console.log("📋 IPT obtenido de Firebase claims:", ipt);
     }
 
-    const fecha = new Date(fechaTurno);
-    if (isNaN(fecha.getTime())) {
-      return res.status(400).json({ message: "Formato de fecha inválido" });
+    // Normalizar tipoTurno
+    const t = String(tipoTurno).toLowerCase().trim();
+    let tipo = "otra";
+    if (t.includes("insumo")) tipo = "insumo";
+    else if (t.includes("renov")) tipo = "carnet";
+
+    tipoTurno = tipo;
+
+    // Validar fecha (soporta tanto 'fecha' como 'fechaSolicitada')
+    const fechaFinal = fecha || fechaSolicitada;
+    console.log("📅 Fecha a procesar:", fechaFinal);
+    
+    if (!fechaFinal) {
+      return res.status(400).json({ message: "Fecha es requerida" });
+    }
+    
+    const date = new Date(fechaFinal);
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({ message: "Fecha inválida" });
     }
 
-    // 🚫 Verificar si ya existe un turno en esa fecha (rango diario)
-    const inicioDelDia = new Date(fecha);
-    inicioDelDia.setHours(0, 0, 0, 0);
-
-    const finDelDia = new Date(fecha);
-    finDelDia.setHours(23, 59, 59, 999);
-
-    const existenteSnapshot = await db
-      .collection("turnos")
-      .where("productorId", "==", productorId)
-      .where("fechaTurno", ">=", Timestamp.fromDate(inicioDelDia))
-      .where("fechaTurno", "<=", Timestamp.fromDate(finDelDia))
-      .where("activo", "==", true)
-      .get();
-
-
-    if (!existenteSnapshot.empty) {
-      return res.status(400).json({ message: "Ya existe un turno para este productor en esa fecha" });
+    // No fines de semana
+    const day = date.getDay();
+    if (day === 0 || day === 6) {
+      return res.status(400).json({ message: "No se permiten turnos sábado o domingo" });
     }
 
-    const nuevoTurno = {
+    // Si es turno de insumo → verificar stock
+    if (tipoTurno === "insumo") {
+      const userDoc = await db.collection("productores").doc(productorId).get();
+
+      if (!userDoc.exists) {
+        return res.status(404).json({ message: "Productor no encontrado" });
+      }
+
+      const datos = userDoc.data();
+      const tieneInsumos = datos.insumosPendientes && datos.insumosPendientes > 0;
+
+      if (!tieneInsumos) {
+        return res.status(400).json({ message: "No tienes insumos para retirar" });
+      }
+    }
+
+    // Crear el turno
+    const turno = {
       productorId,
-      fechaTurno: Timestamp.fromDate(fecha),
-      motivo: motivo || "",
-      tipoTurno: tipoTurno || "",
-      observaciones: observaciones || "",
+      tipoTurno,
+      fecha: fechaFinal,
+      fechaTurno: fechaFinal,
       estado: "pendiente",
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-      activo: true,
+      creadoEn: new Date().toISOString(),
+      activo: true
     };
 
-    const docRef = await db.collection("turnos").add(nuevoTurno);
-    res.status(201).json({ id: docRef.id, ...convertirTimestamps(nuevoTurno) });
+    await db.collection("turnos").add(turno);
+
+    return res.json({ message: "Turno creado exitosamente", turno });
 
   } catch (error) {
-    console.error("Error al crear el turno:", error);
-    res.status(500).json({ message: "Error al crear el turno", error });
+    console.error("Error en crearTurno:", error);
+    return res.status(500).json({ message: "Error al crear el turno" });
   }
 };
+
 
 // 📋 Obtener todos los turnos activos
 export const obtenerTurnos = async (req, res) => {
@@ -223,7 +246,6 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
       .collection("turnos")
       .where("fechaTurno", ">=", Timestamp.fromDate(inicio))
       .where("fechaTurno", "<=", Timestamp.fromDate(fin))
-      .where("activo", "==", true)
       .get();
 
     if (snapshot.empty) {
@@ -247,27 +269,95 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
 
 export const disponibilidadTurno = async (req, res) => {
   try {
-    const { fechaSolicitada, tipoTurno } = req.query;
+    const { fechaSolicitada, tipoTurno, ipt } = req.query;
+    console.log("📅 Backend - disponibilidadTurno recibido:", { fechaSolicitada, tipoTurno, ipt });
+    
     if (!fechaSolicitada || !tipoTurno) {
+      console.log("❌ Faltan parámetros");
       return res.status(400).json({ message: "Faltan parámetros" });
     }
-    const fecha = new Date(`${fechaSolicitada}T00:00:00.000Z`);
-    if (isNaN(fecha.getTime())) return res.status(400).json({ message: "Fecha inválida" });
+    
+    console.log("🔍 Procesando fecha:", fechaSolicitada, "tipo:", typeof fechaSolicitada);
+    const m = String(fechaSolicitada).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    console.log("📅 Match regex:", m);
+    
+    let fecha;
+    if (m) {
+      fecha = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      console.log("✅ Fecha creada desde match:", fecha);
+    } else {
+      fecha = new Date(`${fechaSolicitada}T00:00:00.000Z`);
+      console.log("⚠️ Fecha creada desde string:", fecha);
+    }
+    
+    console.log("📆 Fecha final:", fecha, "isValid:", !isNaN(fecha.getTime()));
+    
+    if (isNaN(fecha.getTime())) {
+      console.log("❌ Fecha inválida - retornando error");
+      return res.json({ disponible: false, motivo: "Fecha inválida" });
+    }
+    
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    const soloDia = new Date(fecha);
+    soloDia.setHours(0,0,0,0);
+    
+    if (soloDia.getTime() < hoy.getTime()) {
+      console.log("❌ Fecha ya pasada");
+      return res.json({ disponible: false, motivo: "Fecha ya pasada" });
+    }
+    
+    const dow = fecha.getDay();
+    if (dow === 0 || dow === 6) {
+      console.log("❌ Fin de semana");
+      return res.json({ disponible: false, motivo: "Fin de semana" });
+    }
+    
+    // Para "Carnet de renovación" y "Otra", siempre están disponibles si la fecha es válida
+    if (String(tipoTurno) !== "Insumo") {
+      console.log("✅ Tipo no es Insumo, retornando disponible: true");
+      return res.json({ disponible: true });
+    }
+    
+    console.log("🔍 Procesando tipo Insumo...");
+    
+    // Solo para "Insumo" verificamos la capacidad y disponibilidad de insumos
     const inicio = new Date(fecha);
     const fin = new Date(fecha);
     inicio.setHours(0,0,0,0);
     fin.setHours(23,59,59,999);
+    
     const snap = await db
       .collection("turnos")
       .where("fechaTurno", ">=", Timestamp.fromDate(inicio))
       .where("fechaTurno", "<=", Timestamp.fromDate(fin))
-      .where("tipoTurno", "==", tipoTurno)
-      .where("activo", "==", true)
       .get();
+      
+    const items = snap.docs.map(doc => doc.data()).filter(d => d.activo !== false && d.tipoTurno === "Insumo");
+    console.log("📊 Turnos de Insumo encontrados ese día:", items.length);
+    
+    // Verificar si el productor tiene insumos disponibles
+    if (ipt) {
+      try {
+        const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+        const okDoc = !psnap.empty ? psnap.docs[0].data() : null;
+        const tieneInsumos = Boolean(okDoc && okDoc.insumosDisponibles);
+        console.log("💊 Productor tiene insumos:", tieneInsumos);
+        if (!tieneInsumos) {
+          console.log("❌ No tiene insumos para recibir");
+          return res.json({ disponible: false, reason: "No tienes insumos para recibir" });
+        }
+      } catch (e) {
+        console.log("❌ Error verificando insumos:", e);
+      }
+    }
+    
     const capacidadPorDia = 10;
-    const disponible = snap.size < capacidadPorDia;
+    const disponible = items.length < capacidadPorDia;
+    console.log("📈 Capacidad:", items.length, "/", capacidadPorDia, "-> disponible:", disponible);
     return res.json({ disponible });
   } catch (error) {
+    console.error("❌ Error en disponibilidadTurno:", error);
     return res.status(500).json({ message: "Error de disponibilidad" });
   }
 };

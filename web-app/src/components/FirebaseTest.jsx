@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import api from '../api/axios';
 
 const FirebaseTest = () => {
   const [status, setStatus] = useState('Verificando...');
@@ -9,15 +8,18 @@ const FirebaseTest = () => {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        // Intentar obtener una colección de prueba
-        const testCollection = collection(db, '_test_');
-        const snapshot = await getDocs(testCollection);
-        setStatus('✅ Conexión con Firebase establecida correctamente');
-        setError(null);
+        const res = await api.get('/lotes');
+        if (Array.isArray(res.data)) {
+          setStatus('✅ Conexión backend OK');
+          setError(null);
+        } else {
+          setStatus('⚠️ Backend respondió sin lista');
+          setError(null);
+        }
       } catch (err) {
-        console.error('Error de conexión con Firebase:', err);
-        setStatus('❌ Error de conexión con Firebase');
-        setError(err.message);
+        console.error('Error de conexión con backend:', err);
+        setStatus('❌ Error de conexión con backend');
+        setError(err?.response?.data?.error || err.message);
       }
     };
 
@@ -32,7 +34,7 @@ const FirebaseTest = () => {
       borderRadius: '5px',
       backgroundColor: error ? '#ffe6e6' : '#e6ffe6'
     }}>
-      <h4>Test de Conexión Firebase:</h4>
+      <h4>Test de Conexión:</h4>
       <p>{status}</p>
       {error && (
         <div>

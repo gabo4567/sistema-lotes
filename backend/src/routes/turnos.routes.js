@@ -23,7 +23,10 @@ router.get("/ping", (req, res) => {
   res.json({ message: "Turnos API funcionando ✅" });
 });
 
-// CRUD principal
+// 📊 Endpoint público - disponibilidad (sin autenticación)
+router.get("/disponibilidad", disponibilidadTurno);
+
+// CRUD principal - requiere autenticación
 router.post("/", crearTurno);
 router.get("/", obtenerTurnos);
 router.get("/:id", obtenerTurnoPorId);
@@ -31,10 +34,9 @@ router.put("/:id", actualizarTurno);
 router.patch("/:id/estado", cambiarEstadoTurno);
 router.delete("/:id", eliminarTurno);
 
-// 📊 Endpoints complementarios
+// 📊 Endpoints complementarios - requieren autenticación
 router.get("/estado/:estado", obtenerTurnosPorEstado);
 router.get("/productor/:productorId", obtenerTurnosPorProductor);
 router.get("/filtro/fechas", obtenerTurnosPorRangoFechas);
-router.get("/disponibilidad", disponibilidadTurno);
 
 export default router;

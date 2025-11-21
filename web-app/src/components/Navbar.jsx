@@ -15,12 +15,13 @@ return (
     <Link to="/productores">Productores</Link>
     <Link to="/mediciones">Mediciones</Link>
     <Link to="/informes">Informes</Link>
+    <Link to="/users">Usuarios</Link>
   </div>
 <div>
 {user ? (
 <button onClick={logout} className="btn">Salir</button>
 ) : (
-<Link to="/login">Login</Link>
+    <Link to="/">Login</Link>
 )}
 </div>
 </nav>

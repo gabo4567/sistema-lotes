@@ -6,7 +6,12 @@ import { makeToken } from "../middlewares/auth.js";
 // Registrar usuario
 export const registerUser = async (req, res) => {
   try {
-    const { email, password, nombre } = req.body;
+    const { email, password, nombre, role } = req.body;
+
+    const domain = process.env.WEB_EMAIL_DOMAIN;
+    if (domain && !String(email).toLowerCase().endsWith(`@${domain.toLowerCase()}`)) {
+      return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
+    }
 
     const userRecord = await admin.auth().createUser({
       email,
@@ -14,9 +19,12 @@ export const registerUser = async (req, res) => {
       displayName: nombre,
     });
 
+    const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
+    const finalRole = allowed.includes(role) ? role : undefined;
     await db.collection("users").doc(userRecord.uid).set({
       email,
       nombre,
+      ...(finalRole ? { role: finalRole } : {}),
       createdAt: new Date(),
     });
 
@@ -26,6 +34,7 @@ export const registerUser = async (req, res) => {
         uid: userRecord.uid,
         email: userRecord.email,
         nombre: userRecord.displayName,
+        role: finalRole || undefined,
       },
     });
   } catch (error) {
@@ -44,7 +53,16 @@ export const loginUser = async (req, res) => {
 
     const user = await admin.auth().getUserByEmail(email);
     const userDoc = await db.collection("users").doc(user.uid).get();
+    if (userDoc.exists && userDoc.data().estado === "Inactivo") {
+      return res.status(403).json({ error: "Usuario inactivo" });
+    }
     const role = userDoc.exists ? (userDoc.data().role || "Tecnico") : "Tecnico";
+    await db.collection("users").doc(user.uid).set({
+      email: user.email,
+      nombre: user.displayName || "",
+      role,
+      ultimoAcceso: new Date(),
+    }, { merge: true });
     const webToken = makeToken({ uid: user.uid, email: user.email, role });
     res.json({ token: webToken, role });
   } catch (error) {
@@ -128,6 +146,19 @@ export const cambiarPasswordProductor = async (req, res) => {
     const token = await admin.auth().createCustomToken(uid, { role: "productor", ipt: String(ipt) });
     return res.json({ message: "Contraseña actualizada", token });
   } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Generar enlace de reseteo de contraseña (usuarios web)
+export const resetPasswordLink = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email requerido" });
+    const link = await admin.auth().generatePasswordResetLink(email);
+    return res.json({ link });
+  } catch (error) {
+    console.error("Error generando reset link:", error);
     return res.status(500).json({ error: error.message });
   }
 };

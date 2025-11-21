@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { admin } from "../utils/firebase.js";
 
 const SECRET = process.env.JWT_SECRET || "sistema-lotes-secret";
 
@@ -29,6 +30,37 @@ export const requireAuth = (req, res, next) => {
     const payload = verify(token);
     req.user = payload;
     next();
+  } catch (e) {
+    return res.status(401).json({ error: e.message || "No autenticado" });
+  }
+};
+
+export const requireFirebaseAuth = async (req, res, next) => {
+  try {
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "No autenticado" });
+    
+    try {
+      // Verificar token de Firebase
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      req.user = {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        role: decodedToken.role || "Productor",
+        firebaseClaims: decodedToken
+      };
+      next();
+    } catch (firebaseError) {
+      // Si falla Firebase, intentar con JWT tradicional
+      try {
+        const payload = verify(token);
+        req.user = payload;
+        next();
+      } catch (jwtError) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+    }
   } catch (e) {
     return res.status(401).json({ error: e.message || "No autenticado" });
   }

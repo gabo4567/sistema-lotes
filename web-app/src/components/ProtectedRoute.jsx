@@ -2,7 +2,7 @@ import React, { useContext } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
 
-const ProtectedRoute = ({ redirectTo = "/login", allowedRoles }) => {
+const ProtectedRoute = ({ redirectTo = "/", allowedRoles }) => {
   const { user } = useContext(AuthContext);
   if (!user) return <Navigate to={redirectTo} replace />;
   if (allowedRoles && user.role && !allowedRoles.includes(user.role)) {

@@ -87,3 +87,16 @@ export const deleteOrden = async (req, res) => {
     res.status(500).json({ error: "Error al desactivar orden" });
   }
 };
+
+// Insumos: listado simple
+export const getInsumos = async (req, res) => {
+  try {
+    const snapshot = await db.collection("insumos").get();
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(items);
+  } catch (error) {
+    console.error("Error al obtener insumos:", error);
+    // Devolver lista vacía para no romper frontend
+    res.json([]);
+  }
+};

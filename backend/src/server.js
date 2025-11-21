@@ -16,12 +16,24 @@ import ordenesRoutes from "./routes/ordenes.routes.js";
 import medicionesRoutes from "./routes/mediciones.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
+import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// CORS básico para desarrollo (web en Vite 5173)
+app.use((req, res, next) => {
+  const origin = process.env.WEB_ORIGIN || "http://localhost:5173";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Vary", "Origin");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Rutas API
 app.use("/api/users", requireAuth, requireRole(["Administrador"]), usersRoutes);
@@ -31,9 +43,18 @@ app.use("/api/productores", productoresRoutes);
 app.use("/api/ordenes", ordenesRoutes);
 app.use("/api/mediciones", medicionesRoutes);
 
-// 🧭 Nueva ruta: obtener turnos por estado
+// 🧭 Rutas de turnos - disponibilidad sin autenticación
 console.log("📢 Intentando registrar las rutas de /api/turnos...");
-app.use("/api/turnos", turnosRoutes);
+
+// Primero registramos el endpoint público de disponibilidad CON RUTA COMPLETA
+app.get("/api/turnos/disponibilidad", (req, res, next) => {
+  console.log("📅 Endpoint /api/turnos/disponibilidad llamado");
+  disponibilidadTurno(req, res, next);
+});
+
+// Luego registramos el resto de rutas con autenticación Firebase
+app.use("/api/turnos", requireFirebaseAuth, turnosRoutes);
+
 console.log("✅ Rutas de turnos registradas correctamente");
 
 // 🧭 Nueva ruta de informes
@@ -53,4 +74,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`✅ Servidor backend escuchando en http://localhost:${PORT}`);
 });
-import { requireAuth, requireRole } from "./middlewares/auth.js";
+import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";

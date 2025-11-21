@@ -1,64 +1,51 @@
-// Import Firebase services
-import { db } from "./firebase.js";
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import api from "../api/axios";
 
-// Funciones CRUD para lotes
 export const lotesService = {
-  // Obtener todos los lotes
   async getLotes() {
-    try {
-      const lotesCollection = collection(db, "lotes");
-      const lotesSnapshot = await getDocs(lotesCollection);
-      const lotesList = lotesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      return lotesList;
-    } catch (error) {
-      console.error("Error al obtener lotes:", error);
-      throw error;
-    }
+    const res = await api.get("/lotes");
+    return res.data;
   },
 
-  // Crear un nuevo lote
-  async createLote(loteData) {
-    try {
-      const lotesCollection = collection(db, "lotes");
-      const docRef = await addDoc(lotesCollection, {
-        ...loteData,
-        createdAt: new Date().toISOString()
-      });
-      return { id: docRef.id, ...loteData };
-    } catch (error) {
-      console.error("Error al crear lote:", error);
-      throw error;
-    }
+  async getLote(id) {
+    const res = await api.get(`/lotes/${id}`);
+    return res.data;
   },
 
-  // Actualizar un lote
-  async updateLote(id, loteData) {
-    try {
-      const loteDoc = doc(db, "lotes", id);
-      await updateDoc(loteDoc, {
-        ...loteData,
-        updatedAt: new Date().toISOString()
-      });
-      return { id, ...loteData };
-    } catch (error) {
-      console.error("Error al actualizar lote:", error);
-      throw error;
-    }
+  async createLote(data) {
+    // Adaptar datos simples (lat/lng) a polígono mínimo válido para backend
+    const { nombre, lat, lng } = data || {};
+    const baseLat = Number(lat);
+    const baseLng = Number(lng);
+    const d = 0.0001;
+    const poligono = [
+      { lat: baseLat, lng: baseLng },
+      { lat: baseLat + d, lng: baseLng },
+      { lat: baseLat, lng: baseLng + d }
+    ];
+    const payload = {
+      ipt: "WEB_TMP",
+      superficie: null,
+      ubicacion: nombre || null,
+      poligono,
+      metodoMarcado: "aereo",
+      observacionesTecnico: "Creado desde formulario simple web",
+    };
+    const res = await api.post("/lotes", payload);
+    return res.data;
   },
 
-  // Eliminar un lote
+  async updateLote(id, data) {
+    const res = await api.put(`/lotes/${id}`, data);
+    return res.data;
+  },
+
   async deleteLote(id) {
-    try {
-      const loteDoc = doc(db, "lotes", id);
-      await deleteDoc(loteDoc);
-      return id;
-    } catch (error) {
-      console.error("Error al eliminar lote:", error);
-      throw error;
-    }
+    const res = await api.delete(`/lotes/${id}`);
+    return res.data;
+  },
+
+  async cambiarEstado(id, data) {
+    const res = await api.patch(`/lotes/${id}/estado`, data);
+    return res.data;
   }
 };

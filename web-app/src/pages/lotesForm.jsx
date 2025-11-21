@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { crearLote } from "../services/lotes.service";
+import { lotesService } from "../services/lotes.service";
 import Layout from "../components/Layout";
 
 const LoteForm = () => {
@@ -10,7 +10,7 @@ const LoteForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await crearLote({ nombre, lat: parseFloat(lat), lng: parseFloat(lng) });
+      await lotesService.createLote({ nombre, lat: parseFloat(lat), lng: parseFloat(lng) });
       alert("✅ Lote creado correctamente");
       setNombre("");
       setLat("");

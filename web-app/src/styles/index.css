@@ -108,7 +108,7 @@ body {
 /* Botón principal */
 .btn-primary-custom {
   width: 100%;
-  background-image: linear-gradient(90deg, var(#6dd6f9) 0%, var(--color-2) 100%);
+  background-image: linear-gradient(90deg, #6dd6f9 0%, var(--color-2) 100%);
   border: none;
   border-radius: 10px;
   color: #fff;
