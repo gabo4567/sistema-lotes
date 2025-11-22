@@ -20,9 +20,9 @@ export const crearTurno = async (req, res) => {
 
     // Normalizar tipoTurno
     const t = String(tipoTurno).toLowerCase().trim();
-    let tipo = "otra";
-    if (t.includes("insumo")) tipo = "insumo";
-    else if (t.includes("renov")) tipo = "carnet";
+    let tipo = "Otra";
+    if (t.includes("insumo")) tipo = "Insumo";
+    else if (t.includes("renov")) tipo = "Carnet de renovación";
 
     tipoTurno = tipo;
 
