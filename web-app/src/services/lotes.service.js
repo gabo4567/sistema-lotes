@@ -1,3 +1,4 @@
+// servicios/lotes.service.js
 import api from "../api/axios";
 
 export const lotesService = {

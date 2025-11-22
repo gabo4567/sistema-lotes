@@ -22,7 +22,7 @@ const MedicionesList = () => {
   useEffect(()=>{ load(); }, []);
 
   return (
-    <Layout>
+<body>
       <h2>Mediciones</h2>
       <div className="flex gap-2 mb-2">
         <input placeholder="Productor" value={filtros.productor} onChange={e=>setFiltros({...filtros, productor:e.target.value})} />
@@ -40,7 +40,7 @@ const MedicionesList = () => {
           </tbody>
         </table>
       )}
-    </Layout>
+    </body>
   );
 };
 

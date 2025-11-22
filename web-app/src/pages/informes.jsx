@@ -25,7 +25,7 @@ const Informes = () => {
   const expExcel = async () => { const r = await exportarExcel(tipo); setMessage(r?.message || ""); };
 
   return (
-    <Layout>
+ <body>
       <h2>Informes</h2>
       <div className="flex gap-2 mb-2">
         <select value={tipo} onChange={e=>setTipo(e.target.value)}>
@@ -41,7 +41,7 @@ const Informes = () => {
       </div>
       {message && <div className="mb-2">{message}</div>}
       <pre style={{ background:'#fff', padding:12, borderRadius:8 }}>{data ? JSON.stringify(data, null, 2) : 'Sin datos'}</pre>
-    </Layout>
+    </body>
   );
 };
 

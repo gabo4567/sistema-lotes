@@ -46,7 +46,7 @@ const Login = () => {
           <div className="d-flex align-items-center mb-3">
             <img src={logo} alt="Logo" className="logo me-3" />
             <div>
-              <h4 className="mb-0">Login</h4>
+              <h3 className="mb-0">Login</h3>
               <small className="text-muted">Panel de administración</small>
             </div>
           </div>
@@ -55,7 +55,7 @@ const Login = () => {
             <div className="mb-3">
               <label htmlFor="email" className="form-label visually-hidden">
                 Email
-              </label>
+              </label><br />
               <input
                 id="email"
                 type="email"
@@ -74,7 +74,7 @@ const Login = () => {
                 className="form-label visually-hidden"
               >
                 Contraseña
-              </label>
+              </label><br />
               <input
                 id="password"
                 type="password"

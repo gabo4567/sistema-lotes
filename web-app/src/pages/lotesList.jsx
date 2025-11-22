@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { lotesService } from "../services/lotes.service";
 import { Link, useNavigate } from "react-router-dom";
+import Layout from "../components/Layout";
 
 const LotesList = () => {
   const [lotes, setLotes] = useState([]);
@@ -30,6 +31,7 @@ const LotesList = () => {
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
   return (
+    
     <div>
       <h2>Gestión de Lotes</h2>
       <div className="flex gap-2">
@@ -67,6 +69,7 @@ const LotesList = () => {
         </table>
       )}
     </div>
+    
   );
 };
 

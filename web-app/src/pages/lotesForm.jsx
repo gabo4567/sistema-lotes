@@ -22,7 +22,7 @@ const LoteForm = () => {
   };
 
   return (
-    <Layout>
+    <body>
       <form onSubmit={handleSubmit} className="max-w-md bg-white p-4 rounded shadow">
         <h2 className="text-xl mb-4 font-semibold">Crear Lote</h2>
         <input
@@ -47,7 +47,7 @@ const LoteForm = () => {
           Guardar
         </button>
       </form>
-    </Layout>
+    </body>
   );
 };
 

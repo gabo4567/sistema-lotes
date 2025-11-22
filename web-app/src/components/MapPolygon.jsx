@@ -1,22 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
+import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 
 const MapPolygon = ({ points = [] }) => {
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const containerRef = useRef(null);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    if (!key) return;
-    if (window.google && window.google.maps) { setReady(true); return; }
-    const id = "gmaps-js";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("script");
-    s.id = id;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=drawing`;
-    s.async = true;
-    s.onload = () => setReady(true);
-    document.head.appendChild(s);
-  }, [key]);
+useEffect(() => {
+  if (!key) return;
+  loadGoogleMaps(key).then(() => setReady(true));
+}, [key]);
+
 
   useEffect(() => {
     if (!ready || !containerRef.current || !window.google || !window.google.maps) return;

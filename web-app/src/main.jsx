@@ -6,6 +6,7 @@ import ReactDOM from "react-dom/client";
 // estilo global
 import "./styles/index.css";
 
+
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
@@ -18,6 +19,7 @@ import ResetPassword from "./pages/resetPassword.jsx";
 import LotesList from "./pages/lotesList.jsx";
 import LoteAdminForm from "./pages/loteAdminForm.jsx";
 import LoteDetail from "./pages/loteDetail.jsx";
+import LoteForm from "./pages/lotesForm.jsx";
 import TurnosList from "./pages/turnosList.jsx";
 import InsumosList from "./pages/insumosList.jsx";
 import Forbidden from "./pages/forbidden.jsx";
@@ -28,6 +30,7 @@ import MedicionesList from "./pages/medicionesList.jsx";
 import MedicionesForm from "./pages/medicionesForm.jsx";
 import Informes from "./pages/informes.jsx";
 import UsersList from "./pages/usersList.jsx";
+import Layout from "./components/Layout.jsx";
 
 
 class ErrorBoundary extends React.Component {
@@ -43,71 +46,88 @@ class ErrorBoundary extends React.Component {
 }
 
 const router = createBrowserRouter([
+// Rutas públicas
   { path: "/", element: <Login /> },
   { path: "/403", element: <Forbidden /> },
   { path: "/register", element: <Register /> },
   { path: "/reset-password", element: <ResetPassword /> },
 
-  {
-    element: <ProtectedRoute />,
-    children: [{ path: "/home", element: <Home /> }],
-  },
-
+  // Rutas protegidas con Layout
   {
     element: (
-      <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
     ),
     children: [
-      { path: "/lotes", element: <LotesList /> },
-      { path: "/lotes/nuevo", element: <LoteAdminForm /> },
-      { path: "/lotes/:id", element: <LoteDetail /> },
-      { path: "/lotes/:id/editar", element: <LoteAdminForm /> },
+      { path: "/home", element: <Home /> },
+
+      // Lotes
+      {
+        element: (
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+        ),
+        children: [
+          { path: "/lotes", element: <LotesList /> },
+          { path: "/lotes/nuevo", element: <LoteAdminForm /> },
+          { path: "/lotes/:id", element: <LoteDetail /> },
+          { path: "/lotes/:id/editar", element: <LoteAdminForm /> },
+        ],
+      },
+
+      // Turnos
+      {
+        element: (
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+        ),
+        children: [{ path: "/turnos", element: <TurnosList /> }],
+      },
+
+      // Insumos
+      {
+        element: <ProtectedRoute allowedRoles={["Administrador"]} />,
+        children: [{ path: "/insumos", element: <InsumosList /> }],
+      },
+
+      // Productores
+      {
+        element: (
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+        ),
+        children: [
+          { path: "/productores", element: <ProductoresList /> },
+          { path: "/productores/nuevo", element: <ProductorForm /> },
+          { path: "/productores/:id", element: <ProductorDetail /> },
+          { path: "/productores/:id/editar", element: <ProductorForm /> },
+        ],
+      },
+
+      // Mediciones
+      {
+        element: (
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+        ),
+        children: [
+          { path: "/mediciones", element: <MedicionesList /> },
+          { path: "/mediciones/nueva", element: <MedicionesForm /> },
+        ],
+      },
+
+      // Informes
+      {
+        element: <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]} />,
+        children: [{ path: "/informes", element: <Informes /> }],
+      },
+
+      // Users
+      {
+        element: <ProtectedRoute allowedRoles={["Administrador"]} />,
+        children: [{ path: "/users", element: <UsersList /> }],
+      },
     ],
   },
 
-  {
-    element: (
-      <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
-    ),
-    children: [{ path: "/turnos", element: <TurnosList /> }],
-  },
-
-  {
-    element: <ProtectedRoute allowedRoles={["Administrador"]} />,
-    children: [{ path: "/insumos", element: <InsumosList /> }],
-  },
-
-  {
-    element: (
-      <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
-    ),
-    children: [
-      { path: "/productores", element: <ProductoresList /> },
-      { path: "/productores/nuevo", element: <ProductorForm /> },
-      { path: "/productores/:id", element: <ProductorDetail /> },
-      { path: "/productores/:id/editar", element: <ProductorForm /> },
-    ],
-  },
-
-  {
-    element: (
-      <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
-    ),
-    children: [
-      { path: "/mediciones", element: <MedicionesList /> },
-      { path: "/mediciones/nueva", element: <MedicionesForm /> },
-    ],
-  },
-
-  {
-    element: <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]} />,
-    children: [{ path: "/informes", element: <Informes /> }],
-  },
-  {
-    element: <ProtectedRoute allowedRoles={["Administrador"]} />,
-    children: [{ path: "/users", element: <UsersList /> }],
-  },
-
+  // fallback
   { path: "*", element: <Login /> },
 ]);
 

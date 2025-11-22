@@ -31,9 +31,18 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Vary", "Origin");
+  res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
+
 
 // Rutas API
 app.use("/api/users", requireAuth, requireRole(["Administrador"]), usersRoutes);

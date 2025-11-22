@@ -61,7 +61,7 @@ const ProductorForm = () => {
   };
 
   return (
-    <Layout>
+<body>
       <h2>{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-2 max-w-xl">
         <input placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
@@ -87,7 +87,7 @@ const ProductorForm = () => {
         {error && <div className="text-red-600">{error}</div>}
         <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
       </form>
-    </Layout>
+      </body>
   );
 };
 

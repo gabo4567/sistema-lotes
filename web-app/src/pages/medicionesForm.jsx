@@ -21,7 +21,7 @@ const MedicionesForm = () => {
   };
 
   return (
-    <Layout>
+ <body>
       <h2>Nueva medición</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
         <input placeholder="Productor" value={form.productor} onChange={e=>onChange('productor', e.target.value)} />
@@ -35,7 +35,7 @@ const MedicionesForm = () => {
         {error && <div className="text-red-600">{error}</div>}
         <button className="btn" type="submit" disabled={loading}>{loading? 'Guardando…' : 'Guardar'}</button>
       </form>
-    </Layout>
+   </body>
   );
 };
 

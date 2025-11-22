@@ -12,6 +12,7 @@ const LoteAdminForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [poly, setPoly] = useState([]);
+  const hasApiKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
   useEffect(()=>{ (async ()=>{
     if (isEdit) {
@@ -67,7 +68,7 @@ const LoteAdminForm = () => {
   };
 
   return (
-    <Layout>
+      <body>
       <h2>{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-2 max-w-xl">
         <input placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
@@ -83,7 +84,7 @@ const LoteAdminForm = () => {
         <div>
           <div style={{ marginBottom: 8 }}>Editar polígono en el mapa</div>
           <MapPolygonEditor points={poly} onChange={(pts)=>{ setPoly(pts); setForm(f=>({ ...f, poligonoText: pts.map(p=>`${p.lat},${p.lng}`).join('\n') })); }} />
-          {!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && (
+          {!hasApiKey && (
             <div style={{ marginTop: 6, color: '#6b7280' }}>Sin API key: usá el campo de texto para cargar el polígono (lat,lng por línea)</div>
           )}
         </div>
@@ -92,7 +93,7 @@ const LoteAdminForm = () => {
         {error && <div className="text-red-600">{error}</div>}
         <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
       </form>
-    </Layout>
+      </body>
   );
 };
 

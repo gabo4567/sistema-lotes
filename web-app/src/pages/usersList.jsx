@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getUsers, updateUser, deactivateUser, resetPasswordUser } from "../services/users.service";
-import Layout from "../components/Layout";
+
 
 const UsersList = () => {
   const [items, setItems] = useState([]);
@@ -49,12 +49,11 @@ const UsersList = () => {
       setError("No se pudo generar enlace de reseteo");
     }
   };
-
-  if (loading) return <Layout><div>Cargando…</div></Layout>;
-  if (error) return <Layout><div className="text-red-600">{error}</div></Layout>;
+  if (loading) return <div>Cargando usuarios...</div>;
+  if (error) return <div className="text-red-700">{error}</div>;
 
   return (
-    <Layout>
+    <body>
       <h2>Usuarios</h2>
       {msg && <div className="text-green-700 mb-2">{msg}</div>}
       <table className="w-full">
@@ -86,7 +85,7 @@ const UsersList = () => {
           ))}
         </tbody>
       </table>
-    </Layout>
+    </body>
   );
 };
 

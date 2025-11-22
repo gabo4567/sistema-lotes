@@ -22,7 +22,7 @@ const InsumosList = () => {
   })()},[])
 
   return (
-    <Layout>
+    <body>
       <h2>Insumos</h2>
       {error && <div className="text-red-600" style={{ marginBottom: 8 }}>{error}</div>}
       {loading ? (<div>Cargando…</div>) : (
@@ -36,7 +36,7 @@ const InsumosList = () => {
           )}
         </ul>
       )}
-    </Layout>
+ </body>
   )
 }
 

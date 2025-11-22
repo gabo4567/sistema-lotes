@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import api from "../api/axios";
+import Layout from "../components/Layout";
 
 const ResetPassword = () => {
   const [email, setEmail] = useState("");
@@ -18,6 +19,7 @@ const ResetPassword = () => {
   };
 
   return (
+
     <div style={{ maxWidth: 480, margin: "40px auto" }}>
       <h2>Recuperar contraseña</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
@@ -32,6 +34,7 @@ const ResetPassword = () => {
         {error && <div className="text-red-600">{error}</div>}
       </form>
     </div>
+
   );
 };
 

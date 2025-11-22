@@ -97,6 +97,8 @@ body {
 .auth-card .form-control {
   border-radius: 10px;
   padding: 12px 14px;
+  margin: 6px;
+  width: 90%;
   border: 1px solid rgba(16,24,32,0.08);
 }
 .auth-card .form-control:focus {
@@ -131,4 +133,28 @@ body {
   .auth-split { flex-direction: column; }
   .right-col { min-height: 220px; order: 2; }
   .left-col { order: 1; padding: 28px 18px; }
+}
+
+.bg-white-shadow-p-3-flex-justify-between{
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(16,24,32,0.08);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+
+}
+
+.flex-gap-4-items-center {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.nav .link {
+  font-weight: 700;
+  font-size: 1.125rem;
+  margin: 0px 5px 0px 5px;
+  font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+  color: var(--color-5);
+
 }

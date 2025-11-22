@@ -8,14 +8,14 @@ const { user, logout } = useContext(AuthContext)
 return (
 <nav className="bg-white shadow p-3 flex justify-between">
   <div className="flex gap-4 items-center">
-    <Link to="/">SISTEMA-LOTES</Link>
-    <Link to="/lotes">Lotes</Link>
-    <Link to="/turnos">Turnos</Link>
-    <Link to="/insumos">Insumos</Link>
-    <Link to="/productores">Productores</Link>
-    <Link to="/mediciones">Mediciones</Link>
-    <Link to="/informes">Informes</Link>
-    <Link to="/users">Usuarios</Link>
+    <Link className="nav link" to="/home">SISTEMA-LOTES</Link>
+    <Link className="nav link" to="/lotes">Lotes</Link>
+    <Link className="nav link" to="/turnos">Turnos</Link>
+    <Link className="nav link" to="/insumos">Insumos</Link>
+    <Link className="nav link" to="/productores">Productores</Link>
+    <Link className="nav link" to="/mediciones">Mediciones</Link>
+    <Link className="nav link" to="/informes">Informes</Link>
+    <Link className="nav link" to="/users">Usuarios</Link>
   </div>
 <div>
 {user ? (
