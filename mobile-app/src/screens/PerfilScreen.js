@@ -63,6 +63,11 @@ export default function PerfilScreen() {
         <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
         <Text style={styles.item}>Estado: {data?.estado}</Text>
         <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
+        <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura)</Text>
+        <Text style={styles.item}>Entrada domicilio: {data?.ubicaciones?.entradaDomicilio?.lat != null ? `${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}, ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}</Text>
+        <Text style={styles.item}>Domicilio/Casa: {data?.ubicaciones?.domicilioCasa?.lat != null ? `${data.ubicaciones.domicilioCasa.lat.toFixed(6)}, ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}</Text>
+        <Text style={styles.item}>Entrada campo: {data?.ubicaciones?.entradaCampo?.lat != null ? `${data.ubicaciones.entradaCampo.lat.toFixed(6)}, ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}</Text>
+        <Text style={styles.item}>Centro campo: {data?.ubicaciones?.centroCampo?.lat != null ? `${data.ubicaciones.centroCampo.lat.toFixed(6)}, ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}</Text>
       </View>
     </View>
   );
@@ -73,6 +78,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: "bold", color: "#1e8449", marginBottom: 12, textAlign: "center" },
   card: { backgroundColor: "#ffffff", borderRadius: 12, padding: 16, elevation: 2 },
   item: { fontSize: 16, marginBottom: 6, color: "#34495e" },
+  section: { marginTop: 10, fontWeight: "bold" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   error: { color: "#c0392b" },
 });

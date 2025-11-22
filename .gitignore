@@ -10,6 +10,8 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+*.map
+*.orig
 
 # Variables de entorno
 .env
@@ -22,6 +24,11 @@ Thumbs.db
 serviceAccountKey.json
 firebase-adminsdk*.json
 
+# Carpetas internas que NO deben subirse
+.trae/
+.expo/
+.expo-shared/
+
 # ========================
 # 🧱 BACKEND (Node + Express)
 # ========================
@@ -29,7 +36,7 @@ firebase-adminsdk*.json
 backend/node_modules/
 backend/.env
 backend/npm-debug.log
-backend/package-lock.json
+backend/dist/
 
 # ========================
 # 📱 MOBILE APP (React Native)
@@ -42,12 +49,22 @@ mobile-app/dist/
 mobile-app/build/
 mobile-app/web-build/
 mobile-app/.env
+
+# React Native / Android
 mobile-app/android/app/build/
 mobile-app/android/.gradle/
+mobile-app/android/.cxx/
+mobile-app/android/local.properties
+
+# React Native / iOS
 mobile-app/ios/Pods/
 mobile-app/ios/build/
 mobile-app/ios/DerivedData/
 mobile-app/ios/*.xcworkspace
+
+# Bundlers / Configs que no deben subirse
+mobile-app/metro.config.js
+mobile-app/app.config.js
 
 # ========================
 # 💻 WEB APP (React)

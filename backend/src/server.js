@@ -16,6 +16,7 @@ import ordenesRoutes from "./routes/ordenes.routes.js";
 import medicionesRoutes from "./routes/mediciones.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 
 
@@ -69,6 +70,15 @@ console.log("✅ Rutas de turnos registradas correctamente");
 // 🧭 Nueva ruta de informes
 app.use("/api/informes", informesRoutes);
 console.log("✅ Rutas de informes registradas correctamente");
+
+// 📸 Ruta para uploads de imágenes
+app.use("/api/upload", uploadRoutes);
+console.log("✅ Rutas de uploads registradas correctamente");
+
+// 📁 Servir archivos estáticos (imágenes subidas)
+// Servir archivos estáticos desde uploads
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+console.log("📁 Servidor de archivos estáticos configurado para /uploads");
 
 app.get("/", (req, res) => {
   res.send("Servidor del Sistema de Lotes funcionando correctamente 🚀");

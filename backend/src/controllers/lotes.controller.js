@@ -4,7 +4,7 @@ import { db } from "../utils/firebase.js";
 // Crear un lote
 export const createLote = async (req, res) => {
   try {
-    const { ipt, superficie, ubicacion, poligono, metodoMarcado, observacionesTecnico } = req.body;
+    const { ipt, superficie, ubicacion, poligono, metodoMarcado, observacionesTecnico, nombre, observacionesProductor } = req.body;
     if (!ipt || !poligono || !Array.isArray(poligono) || poligono.length < 3 || !metodoMarcado) {
       return res.status(400).json({ error: "Datos de lote inválidos" });
     }
@@ -18,6 +18,8 @@ export const createLote = async (req, res) => {
       fechaCreacion: new Date(),
       estado: "Pendiente",
       observacionesTecnico: observacionesTecnico || "",
+      nombre: nombre ? String(nombre) : null,
+      observacionesProductor: observacionesProductor || "",
       activo: true,
     };
 
@@ -110,7 +112,11 @@ export const deleteLote = async (req, res) => {
 export const getLotesByIpt = async (req, res) => {
   try {
     const { ipt } = req.params;
-    const snapshot = await db.collection("lotes").where("ipt", "==", String(ipt)).get();
+    const snapshot = await db
+      .collection("lotes")
+      .where("ipt", "==", String(ipt))
+      .where("activo", "==", true)
+      .get();
     const lotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(lotes);
   } catch (error) {
