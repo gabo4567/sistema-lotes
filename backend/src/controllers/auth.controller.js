@@ -104,7 +104,24 @@ export const loginProductor = async (req, res) => {
       return res.status(401).json({ error: "Credenciales inválidas" });
     }
     const uid = `prod_${String(ipt)}`;
-    const token = await admin.auth().createCustomToken(uid, { role: "productor", ipt: String(ipt) });
+    
+    // Actualizar claims del usuario con datos completos del productor
+    await admin.auth().setCustomUserClaims(uid, {
+      ipt: String(ipt),
+      role: "productor",
+      nombre: data.nombreCompleto || data.nombre,
+      email: data.email,
+      productorId: doc.id // ID del documento en Firestore
+    });
+    
+    const token = await admin.auth().createCustomToken(uid, { 
+      role: "productor", 
+      ipt: String(ipt),
+      nombre: data.nombreCompleto || data.nombre,
+      email: data.email,
+      productorId: doc.id
+    });
+    
     await doc.ref.update({ historialIngresos: admin.firestore.FieldValue.increment(1) });
     return res.json({ token, requiereCambioContrasena: requiereCambio });
   } catch (error) {
@@ -143,7 +160,23 @@ export const cambiarPasswordProductor = async (req, res) => {
     const newHash = hashPassword(String(newPassword), salt);
     await doc.ref.update({ passwordHash: newHash, requiereCambioContrasena: false });
     const uid = `prod_${String(ipt)}`;
-    const token = await admin.auth().createCustomToken(uid, { role: "productor", ipt: String(ipt) });
+    
+    // Actualizar claims del usuario con datos completos del productor
+    await admin.auth().setCustomUserClaims(uid, {
+      ipt: String(ipt),
+      role: "productor",
+      nombre: data.nombreCompleto || data.nombre,
+      email: data.email,
+      productorId: doc.id // ID del documento en Firestore
+    });
+    
+    const token = await admin.auth().createCustomToken(uid, { 
+      role: "productor", 
+      ipt: String(ipt),
+      nombre: data.nombreCompleto || data.nombre,
+      email: data.email,
+      productorId: doc.id
+    });
     return res.json({ message: "Contraseña actualizada", token });
   } catch (error) {
     return res.status(500).json({ error: error.message });

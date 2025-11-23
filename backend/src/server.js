@@ -18,6 +18,7 @@ import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
+import testRoutes from "./routes/test.routes.js";
 
 
 const app = express();
@@ -25,15 +26,38 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// CORS básico para desarrollo (web en Vite 5173)
+// CORS configurado para desarrollo - más permisivo para app móvil
 app.use((req, res, next) => {
-  const origin = process.env.WEB_ORIGIN || "http://localhost:5173";
-  res.header("Access-Control-Allow-Origin", origin);
+  // Permitir múltiples orígenes para desarrollo
+  const allowedOrigins = [
+    "http://localhost:5173",           // Web frontend
+    "http://localhost:19006",          // Expo web
+    "http://192.168.1.100:19006",      // Expo en red local
+    "http://10.0.2.2:3000",            // Android emulator
+    "exp://192.168.1.100:19000",       // Expo directo
+    "*"                                 // Temporal para debugging
+  ];
+  
+  const origin = req.headers.origin;
+  
+  // Para desarrollo, permitir todos los orígenes temporalmente
+  res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.header("Access-Control-Allow-Credentials", "true");
   res.header("Vary", "Origin");
+<<<<<<< HEAD
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
+=======
+  
+  if (req.method === "OPTIONS") {
+    console.log("🔄 CORS preflight request desde:", origin);
+    return res.sendStatus(204);
+  }
+  
+  console.log("📡 Request desde origen:", origin || "desconocido");
+>>>>>>> fe68880 (Agregar mejoras en turnos, nuevas rutas de test y actualizar pantallas mobile)
   next();
 });
 
@@ -61,6 +85,22 @@ app.get("/api/turnos/disponibilidad", (req, res, next) => {
   console.log("📅 Endpoint /api/turnos/disponibilidad llamado");
   disponibilidadTurno(req, res, next);
 });
+
+// Ruta de prueba SIN autenticación para verificar comunicación
+app.post("/api/test/public/test-turno", (req, res) => {
+  console.log("🧪 TEST PÚBLICO - Body recibido:", req.body);
+  console.log("🧪 TEST PÚBLICO - Headers:", req.headers);
+  
+  res.json({
+    success: true,
+    message: "Comunicación exitosa - El servidor recibe los datos correctamente",
+    datosRecibidos: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Ruta de prueba para verificar el flujo de turnos
+app.use("/api/test", requireFirebaseAuth, testRoutes);
 
 // Luego registramos el resto de rutas con autenticación Firebase
 app.use("/api/turnos", requireFirebaseAuth, turnosRoutes);

@@ -8,9 +8,26 @@ export const crearTurno = async (req, res) => {
   try {
     console.log("📅 Backend - crearTurno recibido:", req.body);
     console.log("👤 Usuario autenticado:", req.user?.uid);
+    console.log("🔑 Headers:", req.headers);
     
     let { tipoTurno, fechaSolicitada, fecha, ipt } = req.body;
-    const productorId = req.user.uid;
+    
+    // 🔍 DEBUG EXHAUSTIVO DE TIPOS
+    console.log("🔍 DEBUG TIPO - VALORES CRUDOS RECIBIDOS:");
+    console.log("  - tipoTurno crudo:", JSON.stringify(tipoTurno));
+    console.log("  - tipoTurno tipo:", typeof tipoTurno);
+    console.log("  - fechaSolicitada cruda:", JSON.stringify(fechaSolicitada));
+    console.log("  - fecha cruda:", JSON.stringify(fecha));
+    console.log("  - ipt crudo:", JSON.stringify(ipt));
+    
+    // Obtener el productorId correcto - primero de los claims, luego del UID
+    let productorId = req.user.uid;
+    if (req.user.firebaseClaims?.productorId) {
+      productorId = req.user.firebaseClaims.productorId;
+      console.log("🆔 ProductorId obtenido de Firebase claims:", productorId);
+    } else {
+      console.log("🆔 ProductorId usando UID de Firebase:", productorId);
+    }
     
     // Si no hay IPT en el body, intentar obtenerlo de los claims de Firebase
     if (!ipt && req.user.firebaseClaims) {
@@ -18,26 +35,103 @@ export const crearTurno = async (req, res) => {
       console.log("📋 IPT obtenido de Firebase claims:", ipt);
     }
 
-    // Normalizar tipoTurno
-    const t = String(tipoTurno).toLowerCase().trim();
-    let tipo = "Otra";
-    if (t.includes("insumo")) tipo = "Insumo";
-    else if (t.includes("renov")) tipo = "Carnet de renovación";
-
-    tipoTurno = tipo;
+    // Normalizar tipoTurno - SOLUCIÓN DRÁSTICA Y ULTRA-ROBUSTA
+    console.log("🔍 DEBUG - tipoTurno recibido:", JSON.stringify(tipoTurno));
+    
+    // Guardar valor original para debugging
+    const tipoOriginal = tipoTurno;
+    
+    // Convertir a string y limpiar
+    let t = String(tipoTurno).toLowerCase().trim();
+    console.log("🔍 DEBUG - tipoTurno limpio:", JSON.stringify(t));
+    
+    // DICCIONARIO COMPLETO DE MAPEO
+    const mapeoTipos = {
+      // Insumo
+      'insumo': 'insumo',
+      'insumos': 'insumo',
+      'ins': 'insumo',
+      
+      // Renovación de Carnet
+      'renovación de carnet': 'carnet',
+      'renovacion de carnet': 'carnet',
+      'renovación': 'carnet',
+      'renovacion': 'carnet',
+      'renov': 'carnet',
+      'carnet': 'carnet',
+      'carné': 'carnet',
+      'renovación carnet': 'carnet',
+      'renovacion carnet': 'carnet',
+      
+      // Otras variaciones comunes
+      'otra': 'otra',
+      'otro': 'otra',
+      'otros': 'otra',
+      'varios': 'otra',
+      'vario': 'otra'
+    };
+    
+    // Buscar coincidencia exacta primero
+    let tipoNormalizado = mapeoTipos[t];
+    
+    // Si no hay coincidencia exacta, buscar por includes
+    if (!tipoNormalizado) {
+      if (t.includes('insumo')) tipoNormalizado = 'insumo';
+      else if (t.includes('renovación') || t.includes('renovacion') || t.includes('renov') || t.includes('carnet')) {
+        tipoNormalizado = 'carnet';
+      } else {
+        tipoNormalizado = 'otra';
+      }
+    }
+    
+    console.log("🔍 DEBUG - MAPEO RESULTADO:");
+    console.log("  - Original:", JSON.stringify(tipoOriginal));
+    console.log("  - Procesado:", JSON.stringify(t));
+    console.log("  - Resultado:", JSON.stringify(tipoNormalizado));
+    
+    tipoTurno = tipoNormalizado;
 
     // Validar fecha (soporta tanto 'fecha' como 'fechaSolicitada')
     const fechaFinal = fecha || fechaSolicitada;
     console.log("📅 Fecha a procesar:", fechaFinal);
     
+    // 🕐 DEBUG EXHAUSTIVO DE FECHA
+    console.log("🕐 DEBUG FECHA - INICIO");
+    console.log("  - Valor crudo:", JSON.stringify(fechaFinal));
+    console.log("  - Tipo:", typeof fechaFinal);
+    console.log("  - Longitud:", fechaFinal?.length);
+    
     if (!fechaFinal) {
       return res.status(400).json({ message: "Fecha es requerida" });
     }
     
-    const date = new Date(fechaFinal);
+    // Procesar fecha con manejo de zona horaria
+    let date;
+    let fechaProcesada;
+    
+    if (fechaFinal.includes('T')) {
+      // Si ya viene con tiempo (ISO), parsear directamente
+      date = new Date(fechaFinal);
+      console.log("  - Fecha ISO detectada, parseando directamente");
+    } else {
+      // Si es solo fecha (YYYY-MM-DD), crear a medianoche UTC
+      console.log("  - Fecha simple detectada, creando UTC");
+      const [year, month, day] = fechaFinal.split('-').map(Number);
+      date = new Date(Date.UTC(year, month - 1, day));
+      fechaProcesada = date.toISOString().split('T')[0]; // Guardar fecha original
+      console.log("  - Fecha UTC creada:", date.toISOString());
+      console.log("  - Feza local (AR):", date.toLocaleDateString('es-AR'));
+    }
+    
     if (isNaN(date.getTime())) {
       return res.status(400).json({ message: "Fecha inválida" });
     }
+    
+    console.log("  - Día de semana (0=dom):", date.getDay());
+    console.log("  - Día del mes:", date.getDate());
+    console.log("  - Mes:", date.getMonth());
+    console.log("  - Año:", date.getFullYear());
+    console.log("🕐 DEBUG FECHA - FIN");
 
     // No fines de semana
     const day = date.getDay();
@@ -61,18 +155,31 @@ export const crearTurno = async (req, res) => {
       }
     }
 
-    // Crear el turno
+    // Crear el turno con fecha UTC para evitar problemas de zona horaria
+    const fechaParaFirestore = fechaProcesada || fechaFinal;
+    console.log("💾 Guardando turno con fecha:", fechaParaFirestore);
+    
     const turno = {
       productorId,
       tipoTurno,
-      fecha: fechaFinal,
-      fechaTurno: fechaFinal,
+      fecha: fechaParaFirestore,
+      fechaTurno: fechaParaFirestore,
       estado: "pendiente",
       creadoEn: new Date().toISOString(),
-      activo: true
+      activo: true,
+      ...(req.body.motivo ? { motivo: req.body.motivo } : {})
     };
 
-    await db.collection("turnos").add(turno);
+    console.log("💾 GUARDANDO EN FIRESTORE:");
+    console.log("  - Documento a guardar:", JSON.stringify(turno, null, 2));
+    
+    const docRef = await db.collection("turnos").add(turno);
+    
+    console.log("✅ Documento guardado con ID:", docRef.id);
+    
+    // Verificar qué se guardó realmente
+    const docGuardado = await docRef.get();
+    console.log("📖 Datos guardados en Firestore:", JSON.stringify(docGuardado.data(), null, 2));
 
     return res.json({ message: "Turno creado exitosamente", turno });
 
@@ -314,8 +421,8 @@ export const disponibilidadTurno = async (req, res) => {
     }
     
     // Para "Carnet de renovación" y "Otra", siempre están disponibles si la fecha es válida
-    if (String(tipoTurno) !== "Insumo") {
-      console.log("✅ Tipo no es Insumo, retornando disponible: true");
+    if (String(tipoTurno) !== "insumo") {
+      console.log("✅ Tipo no es insumo, retornando disponible: true");
       return res.json({ disponible: true });
     }
     
@@ -333,7 +440,7 @@ export const disponibilidadTurno = async (req, res) => {
       .where("fechaTurno", "<=", Timestamp.fromDate(fin))
       .get();
       
-    const items = snap.docs.map(doc => doc.data()).filter(d => d.activo !== false && d.tipoTurno === "Insumo");
+    const items = snap.docs.map(doc => doc.data()).filter(d => d.activo !== false && d.tipoTurno === "insumo");
     console.log("📊 Turnos de Insumo encontrados ese día:", items.length);
     
     // Verificar si el productor tiene insumos disponibles

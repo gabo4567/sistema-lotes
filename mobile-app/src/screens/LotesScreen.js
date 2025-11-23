@@ -1,7 +1,7 @@
 // src/screens/LotesScreen.js
 
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Location from "expo-location";
@@ -283,43 +283,45 @@ export default function LotesScreen() {
       )}
 
       {creating && createStep === "form" && (
-        <View style={[styles.form, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <Text style={styles.formTitle}>Datos del lote</Text>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nombre del lote *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej: Lote Norte"
-              value={nombre}
-              onChangeText={setNombre}
-            />
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Observaciones del productor (opcional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Notas propias"
-              value={observacionesProductor}
-              onChangeText={setObservacionesProductor}
-              multiline
-              numberOfLines={4}
-              maxLength={500}
-            />
-          </View>
-          <View style={styles.formInfo}>
-            <Text style={styles.itemText}>Superficie (ha): {currentAreaHa.toFixed(2)}</Text>
-            <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
-            <Text style={styles.itemText}>Estado: Pendiente</Text>
-          </View>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <TouchableOpacity style={[styles.btn, styles.primary]} onPress={savePolygon} disabled={saving}>
-              <Text style={styles.btnText}>{saving ? "Guardando..." : "Guardar lote"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={toPolygonStep}>
-              <Text style={styles.btnText}>Volver</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Math.max(insets.top, 24)}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.form, { paddingBottom: Math.max(insets.bottom, 24), marginTop: 4 }]}>
+            <Text style={styles.formTitle}>Datos del lote</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nombre del lote *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Lote Norte"
+                value={nombre}
+                onChangeText={setNombre}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Observaciones del productor (opcional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Notas propias"
+                value={observacionesProductor}
+                onChangeText={setObservacionesProductor}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+              />
+            </View>
+            <View style={styles.formInfo}>
+              <Text style={styles.itemText}>Superficie (ha): {currentAreaHa.toFixed(2)}</Text>
+              <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
+              <Text style={styles.itemText}>Estado: Pendiente</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity style={[styles.btn, styles.primary]} onPress={savePolygon} disabled={saving}>
+                <Text style={styles.btnText}>{saving ? "Guardando..." : "Guardar lote"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={toPolygonStep}>
+                <Text style={styles.btnText}>Volver</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       {!creating && selected && (
@@ -364,6 +366,7 @@ export default function LotesScreen() {
                 </View>
               </View>
             )}
+            ListFooterComponent={<View style={{ height: Math.max(insets.bottom + 24, 64) }} />}
             contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
           />
         </View>
