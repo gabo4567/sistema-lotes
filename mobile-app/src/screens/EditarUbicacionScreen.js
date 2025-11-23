@@ -108,7 +108,19 @@ export default function EditarUbicacionScreen({ route, navigation }) {
           <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => navigation.goBack()}>
             <Text style={styles.btnText}>Cancelar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: '#c0392b' }]} onPress={softDelete}>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#c0392b' }]}
+            onPress={() => {
+              Alert.alert(
+                'Eliminar ubicación',
+                '¿Estás seguro de que deseas eliminar esta ubicación?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: 'Eliminar', style: 'destructive', onPress: () => softDelete() },
+                ]
+              );
+            }}
+          >
             <Text style={styles.btnText}>Eliminar</Text>
           </TouchableOpacity>
         </View>

@@ -65,7 +65,7 @@ export default function LoginScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Sistema de Lotes</Text>
+        <Text style={styles.title}>Sistema de Lotes - IPT</Text>
         <Text style={styles.subtitle}>Iniciar sesión</Text>
 
         <TextInput

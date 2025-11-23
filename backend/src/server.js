@@ -46,18 +46,12 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Vary", "Origin");
-<<<<<<< HEAD
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-=======
-  
   if (req.method === "OPTIONS") {
     console.log("🔄 CORS preflight request desde:", origin);
     return res.sendStatus(204);
   }
-  
   console.log("📡 Request desde origen:", origin || "desconocido");
->>>>>>> fe68880 (Agregar mejoras en turnos, nuevas rutas de test y actualizar pantallas mobile)
   next();
 });
 

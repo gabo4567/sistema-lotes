@@ -201,19 +201,32 @@ export default function LotesScreen() {
       Alert.alert("No permitido", "No se puede eliminar un lote validado");
       return;
     }
-    try {
-      const resp = await fetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
-      if (!resp.ok) {
-        const j = await resp.json().catch(() => ({}));
-        throw new Error(j?.error || "No se pudo eliminar el lote");
-      }
-      setSelected(null);
-      clearPolygon();
-      loadList();
-      Alert.alert("Eliminado", "Lote eliminado correctamente");
-    } catch (e) {
-      Alert.alert("Error", e.message || "No se pudo eliminar");
-    }
+    Alert.alert(
+      "Eliminar lote",
+      "¿Estás seguro de que deseas eliminar este lote?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const resp = await fetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
+              if (!resp.ok) {
+                const j = await resp.json().catch(() => ({}));
+                throw new Error(j?.error || "No se pudo eliminar el lote");
+              }
+              setSelected(null);
+              clearPolygon();
+              loadList();
+              Alert.alert("Eliminado", "Lote eliminado correctamente");
+            } catch (e) {
+              Alert.alert("Error", e.message || "No se pudo eliminar");
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
