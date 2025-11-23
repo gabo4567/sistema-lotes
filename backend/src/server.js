@@ -19,7 +19,7 @@ import informesRoutes from "./routes/informes.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 import testRoutes from "./routes/test.routes.js";
-
+import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,11 +47,7 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "OPTIONS") {
-    console.log("🔄 CORS preflight request desde:", origin);
-    return res.sendStatus(204);
-  }
-  console.log("📡 Request desde origen:", origin || "desconocido");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -127,4 +123,3 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`✅ Servidor backend escuchando en http://localhost:${PORT}`);
 });
-import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";
