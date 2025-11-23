@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { getMediciones } from "../services/mediciones.service";
-import Layout from "../components/Layout";
 
 const MedicionesList = () => {
   const [items, setItems] = useState([]);
@@ -22,7 +21,7 @@ const MedicionesList = () => {
   useEffect(()=>{ load(); }, []);
 
   return (
-<body>
+<div className="mediciones-list">
       <h2>Mediciones</h2>
       <div className="flex gap-2 mb-2">
         <input placeholder="Productor" value={filtros.productor} onChange={e=>setFiltros({...filtros, productor:e.target.value})} />
@@ -40,7 +39,7 @@ const MedicionesList = () => {
           </tbody>
         </table>
       )}
-    </body>
+    </div>
   );
 };
 

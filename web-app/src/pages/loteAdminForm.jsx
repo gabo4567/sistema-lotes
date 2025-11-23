@@ -68,7 +68,7 @@ const LoteAdminForm = () => {
   };
 
   return (
-      <body>
+      <div className="lote-admin-form">
       <h2>{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-2 max-w-xl">
         <input placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
@@ -93,7 +93,7 @@ const LoteAdminForm = () => {
         {error && <div className="text-red-600">{error}</div>}
         <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
       </form>
-      </body>
+      </div>
   );
 };
 

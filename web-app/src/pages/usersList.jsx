@@ -53,7 +53,7 @@ const UsersList = () => {
   if (error) return <div className="text-red-700">{error}</div>;
 
   return (
-    <body>
+    <div className="users-list">
       <h2>Usuarios</h2>
       {msg && <div className="text-green-700 mb-2">{msg}</div>}
       <table className="w-full">
@@ -85,7 +85,7 @@ const UsersList = () => {
           ))}
         </tbody>
       </table>
-    </body>
+    </div>
   );
 };
 

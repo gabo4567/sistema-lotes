@@ -19,7 +19,7 @@ const handleCambioEstado = async (id, nuevo)=>{
 
 
 return (
-<body>
+<div className="turnos-list">
 <h2>Turnos</h2>
 <ul>
 {turnos.map(t=> (
@@ -41,7 +41,7 @@ return (
   </li>
 ))}
 </ul>
-</body>
+</div>
 )
 }
 

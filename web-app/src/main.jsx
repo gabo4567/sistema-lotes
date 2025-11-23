@@ -46,8 +46,9 @@ class ErrorBoundary extends React.Component {
 }
 
 const router = createBrowserRouter([
-// Rutas públicas
-  { path: "/", element: <Login /> },
+  // Rutas públicas
+  
+  { path: "/login", element: <Login /> },
   { path: "/403", element: <Forbidden /> },
   { path: "/register", element: <Register /> },
   { path: "/reset-password", element: <ResetPassword /> },
@@ -61,11 +62,12 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/home", element: <Home /> },
-
+      { path: "/", element: <Home /> }, // o home
       // Lotes
       {
         element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
+          <Layout />
         ),
         children: [
           { path: "/lotes", element: <LotesList /> },
@@ -78,21 +80,25 @@ const router = createBrowserRouter([
       // Turnos
       {
         element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
+          <Layout />
         ),
         children: [{ path: "/turnos", element: <TurnosList /> }],
       },
 
       // Insumos
       {
-        element: <ProtectedRoute allowedRoles={["Administrador"]} />,
+        element: (
+        <ProtectedRoute allowedRoles={["Administrador"]} />,
+          <Layout />),
         children: [{ path: "/insumos", element: <InsumosList /> }],
       },
 
       // Productores
       {
         element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
+          <Layout />
         ),
         children: [
           { path: "/productores", element: <ProductoresList /> },
@@ -105,7 +111,8 @@ const router = createBrowserRouter([
       // Mediciones
       {
         element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />
+          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
+          <Layout />
         ),
         children: [
           { path: "/mediciones", element: <MedicionesList /> },
@@ -115,20 +122,22 @@ const router = createBrowserRouter([
 
       // Informes
       {
-        element: <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]} />,
+        element:( 
+        <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]} />,
+          <Layout />),
         children: [{ path: "/informes", element: <Informes /> }],
       },
 
       // Users
       {
-        element: <ProtectedRoute allowedRoles={["Administrador"]} />,
+        element: (
+        <ProtectedRoute allowedRoles={["Administrador"]} />,
+          <Layout />),
         children: [{ path: "/users", element: <UsersList /> }],
       },
     ],
   },
 
-  // fallback
-  { path: "*", element: <Login /> },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")).render(

@@ -29,7 +29,7 @@ const LoteDetail = () => {
   };
 
   return (
-  <body>
+  <div className="lote-detail">
       {error && <div className="text-red-600" style={{ marginBottom: 8 }}>{error}</div>}
       {!lote ? (<div>Cargando…</div>) : (
         <div>
@@ -51,7 +51,7 @@ const LoteDetail = () => {
           </div>
         </div>
       )}
-    </body>
+    </div>
   );
 };
 

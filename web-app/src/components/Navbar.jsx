@@ -19,9 +19,9 @@ return (
   </div>
 <div>
 {user ? (
-<button onClick={logout} className="btn">Salir</button>
+  <button onClick={logout} className="btn">Salir</button>
 ) : (
-    <Link to="/">Login</Link>
+  <Link to="/login" className="btn">Ingresar</Link>
 )}
 </div>
 </nav>

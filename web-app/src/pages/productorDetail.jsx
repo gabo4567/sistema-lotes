@@ -23,7 +23,7 @@ const ProductorDetail = () => {
   })() }, [id]);
 
   return (
-<body>
+<div className="productor-detail">
       {!prod ? (<div>Cargando…</div>) : (
         <div>
           <h2>Productor {prod.nombreCompleto || ''}</h2>
@@ -41,7 +41,7 @@ const ProductorDetail = () => {
           {error && <div className="text-red-600">{error}</div>}
         </div>
       )}
-    </body>
+    </div>
   );
 };
 
