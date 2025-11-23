@@ -139,19 +139,15 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: "No se permiten turnos sábado o domingo" });
     }
 
-    // Si es turno de insumo → verificar stock
+    // Si es turno de insumo → verificar asignaciones en ProductorInsumos
     if (tipoTurno === "insumo") {
-      const userDoc = await db.collection("productores").doc(productorId).get();
-
-      if (!userDoc.exists) {
-        return res.status(404).json({ message: "Productor no encontrado" });
-      }
-
-      const datos = userDoc.data();
-      const tieneInsumos = datos.insumosPendientes && datos.insumosPendientes > 0;
-
-      if (!tieneInsumos) {
-        return res.status(400).json({ message: "No tienes insumos para retirar" });
+      const asignSnap = await db
+        .collection("productorInsumos")
+        .where("productorId", "==", String(productorId))
+        .get();
+      const asignaciones = asignSnap.docs.map(d => d.data()).filter(x => Number(x.cantidadAsignada || 0) > 0 && x.estado !== "entregado");
+      if (asignaciones.length === 0) {
+        return res.status(400).json({ message: "Usted no tiene insumos disponibles." });
       }
     }
 
@@ -260,6 +256,22 @@ export const cambiarEstadoTurno = async (req, res) => {
     }
 
     await db.collection("turnos").doc(id).update({ estado, motivo: motivo || "", updatedAt: Timestamp.now() });
+
+    // Si se confirma/completa turno de insumo, marcar asignaciones como entregadas
+    try {
+      const doc = await db.collection("turnos").doc(id).get();
+      const turno = doc.data();
+      if (turno?.tipoTurno === "insumo" && (estado === "confirmado" || estado === "completado")) {
+        const snap = await db
+          .collection("productorInsumos")
+          .where("productorId", "==", String(turno.productorId))
+          .where("estado", "==", "pendiente")
+          .get();
+        const batch = db.batch();
+        snap.docs.forEach(d => batch.update(d.ref, { estado: "entregado", fechaEntrega: new Date() }));
+        await batch.commit();
+      }
+    } catch (e) {}
 
     res.json({ message: `Estado del turno actualizado a '${estado}'` });
   } catch (error) {
@@ -443,20 +455,20 @@ export const disponibilidadTurno = async (req, res) => {
     const items = snap.docs.map(doc => doc.data()).filter(d => d.activo !== false && d.tipoTurno === "insumo");
     console.log("📊 Turnos de Insumo encontrados ese día:", items.length);
     
-    // Verificar si el productor tiene insumos disponibles
+    // Verificar si el productor tiene asignaciones de insumos
     if (ipt) {
       try {
         const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
-        const okDoc = !psnap.empty ? psnap.docs[0].data() : null;
-        const tieneInsumos = Boolean(okDoc && okDoc.insumosDisponibles);
-        console.log("💊 Productor tiene insumos:", tieneInsumos);
-        if (!tieneInsumos) {
-          console.log("❌ No tiene insumos para recibir");
-          return res.json({ disponible: false, reason: "No tienes insumos para recibir" });
+        if (!psnap.empty) {
+          const productorId = psnap.docs[0].id;
+          const asnap = await db.collection("productorInsumos").where("productorId", "==", String(productorId)).get();
+          const asignaciones = asnap.docs.map(d => d.data()).filter(x => Number(x.cantidadAsignada || 0) > 0 && x.estado !== "entregado");
+          const tiene = asignaciones.length > 0;
+          if (!tiene) {
+            return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles." });
+          }
         }
-      } catch (e) {
-        console.log("❌ Error verificando insumos:", e);
-      }
+      } catch {}
     }
     
     const capacidadPorDia = 10;

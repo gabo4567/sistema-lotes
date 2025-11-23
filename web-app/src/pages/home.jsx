@@ -1,26 +1,46 @@
 import React, { useContext } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
-import FirebaseTest from "../components/FirebaseTest";
-import Navbar from "../components/Navbar";
+import { confirmDialog } from "../utils/alerts";
 
 const Home = () => {
   const { logout } = useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout();
-    navigate("/");
+  const handleLogout = async () => {
+    const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que deseas cerrar sesión?", icon: "warning", confirmButtonText: "Cerrar sesión", cancelButtonText: "Cancelar" });
+    if (ok) logout();
   };
+  const options = [
+    { type: "link", to: "/home", label: "Home", className: "menu-btn menu-btn--home" },
+    { type: "link", to: "/lotes", label: "Lotes", className: "menu-btn" },
+    { type: "link", to: "/turnos", label: "Turnos", className: "menu-btn" },
+    { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
+    { type: "link", to: "/productores", label: "Productores", className: "menu-btn" },
+    { type: "link", to: "/mediciones", label: "Mediciones", className: "menu-btn" },
+    { type: "link", to: "/informes", label: "Informes", className: "menu-btn" },
+    { type: "link", to: "/users", label: "Usuarios", className: "menu-btn" },
+    { type: "button", onClick: handleLogout, label: "Cerrar Sesión", className: "menu-btn menu-btn--danger" },
+  ];
 
   return (
-    <div>
-      <h1>Sistema de Lotes - Instituto Provincial del Tabaco</h1>
-      <FirebaseTest />
-        <Navbar />
-      <button onClick={handleLogout} style={{ marginTop: '20px' }}>
-        Cerrar Sesión
-      </button>
+    <div className="home-container">
+      <div className="home-hero">
+        <h1 className="home-title">Sistema de Lotes - IPT (Administración)</h1>
+        <p className="home-subtitle">Gestión integrada de lotes, turnos y productores</p>
+      </div>
+
+      <div className="menu-grid">
+        {options.map((opt, idx) => (
+          opt.type === "link" ? (
+            <Link key={`${opt.label}-${idx}`} to={opt.to} className={opt.className}>
+              {opt.label}
+            </Link>
+          ) : (
+            <button key={`${opt.label}-${idx}`} className={opt.className} onClick={opt.onClick}>
+              {opt.label}
+            </button>
+          )
+        ))}
+      </div>
     </div>
   );
 };

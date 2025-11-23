@@ -14,6 +14,7 @@ import lotesRoutes from "./routes/lotes.routes.js";
 import productoresRoutes from "./routes/productores.routes.js";
 import ordenesRoutes from "./routes/ordenes.routes.js";
 import medicionesRoutes from "./routes/mediciones.routes.js";
+import insumosRoutes from "./routes/insumos.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
@@ -66,6 +67,7 @@ app.use("/api/lotes", lotesRoutes);
 app.use("/api/productores", productoresRoutes);
 app.use("/api/ordenes", ordenesRoutes);
 app.use("/api/mediciones", medicionesRoutes);
+app.use("/api/insumos", insumosRoutes);
 
 // 🧭 Rutas de turnos - disponibilidad sin autenticación
 console.log("📢 Intentando registrar las rutas de /api/turnos...");

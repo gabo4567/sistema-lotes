@@ -5,7 +5,8 @@ import { AuthContext } from "../contexts/AuthContext";
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useContext(AuthContext);
 
-  if (user === null) {
+  const hasToken = !!localStorage.getItem("token");
+  if (user === null && hasToken) {
     return <div>Cargando sesión...</div>;
   }
 

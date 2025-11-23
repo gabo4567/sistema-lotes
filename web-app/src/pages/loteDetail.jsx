@@ -33,11 +33,11 @@ const LoteDetail = () => {
       {error && <div className="text-red-600" style={{ marginBottom: 8 }}>{error}</div>}
       {!lote ? (<div>Cargando…</div>) : (
         <div>
-          <h2>Lote {id}</h2>
+          <h2>{lote.nombre || ''}</h2>
           <div>IPT: {lote.ipt}</div>
           <div>Estado: {lote.estado}</div>
           <div>Método: {lote.metodoMarcado}</div>
-          <div style={{ margin: '12px 0' }}>
+          <div className="map-card">
             <MapPolygon points={lote.poligono || []} />
           </div>
           <div className="flex flex-col gap-2" style={{ maxWidth: 480 }}>

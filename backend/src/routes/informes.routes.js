@@ -7,6 +7,8 @@ import {
   obtenerOrdenesPorMes,
   obtenerTurnosPorEstado,
   obtenerMedicionesPorLote,
+  obtenerInsumosResumen,
+  obtenerTurnosEficiencia,
   exportarPDF,
   exportarExcel,
 } from "../controllers/informes.controller.js";
@@ -24,6 +26,8 @@ router.get("/productores-activos", obtenerProductoresActivos);
 router.get("/ordenes-por-mes", obtenerOrdenesPorMes);
 router.get("/turnos-por-estado", obtenerTurnosPorEstado);
 router.get("/mediciones-por-lote", obtenerMedicionesPorLote);
+router.get("/insumos-resumen", obtenerInsumosResumen);
+router.get("/turnos-eficiencia", obtenerTurnosEficiencia);
 
 // 🧾 Exportaciones
 router.get("/exportar/pdf", exportarPDF);

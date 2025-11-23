@@ -27,7 +27,7 @@ useEffect(() => {
   }, [ready, points]);
 
   if (!key) {
-    const w = 340, h = 340;
+    const w = 360, h = 300;
     const pts = Array.isArray(points) ? points : [];
     const lats = pts.map(p=>p.lat), lngs = pts.map(p=>p.lng);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
@@ -36,15 +36,15 @@ useEffect(() => {
     const toY = (lat) => ((maxLat - lat) / (maxLat - minLat || 1)) * (h-20) + 10;
     const svgPts = pts.map(p=>`${toX(p.lng)},${toY(p.lat)}`).join(" ");
     return (
-      <div>
-        <div style={{ marginBottom: 8 }}>Configurar VITE_GOOGLE_MAPS_API_KEY para mapa interactivo</div>
-        <svg width={w} height={h} style={{ background:'#f8fafc', border:'1px solid #e5e7eb' }}>
+      <div className="map-fallback">
+        <div className="map-hint">Configurar VITE_GOOGLE_MAPS_API_KEY para mapa interactivo</div>
+        <svg width={w} height={h} style={{ background:'#f8fafc', border:'1px solid #e5e7eb', width:'100%', height:h }}>
           {pts.length >= 3 && <polygon points={svgPts} fill="#93c5fd" stroke="#1d4ed8" strokeWidth={2} />}
         </svg>
       </div>
     );
   }
-  return <div ref={containerRef} style={{ width: 360, height: 360, background: "#eef2ff" }} />;
+  return <div ref={containerRef} className="map-container" style={{ width: '100%', height: 360, background: "#eef2ff", borderRadius: 12 }} />;
 };
 
 export default MapPolygon;

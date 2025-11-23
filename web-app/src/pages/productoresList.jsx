@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useContext } from "react";
 import { getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
+import HomeButton from "../components/HomeButton";
 import { AuthContext } from "../contexts/AuthContext";
+import { confirmDialog, notify } from "../utils/alerts";
 
 const ProductoresList = () => {
   const { user } = useContext(AuthContext);
@@ -26,21 +28,25 @@ const ProductoresList = () => {
   useEffect(() => { load(); }, []);
 
   const onResetPassword = async (ipt) => {
+    const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que deseas resetear la contraseña del productor a su CUIL nuevamente?", icon: "warning", confirmButtonText: "Resetear", cancelButtonText: "Cancelar" });
+    if (!ok) return;
     try {
       await resetPasswordProductor(ipt);
-      alert("Contraseña reseteada (CUIL en próximo ingreso)");
+      await notify({ title: "Listo", text: "Contraseña reseteada (CUIL en próximo ingreso)", icon: "success" });
     } catch {
-      alert("No se pudo resetear contraseña");
+      await notify({ title: "Error", text: "No se pudo resetear contraseña", icon: "error" });
     }
   };
 
   const onReempadronado = async (ipt) => {
+    const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que deseas reempadronar al productor?", icon: "warning", confirmButtonText: "Re-empadronar", cancelButtonText: "Cancelar" });
+    if (!ok) return;
     try {
       await marcarReempadronado(ipt);
-      alert("Productor marcado como re-empadronado");
+      await notify({ title: "Listo", text: "Productor marcado como re-empadronado", icon: "success" });
       load();
     } catch {
-      alert("No se pudo marcar re-empadronado");
+      await notify({ title: "Error", text: "No se pudo marcar re-empadronado", icon: "error" });
     }
   };
 
@@ -51,38 +57,43 @@ const ProductoresList = () => {
   if (error) return <div style={{ padding: 24, color: "#c0392b" }}>{error}</div>;
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Productores</h2>
+    <div className="section-card prod-list">
+      <div style={{ marginBottom: 8 }}><HomeButton /></div>
+      <h2 className="users-title">Productores</h2>
       <div style={{ marginBottom: 12 }}>
         <Link to="/productores/nuevo" className="btn">Nuevo productor</Link>
       </div>
-      <table style={{ width: "100%" }}>
-        <thead>
-          <tr>
-            <th>IPT</th>
-            <th>Nombre</th>
-            <th>Estado</th>
-            <th>Ingresos</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((p) => (
-            <tr key={p.id}>
-              <td>{p.ipt}</td>
-              <td>{p.nombreCompleto}</td>
-              <td>{p.estado}</td>
-              <td>{p.historialIngresos ?? 0}</td>
-              <td>
-                <button className="btn" onClick={() => onVer(p.id)}>Ver</button>
-                <button className="btn" style={{ marginLeft: 8 }} onClick={() => onEditar(p.id)}>Editar</button>
-                <button className="btn" style={{ marginLeft: 8 }} onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>
-                <button className="btn" style={{ marginLeft: 8 }} onClick={() => onReempadronado(p.ipt)}>Re-empadronado</button>
-              </td>
+      <div className="table-wrap">
+        <table className="table-inst">
+          <thead>
+            <tr>
+              <th>IPT</th>
+              <th>Nombre</th>
+              <th>Estado</th>
+              <th>Ingresos</th>
+              <th>Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((p) => (
+              <tr key={p.id}>
+                <td>{p.ipt}</td>
+                <td>{p.nombreCompleto}</td>
+                <td>{p.estado}</td>
+                <td>{p.historialIngresos ?? 0}</td>
+                <td>
+                  <div className="actions-col">
+                    <button className="btn" onClick={() => onVer(p.id)}>Ver</button>
+                    <button className="btn" onClick={() => onEditar(p.id)}>Editar</button>
+                    <button className="btn" onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>
+                    <button className="btn" onClick={() => onReempadronado(p.ipt)}>Re-empadronado</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

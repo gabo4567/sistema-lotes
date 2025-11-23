@@ -13,7 +13,10 @@ export const lotesService = {
   },
 
   async createLote(data) {
-    // Adaptar datos simples (lat/lng) a polígono mínimo válido para backend
+    if (data && Array.isArray(data.poligono) && data.poligono.length >= 3) {
+      const res = await api.post("/lotes", data);
+      return res.data;
+    }
     const { nombre, lat, lng } = data || {};
     const baseLat = Number(lat);
     const baseLng = Number(lng);
@@ -26,10 +29,11 @@ export const lotesService = {
     const payload = {
       ipt: "WEB_TMP",
       superficie: null,
-      ubicacion: nombre || null,
+      ubicacion: null,
       poligono,
       metodoMarcado: "aereo",
       observacionesTecnico: "Creado desde formulario simple web",
+      nombre: nombre || "",
     };
     const res = await api.post("/lotes", payload);
     return res.data;

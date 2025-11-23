@@ -61,33 +61,34 @@ const ProductorForm = () => {
   };
 
   return (
-<div className="productor-form">
-      <h2>{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
-      <form onSubmit={onSubmit} className="flex flex-col gap-2 max-w-xl">
-        <input placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
-        <input placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
-        <input placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
-        <input placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
-        <input placeholder="Teléfono" value={form.telefono} onChange={e=>onChange('telefono', e.target.value)} />
-        <input placeholder="Domicilio (casa)" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
-        <div className="flex gap-2">
-          <input placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
-          <input placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
-        </div>
-        <select value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
+    <div className="section-card prod-form">
+      <h2 className="users-title">{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
+      <form onSubmit={onSubmit} className="form-grid">
+        <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
+        <input className="input-inst" placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
+        <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
+        <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
+        <input className="input-inst" placeholder="Teléfono" value={form.telefono} onChange={e=>onChange('telefono', e.target.value)} />
+        <input className="input-inst" placeholder="Domicilio (casa)" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
+        <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
+        <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+        <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
           <option value="Nuevo">Nuevo</option>
           <option value="Vigente">Vigente</option>
           <option value="Vencido">Vencido</option>
           <option value="Re-empadronado">Re-empadronado</option>
         </select>
-        <label>
+        <label className="checkbox-inst">
           <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} /> Requiere cambio de contraseña
         </label>
-        <input placeholder="Plantas por hectárea" value={form.plantasPorHa} onChange={e=>onChange('plantasPorHa', e.target.value)} />
-        {error && <div className="text-red-600">{error}</div>}
-        <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
+        <input className="input-inst" placeholder="Plantas por hectárea" value={form.plantasPorHa} onChange={e=>onChange('plantasPorHa', e.target.value)} />
+        {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
+        <div className="form-actions">
+          <button type="button" className="btn" onClick={()=>navigate('/productores')}>Cancelar</button>
+          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
+        </div>
       </form>
-      </div>
+    </div>
   );
 };
 

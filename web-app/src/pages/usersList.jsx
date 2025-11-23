@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getUsers, updateUser, deactivateUser, resetPasswordUser } from "../services/users.service";
+import HomeButton from "../components/HomeButton";
+import { confirmDialog, promptDialog } from "../utils/alerts";
 
 
 const UsersList = () => {
@@ -22,15 +24,23 @@ const UsersList = () => {
 
   const onChangeRole = async (uid, role) => {
     try {
-      await updateUser(uid, { role });
+      const payload = { role };
+      if (role === 'Productor') {
+        const ipt = await promptDialog({ title: 'Asignar IPT', text: 'Ingrese el número de IPT para este productor', inputLabel: 'IPT', inputPlaceholder: 'Ej: 123456', confirmButtonText: 'Guardar', cancelButtonText: 'Cancelar' });
+        if (!ipt) return;
+        payload.ipt = String(ipt).trim();
+      }
+      await updateUser(uid, payload);
       setMsg("Rol actualizado");
-      setItems(items.map(u => u.id === uid ? { ...u, role } : u));
+      setItems(items.map(u => u.id === uid ? { ...u, role, ipt: payload.ipt ?? u.ipt } : u));
     } catch {
       setError("No se pudo actualizar rol");
     }
   };
 
   const onDeactivate = async (uid) => {
+    const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que deseas desactivar este usuario?", icon: "warning", confirmButtonText: "Desactivar", cancelButtonText: "Cancelar" });
+    if (!ok) return;
     try {
       await deactivateUser(uid);
       setMsg("Usuario desactivado");
@@ -41,6 +51,8 @@ const UsersList = () => {
   };
 
   const onResetPassword = async (uid) => {
+    const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que quieres restablecer la contraseña del usuario a su CUIL nuevamente?", icon: "warning", confirmButtonText: "Restablecer", cancelButtonText: "Cancelar" });
+    if (!ok) return;
     try {
       const { link } = await resetPasswordUser(uid);
       setMsg("Enlace de reseteo generado");
@@ -54,37 +66,50 @@ const UsersList = () => {
 
   return (
     <div className="users-list">
-      <h2>Usuarios</h2>
-      {msg && <div className="text-green-700 mb-2">{msg}</div>}
-      <table className="w-full">
-        <thead>
-          <tr><th>ID</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr>
-        </thead>
-        <tbody>
-          {items.map(u => (
-            <tr key={u.id}>
-              <td>{u.id}</td>
-              <td>{u.nombre || '-'}</td>
-              <td>{u.email}</td>
-              <td>
-                <select value={u.role || ''} onChange={e=>onChangeRole(u.id, e.target.value)}>
-                  <option value="">(sin rol)</option>
-                  <option value="Administrador">Administrador</option>
-                  <option value="Técnico">Técnico</option>
-                  <option value="Tecnico">Tecnico</option>
-                  <option value="Supervisor">Supervisor</option>
-                </select>
-              </td>
-              <td>{u.estado || 'Activo'}</td>
-              <td>{u.ultimoAcceso ? new Date(u.ultimoAcceso.seconds ? u.ultimoAcceso.seconds*1000 : u.ultimoAcceso).toLocaleString() : '-'}</td>
-              <td>
-                <button className="btn" onClick={()=>onResetPassword(u.id)}>Restablecer contraseña</button>
-                <button className="btn" style={{ marginLeft: 8 }} onClick={()=>onDeactivate(u.id)}>Desactivar</button>
-              </td>
+      <div style={{ marginBottom: 8 }}><HomeButton /></div>
+      <h2 className="users-title">Usuarios</h2>
+      {msg && <div className="users-msg ok">{msg}</div>}
+      {error && <div className="users-msg err">{error}</div>}
+      <div className="table-wrap">
+        <table className="table-inst">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>IPT</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Último acceso</th>
+              <th>Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map(u => (
+              <tr key={u.id}>
+                <td>{u.nombre || '-'}</td>
+                <td>{u.ipt || u.productorIpt || '-'}</td>
+                <td>{u.email}</td>
+                <td>
+                  <select className="select-inst" value={u.role || ''} onChange={e=>onChangeRole(u.id, e.target.value)}>
+                    <option value="Administrador">Administrador</option>
+                    <option value="Técnico">Técnico</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Productor">Productor</option>
+                  </select>
+                </td>
+                <td>{u.estado || 'Activo'}</td>
+                <td>{u.ultimoAcceso ? new Date(u.ultimoAcceso.seconds ? u.ultimoAcceso.seconds*1000 : u.ultimoAcceso).toLocaleString() : '-'}</td>
+                <td>
+                  <div className="actions-row">
+                    <button className="btn" onClick={()=>onResetPassword(u.id)}>Restablecer contraseña</button>
+                    <button className="btn btn-danger" onClick={()=>onDeactivate(u.id)}>Desactivar</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

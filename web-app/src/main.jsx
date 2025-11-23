@@ -62,79 +62,77 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/home", element: <Home /> },
-      { path: "/", element: <Home /> }, // o home
-      // Lotes
-      {
-        element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
-          <Layout />
-        ),
-        children: [
-          { path: "/lotes", element: <LotesList /> },
-          { path: "/lotes/nuevo", element: <LoteAdminForm /> },
-          { path: "/lotes/:id", element: <LoteDetail /> },
-          { path: "/lotes/:id/editar", element: <LoteAdminForm /> },
-        ],
-      },
-
-      // Turnos
-      {
-        element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
-          <Layout />
-        ),
-        children: [{ path: "/turnos", element: <TurnosList /> }],
-      },
-
-      // Insumos
-      {
-        element: (
-        <ProtectedRoute allowedRoles={["Administrador"]} />,
-          <Layout />),
-        children: [{ path: "/insumos", element: <InsumosList /> }],
-      },
-
-      // Productores
-      {
-        element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
-          <Layout />
-        ),
-        children: [
-          { path: "/productores", element: <ProductoresList /> },
-          { path: "/productores/nuevo", element: <ProductorForm /> },
-          { path: "/productores/:id", element: <ProductorDetail /> },
-          { path: "/productores/:id/editar", element: <ProductorForm /> },
-        ],
-      },
-
-      // Mediciones
-      {
-        element: (
-          <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]} />,
-          <Layout />
-        ),
-        children: [
-          { path: "/mediciones", element: <MedicionesList /> },
-          { path: "/mediciones/nueva", element: <MedicionesForm /> },
-        ],
-      },
-
-      // Informes
-      {
-        element:( 
-        <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]} />,
-          <Layout />),
-        children: [{ path: "/informes", element: <Informes /> }],
-      },
-
-      // Users
-      {
-        element: (
-        <ProtectedRoute allowedRoles={["Administrador"]} />,
-          <Layout />),
-        children: [{ path: "/users", element: <UsersList /> }],
-      },
+      { path: "/", element: <Home /> },
+      { path: "/lotes", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <LotesList />
+        </ProtectedRoute>
+      ) },
+      { path: "/lotes/nuevo", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <LoteAdminForm />
+        </ProtectedRoute>
+      ) },
+      { path: "/lotes/:id", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <LoteDetail />
+        </ProtectedRoute>
+      ) },
+      { path: "/lotes/:id/editar", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <LoteAdminForm />
+        </ProtectedRoute>
+      ) },
+      { path: "/turnos", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <TurnosList />
+        </ProtectedRoute>
+      ) },
+      { path: "/insumos", element: (
+        <ProtectedRoute allowedRoles={["Administrador"]}>
+          <InsumosList />
+        </ProtectedRoute>
+      ) },
+      { path: "/productores", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <ProductoresList />
+        </ProtectedRoute>
+      ) },
+      { path: "/productores/nuevo", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <ProductorForm />
+        </ProtectedRoute>
+      ) },
+      { path: "/productores/:id", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <ProductorDetail />
+        </ProtectedRoute>
+      ) },
+      { path: "/productores/:id/editar", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <ProductorForm />
+        </ProtectedRoute>
+      ) },
+      { path: "/mediciones", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <MedicionesList />
+        </ProtectedRoute>
+      ) },
+      { path: "/mediciones/nueva", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <MedicionesForm />
+        </ProtectedRoute>
+      ) },
+      { path: "/informes", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Supervisor"]}>
+          <Informes />
+        </ProtectedRoute>
+      ) },
+      { path: "/users", element: (
+        <ProtectedRoute allowedRoles={["Administrador"]}>
+          <UsersList />
+        </ProtectedRoute>
+      ) },
     ],
   },
 

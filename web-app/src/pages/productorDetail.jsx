@@ -15,7 +15,7 @@ const ProductorDetail = () => {
       setProd(data);
       if (data?.ipt) {
         const { data: h } = await getHistorialIngresos(data.ipt);
-        setHist(h);
+        setHist(typeof h === 'object' && h !== null && 'historialIngresos' in h ? h.historialIngresos : h);
       }
     } catch (e) {
       setError("No se pudo cargar productor");
@@ -23,23 +23,45 @@ const ProductorDetail = () => {
   })() }, [id]);
 
   return (
-<div className="productor-detail">
-      {!prod ? (<div>Cargando…</div>) : (
-        <div>
-          <h2>Productor {prod.nombreCompleto || ''}</h2>
-          <div>IPT: {prod.ipt}</div>
-          <div>CUIL: {prod.cuil}</div>
-          <div>Email: {prod.email || '-'}</div>
-          <div>Teléfono: {prod.telefono || '-'}</div>
-          <div>Domicilio: {prod.domicilioCasa || '-'}</div>
-          <div>Ingreso al campo: {prod.domicilioIngresoCampo ? `${prod.domicilioIngresoCampo.lat}, ${prod.domicilioIngresoCampo.lng}` : '-'}</div>
-          <div>Estado: {prod.estado}</div>
-          <div>Requiere cambio de contraseña: {String(prod.requiereCambioContrasena)}</div>
-          <div>Plantas/ha: {prod.plantasPorHa ?? '-'}</div>
-          <h3 style={{ marginTop: 16 }}>Historial de ingresos</h3>
-          <pre style={{ background:'#fff', padding:12, borderRadius:8 }}>{hist ? JSON.stringify(hist, null, 2) : 'Sin datos'}</pre>
-          {error && <div className="text-red-600">{error}</div>}
-        </div>
+    <div className="section-card prod-detail">
+      {!prod ? (
+        <div>Cargando…</div>
+      ) : (
+        <>
+          <h2 className="users-title">{prod.nombreCompleto || 'Productor'}</h2>
+          <div className="detail-grid">
+            <div className="detail-item"><span className="detail-label">IPT:</span> {prod.ipt}</div>
+            <div className="detail-item"><span className="detail-label">CUIL:</span> {prod.cuil}</div>
+            <div className="detail-item"><span className="detail-label">Email:</span> {prod.email || '-'}</div>
+            <div className="detail-item"><span className="detail-label">Teléfono:</span> {prod.telefono || '-'}</div>
+            <div className="detail-item"><span className="detail-label">Domicilio:</span> {prod.domicilioCasa || '-'}</div>
+            <div className="detail-item"><span className="detail-label">Ingreso al campo:</span> {prod.domicilioIngresoCampo ? `${prod.domicilioIngresoCampo.lat}, ${prod.domicilioIngresoCampo.lng}` : '-'}</div>
+            <div className="detail-item"><span className="detail-label">Estado:</span> {prod.estado}</div>
+            <div className="detail-item"><span className="detail-label">Requiere cambio de contraseña:</span> {String(prod.requiereCambioContrasena)}</div>
+            <div className="detail-item"><span className="detail-label">Plantas/ha:</span> {prod.plantasPorHa ?? '-'}</div>
+          </div>
+          <h3 className="users-title" style={{ marginTop: 16 }}>Historial de ingresos</h3>
+          {Array.isArray(hist) && hist.length > 0 ? (
+            <div className="hist-grid">
+              {hist.map((h, idx) => (
+                <div key={idx} className="hist-card">
+                  <div className="hist-row"><span className="hist-label">Fecha:</span> {h.fecha ? new Date(h.fecha).toLocaleDateString() : '-'}</div>
+                  <div className="hist-row"><span className="hist-label">Acción:</span> {h.accion || '-'}</div>
+                  <div className="hist-row"><span className="hist-label">Observación:</span> {h.observacion || '-'}</div>
+                </div>
+              ))}
+            </div>
+          ) : typeof hist === 'number' ? (
+            <div className="hist-grid">
+              <div className="hist-card">
+                <div className="hist-row"><span className="hist-label">Ingresos totales:</span> {hist}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="users-msg err" style={{ marginTop: 8 }}>Sin datos</div>
+          )}
+          {error && <div className="users-msg err" style={{ marginTop: 8 }}>{error}</div>}
+        </>
       )}
     </div>
   );
