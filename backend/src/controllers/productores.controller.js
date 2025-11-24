@@ -102,7 +102,43 @@ export const updateProductor = async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
-    await db.collection("productores").doc(id).update(data);
+    const ref = db.collection("productores").doc(id);
+    await ref.update(data);
+    const snap = await ref.get();
+    const d = snap.data();
+    const ipt = String(d.ipt || "");
+    const uid = `prod_${ipt}`;
+    const nombre = d.nombreCompleto || d.nombre || "";
+    const email = d.email ? String(d.email).toLowerCase() : "";
+    const estado = d.activo === false ? "Inactivo" : "Activo";
+    await db.collection("users").doc(uid).set({
+      nombre,
+      email,
+      role: "Productor",
+      ipt,
+      estado,
+      updatedAt: new Date(),
+    }, { merge: true });
+
+    try {
+      const byIpt = await db.collection("users").where("ipt", "==", ipt).get();
+      for (const udoc of byIpt.docs) {
+        await udoc.ref.set({ nombre, email, role: "Productor", ipt, estado, updatedAt: new Date() }, { merge: true });
+      }
+    } catch (e) {
+      console.error("Sync users por ipt falló", ipt, e);
+    }
+
+    try {
+      if (email) {
+        const byEmail = await db.collection("users").where("email", "==", email).get();
+        for (const udoc of byEmail.docs) {
+          await udoc.ref.set({ nombre, role: "Productor", ipt, estado, updatedAt: new Date() }, { merge: true });
+        }
+      }
+    } catch (e) {
+      console.error("Sync users por email falló", email, e);
+    }
     res.json({ message: "✅ Productor actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar productor:", error);

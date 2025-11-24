@@ -34,7 +34,6 @@ export default function CrearMedicionScreen({ navigation }) {
     tipo: 'PH',
     valorNumerico: '',
     observaciones: '',
-    tecnicoResponsable: '',
   });
   const [capturedImage, setCapturedImage] = useState(null);
   const insets = useSafeAreaInsets();
@@ -94,7 +93,7 @@ export default function CrearMedicionScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!formData.lote || !formData.valorNumerico || !formData.tecnicoResponsable) {
+    if (!formData.lote || !formData.valorNumerico) {
       Alert.alert('Error', 'Por favor complete todos los campos requeridos');
       return;
     }
@@ -125,7 +124,6 @@ export default function CrearMedicionScreen({ navigation }) {
         fecha: new Date().toISOString(),
         tipo: formData.tipo,
         valorNumerico: parseFloat(formData.valorNumerico),
-        tecnicoResponsable: formData.tecnicoResponsable,
         observaciones: formData.observaciones,
         evidenciaUrl: imageUrl,
       };
@@ -201,15 +199,7 @@ export default function CrearMedicionScreen({ navigation }) {
           />
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Técnico Responsable *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre del técnico"
-            value={formData.tecnicoResponsable}
-            onChangeText={(text) => setFormData({ ...formData, tecnicoResponsable: text })}
-          />
-        </View>
+        {/* técnico eliminado */}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Observaciones</Text>

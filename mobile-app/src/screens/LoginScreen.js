@@ -10,6 +10,7 @@ export default function LoginScreen({ navigation }) {
   const { setUser } = useContext(AuthContext);
   const [ipt, setIpt] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -69,7 +70,7 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.subtitle}>Iniciar sesión</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, styles.inputSpacing]}
           placeholder="IPT"
           placeholderTextColor="#7f8c8d"
           keyboardType="number-pad"
@@ -78,14 +79,17 @@ export default function LoginScreen({ navigation }) {
           onChangeText={setIpt}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor="#7f8c8d"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.input}
+            placeholder="Contraseña"
+            placeholderTextColor="#7f8c8d"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Text style={styles.toggle} onPress={()=>setShowPassword(v=>!v)}>{showPassword?"Ocultar":"Ver"}</Text>
+        </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -108,7 +112,10 @@ const styles = StyleSheet.create({
   card: { width: "90%", backgroundColor: "#ffffff", borderRadius: 16, padding: 20, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
   title: { fontSize: 26, textAlign: "center", marginBottom: 8, color: "#1e8449", fontWeight: "bold" },
   subtitle: { fontSize: 16, textAlign: "center", marginBottom: 16, color: "#1e8449" },
-  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10, marginBottom: 12 },
+  inputWrapper: { position: "relative", marginBottom: 12 },
+  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10 },
+  inputSpacing: { marginBottom: 12 },
+  toggle: { position: "absolute", right: 12, top: 12, color: "#1e8449" },
   link: { color: "#1e8449", textAlign: "center", marginTop: 12, fontWeight: "600" },
   error: { color: "#c0392b", textAlign: "center", marginBottom: 8 },
 });

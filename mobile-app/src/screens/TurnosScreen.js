@@ -640,7 +640,7 @@ export default function TurnosScreen() {
                   <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
                 </View>
                 <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
-                {item.motivo ? <Text style={styles.turnoMotivo}>Motivo: {item.motivo}</Text> : null}
+                <Text style={styles.turnoMotivo}>Motivo: {item.motivo || 'No especificado'}</Text>
                 
                 {/* Botones de acción */}
                 <View style={styles.turnoActions}>

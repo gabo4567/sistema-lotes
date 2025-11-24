@@ -18,7 +18,6 @@ export default function EditMedicionScreen({ route, navigation }) {
     tipo: medicion?.tipo || 'PH',
     valorNumerico: medicion?.valorNumerico != null ? String(medicion.valorNumerico) : '',
     observaciones: medicion?.observaciones || '',
-    tecnicoResponsable: medicion?.tecnicoResponsable || '',
   });
   const [capturedImage, setCapturedImage] = useState(null);
 
@@ -42,7 +41,7 @@ export default function EditMedicionScreen({ route, navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!formData.lote || !formData.valorNumerico || !formData.tecnicoResponsable) {
+    if (!formData.lote || !formData.valorNumerico) {
       Alert.alert('Error', 'Completá los campos requeridos');
       return;
     }
@@ -56,7 +55,6 @@ export default function EditMedicionScreen({ route, navigation }) {
         tipo: formData.tipo,
         valorNumerico: parseFloat(formData.valorNumerico),
         observaciones: formData.observaciones,
-        tecnicoResponsable: formData.tecnicoResponsable,
         evidenciaUrl: imageUrl,
       };
       const resp = await fetch(`${API_URL}/mediciones/${medicion.id}`, {
@@ -98,10 +96,7 @@ export default function EditMedicionScreen({ route, navigation }) {
             <TextInput style={styles.input} keyboardType="numeric" value={formData.valorNumerico} onChangeText={(text) => setFormData({ ...formData, valorNumerico: text })} />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Técnico *</Text>
-            <TextInput style={styles.input} value={formData.tecnicoResponsable} onChangeText={(text) => setFormData({ ...formData, tecnicoResponsable: text })} />
-          </View>
+          {/* técnico eliminado */}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Observaciones</Text>

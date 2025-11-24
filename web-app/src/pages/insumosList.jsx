@@ -10,7 +10,7 @@ const InsumosList = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modal, setModal] = useState(null)
-  const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'' })
+  const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible' })
   const [productores, setProductores] = useState([])
   const [asignar, setAsignar] = useState({ productorId:'', cantidadAsignada:'' })
   const [selectedProd, setSelectedProd] = useState('')
@@ -38,8 +38,8 @@ const InsumosList = () => {
 
   useEffect(()=>{ (async()=>{ if(!selectedProd) { setAsignacionesProd([]); return } ; setLoadingAsign(true); try{ const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }catch{ setAsignacionesProd([]) } finally{ setLoadingAsign(false) } })() }, [selectedProd])
 
-  const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'' }); setModal({ type:'add' }) }
-  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:'bolsas', descripcion:insumo.descripcion||'' }); setModal({ type:'edit', insumo }) }
+  const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible' }); setModal({ type:'add' }) }
+  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible' }); setModal({ type:'edit', insumo }) }
   const openAssign = async (insumo)=>{
     try{ const { data } = await getProductores(); setProductores(data||[]) }catch{}
     setAsignar({ productorId:'', cantidadAsignada:'' })
@@ -47,11 +47,11 @@ const InsumosList = () => {
   }
 
   const onSubmitAdd = async ()=>{
-    try{ await insumosService.createInsumo({ nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion }); setModal(null); load(); }
+    try{ await insumosService.createInsumo({ nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion, estado: form.estado }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al agregar insumo') }
   }
   const onSubmitEdit = async ()=>{
-    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion }); setModal(null); load(); }
+    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion, estado: form.estado }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al modificar insumo') }
   }
   const onDelete = async (insumo)=>{
@@ -77,7 +77,12 @@ const InsumosList = () => {
     catch(e){ setError(e?.response?.data?.error||'Error al modificar asignación') }
   }
 
-  const estadoLabel = (i)=> (Number(i.cantidadDisponible||0) > 0 ? 'Disponible' : 'Sin stock')
+  const estadoLabel = (i)=> {
+    const est = String(i.estado||'').toLowerCase();
+    if (est==='no_disponible') return 'No disponible';
+    if (est==='disponible') return 'Disponible';
+    return (Number(i.cantidadDisponible||0) > 0 ? 'Disponible' : 'No disponible')
+  }
   const buttonStyle = { border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }
 
   return (
@@ -91,32 +96,32 @@ const InsumosList = () => {
       </div>
       {loading ? (<div>Cargando…</div>) : (
         <div className="table-wrap">
-          <table className="table-inst" style={{ width:'100%', borderCollapse:'collapse' }}>
+          <table className="table-inst" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: 980 }}>
             <thead>
               <tr style={{ background:'#f0fdf4' }}>
-                <th>Nombre</th>
-                <th>Cantidad disponible</th>
-                <th>Cantidad asignada por productor</th>
-                <th>Estado</th>
-                <th>Descripción</th>
-                <th>Acciones</th>
+                <th style={{ textAlign:'center', width:'20%' }}>Nombre</th>
+                <th style={{ textAlign:'center', width:'16%' }}>Cantidad disponible</th>
+                <th style={{ textAlign:'center', width:'20%' }}>Cantidad asignada por productor</th>
+                <th style={{ textAlign:'center', width:'14%' }}>Estado</th>
+                <th style={{ textAlign:'center', width:'18%' }}>Descripción</th>
+                <th style={{ textAlign:'center', width:'12%' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {items.length===0 ? (
-                <tr><td colSpan={6} style={{ padding: 12 }}>No hay insumos disponibles</td></tr>
+                <tr><td colSpan={6} style={{ padding: 12, textAlign:'center' }}>No hay insumos disponibles</td></tr>
               ) : items.map(i=> (
                 <tr key={i.id}>
-                  <td>{i.nombre}</td>
-                  <td>{i.cantidadDisponible ?? 0} bolsas</td>
-                  <td><InsumoAsignadoCell insumoId={i.id} /></td>
-                  <td>{estadoLabel(i)}</td>
-                  <td>{i.descripcion || '-'}</td>
-                  <td>
-                    <div className="actions-col">
-                      <button style={{ ...buttonStyle, marginRight:6 }} onClick={()=>openEdit(i)}>Modificar</button>
-                      <button style={{ ...buttonStyle, marginRight:6 }} onClick={()=>onDelete(i)}>Eliminar</button>
-                      <button style={buttonStyle} onClick={()=>openAssign(i)}>Asignar a productor</button>
+                  <td style={{ textAlign:'center' }}>{i.nombre}</td>
+                  <td style={{ textAlign:'center' }}>{i.cantidadDisponible ?? 0} bolsas</td>
+                  <td style={{ textAlign:'center' }}><InsumoAsignadoCell insumoId={i.id} /></td>
+                  <td style={{ textAlign:'center' }}>{estadoLabel(i)}</td>
+                  <td style={{ textAlign:'center' }}>{i.descripcion || '-'}</td>
+                  <td style={{ textAlign:'center' }}>
+                    <div className="actions-col" style={{ display:'inline-flex', flexDirection:'column', gap:6, alignItems:'center' }}>
+                      <button style={{ ...buttonStyle }} onClick={()=>openEdit(i)}>Modificar</button>
+                      <button style={{ ...buttonStyle }} onClick={()=>onDelete(i)}>Eliminar</button>
+                      <button style={{ ...buttonStyle }} onClick={()=>openAssign(i)}>Asignar a productor</button>
                     </div>
                   </td>
                 </tr>
@@ -155,12 +160,13 @@ const InsumosList = () => {
                     <tr key={a.id}>
                       <td>{nombreInsumo || '-'}</td>
                       <td>{a.cantidadAsignada ?? 0} bolsas</td>
-                      <td>{ins.descripcion || '-'}</td>
+                      <td>{a.descripcion || '-'}</td>
                       <td>
                         <div className="actions-row">
                           <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>onQuickAdjust(a, +1)}>+1</button>
                           <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>onQuickAdjust(a, -1)}>-1</button>
-                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }} onClick={()=>setModal({ type:'assign-edit', asign: a })}>Modificar cantidad</button>
+                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>setModal({ type:'assign-edit', asign: a })}>Modificar cantidad</button>
+                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }} onClick={()=>setModal({ type:'assign-desc', asign: a })}>Agregar descripción</button>
                         </div>
                       </td>
                     </tr>
@@ -182,6 +188,10 @@ const InsumosList = () => {
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
+                <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
+                  <option value="disponible">Disponible</option>
+                  <option value="no_disponible">No disponible</option>
+                </select>
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitAdd}>Guardar</button>
@@ -196,6 +206,10 @@ const InsumosList = () => {
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
+                <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
+                  <option value="disponible">Disponible</option>
+                  <option value="no_disponible">No disponible</option>
+                </select>
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitEdit}>Guardar</button>
@@ -226,6 +240,16 @@ const InsumosList = () => {
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitEditAsign}>Guardar</button>
+                </div>
+              </div>
+            )}
+            {modal.type==='assign-desc' && (
+              <div>
+                <h3 style={{ marginTop:0 }}>Agregar descripción</h3>
+                <textarea className="input-inst" placeholder="Descripción del insumo para el productor" value={modal.asign.descripcionEdit ?? ''} onChange={e=>setModal(m=>({ ...m, asign: { ...m.asign, descripcionEdit: e.target.value } }))} />
+                <div className="form-actions" style={{ marginTop:8 }}>
+                  <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
+                  <button style={buttonStyle} onClick={async()=>{ try{ await insumosService.updateAsignacion(modal.asign.id, { descripcion: modal.asign.descripcionEdit }); setModal(null); load(); if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) } } catch(e){ setError(e?.response?.data?.error||'Error al agregar descripción') } }}>Guardar</button>
                 </div>
               </div>
             )}

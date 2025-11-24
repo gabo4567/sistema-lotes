@@ -3,7 +3,7 @@ import { createMedicion } from "../services/mediciones.service";
 import Layout from "../components/Layout";
 
 const MedicionesForm = () => {
-  const [form, setForm] = useState({ productor:"", lote:"", fecha:"", tipo:"", valorNumerico:"", tecnicoResponsable:"", evidenciaUrl:"", observaciones:"" });
+  const [form, setForm] = useState({ productor:"", lote:"", fecha:"", tipo:"", valorNumerico:"", evidenciaUrl:"", observaciones:"" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,7 +16,7 @@ const MedicionesForm = () => {
     try {
       await createMedicion(form);
       alert("Medición creada");
-      setForm({ productor:"", lote:"", fecha:"", tipo:"", valorNumerico:"", tecnicoResponsable:"", evidenciaUrl:"", observaciones:"" });
+      setForm({ productor:"", lote:"", fecha:"", tipo:"", valorNumerico:"", evidenciaUrl:"", observaciones:"" });
     } catch { setError("No se pudo crear"); } finally { setLoading(false); }
   };
 
@@ -29,7 +29,7 @@ const MedicionesForm = () => {
         <input placeholder="Fecha" value={form.fecha} onChange={e=>onChange('fecha', e.target.value)} />
         <input placeholder="Tipo" value={form.tipo} onChange={e=>onChange('tipo', e.target.value)} />
         <input placeholder="Valor numérico" value={form.valorNumerico} onChange={e=>onChange('valorNumerico', e.target.value)} />
-        <input placeholder="Técnico responsable" value={form.tecnicoResponsable} onChange={e=>onChange('tecnicoResponsable', e.target.value)} />
+        {/* técnico eliminado */}
         <input placeholder="Evidencia URL" value={form.evidenciaUrl} onChange={e=>onChange('evidenciaUrl', e.target.value)} />
         <textarea placeholder="Observaciones" value={form.observaciones} onChange={e=>onChange('observaciones', e.target.value)} />
         {error && <div className="text-red-600">{error}</div>}

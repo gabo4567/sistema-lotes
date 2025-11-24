@@ -11,6 +11,8 @@ const ProductoresList = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [iptFilter, setIptFilter] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -26,6 +28,13 @@ const ProductoresList = () => {
   };
 
   useEffect(() => { load(); }, []);
+
+  const normalize = (s) => String(s||"").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const viewItems = items.filter(p => {
+    const okIpt = iptFilter ? String(p.ipt||"").includes(String(iptFilter)) : true;
+    const okName = nameFilter ? normalize(p.nombreCompleto||p.nombre||"").includes(normalize(nameFilter)) : true;
+    return okIpt && okName;
+  });
 
   const onResetPassword = async (ipt) => {
     const ok = await confirmDialog({ title: "¿Estás seguro?", text: "¿Estás seguro de que deseas resetear la contraseña del productor a su CUIL nuevamente?", icon: "warning", confirmButtonText: "Resetear", cancelButtonText: "Cancelar" });
@@ -63,6 +72,10 @@ const ProductoresList = () => {
       <div style={{ marginBottom: 12 }}>
         <Link to="/productores/nuevo" className="btn">Nuevo productor</Link>
       </div>
+      <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8, marginBottom:12 }}>
+        <input className="input-inst" placeholder="Filtrar por IPT" value={iptFilter} onChange={e=>setIptFilter(e.target.value)} />
+        <input className="input-inst" placeholder="Filtrar por nombre" value={nameFilter} onChange={e=>setNameFilter(e.target.value)} />
+      </div>
       <div className="table-wrap">
         <table className="table-inst">
           <thead>
@@ -75,7 +88,9 @@ const ProductoresList = () => {
             </tr>
           </thead>
           <tbody>
-            {items.map((p) => (
+            {viewItems.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding:12, textAlign:'center' }}>Sin resultados</td></tr>
+            ) : viewItems.map((p) => (
               <tr key={p.id}>
                 <td>{p.ipt}</td>
                 <td>{p.nombreCompleto}</td>

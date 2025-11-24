@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { View, Text, TextInput, StyleSheet, ActivityIndicator } from "react-native";
 import ButtonPrimary from "../components/ButtonPrimary";
 import { API_URL } from "../utils/constants";
 import { auth } from "../services/firebase";
 import { signInWithCustomToken } from "firebase/auth";
+import { AuthContext } from "../context/AuthContext";
 
 export default function ChangePasswordScreen({ route, navigation }) {
   const { ipt } = route.params || {};
@@ -12,6 +13,10 @@ export default function ChangePasswordScreen({ route, navigation }) {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const { setUser } = useContext(AuthContext);
 
   const handleChange = async () => {
     setError("");
@@ -41,7 +46,7 @@ export default function ChangePasswordScreen({ route, navigation }) {
       const j = await resp.json();
       if (j.token) {
         await signInWithCustomToken(auth, j.token);
-        navigation.replace("Home");
+        setUser(auth.currentUser);
         return;
       }
       navigation.navigate("Login");
@@ -58,9 +63,18 @@ export default function ChangePasswordScreen({ route, navigation }) {
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Cambiar contraseña</Text>
-        <TextInput style={styles.input} placeholder="Contraseña actual" secureTextEntry value={oldPassword} onChangeText={setOldPassword} />
-        <TextInput style={styles.input} placeholder="Nueva contraseña" secureTextEntry value={newPassword} onChangeText={setNewPassword} />
-        <TextInput style={styles.input} placeholder="Confirmar contraseña" secureTextEntry value={confirm} onChangeText={setConfirm} />
+        <View style={styles.inputWrapper}>
+          <TextInput style={styles.input} placeholder="Contraseña actual" secureTextEntry={!showOld} value={oldPassword} onChangeText={setOldPassword} />
+          <Text style={styles.toggle} onPress={()=>setShowOld(v=>!v)}>{showOld?"Ocultar":"Ver"}</Text>
+        </View>
+        <View style={styles.inputWrapper}>
+          <TextInput style={styles.input} placeholder="Nueva contraseña" secureTextEntry={!showNew} value={newPassword} onChangeText={setNewPassword} />
+          <Text style={styles.toggle} onPress={()=>setShowNew(v=>!v)}>{showNew?"Ocultar":"Ver"}</Text>
+        </View>
+        <View style={styles.inputWrapper}>
+          <TextInput style={styles.input} placeholder="Confirmar contraseña" secureTextEntry={!showConfirm} value={confirm} onChangeText={setConfirm} />
+          <Text style={styles.toggle} onPress={()=>setShowConfirm(v=>!v)}>{showConfirm?"Ocultar":"Ver"}</Text>
+        </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading ? <ActivityIndicator color="#2ecc71" style={{ marginVertical: 8 }} /> : <ButtonPrimary title="Guardar" onPress={handleChange} />}
       </View>
@@ -72,6 +86,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" },
   card: { width: "90%", backgroundColor: "#ffffff", borderRadius: 16, padding: 20 },
   title: { fontSize: 20, textAlign: "center", marginBottom: 12, color: "#1e8449", fontWeight: "bold" },
-  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10, marginBottom: 12 },
+  inputWrapper: { position: "relative", marginBottom: 12 },
+  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10 },
+  toggle: { position: "absolute", right: 12, top: 12, color: "#1e8449" },
   error: { color: "#c0392b", textAlign: "center", marginBottom: 8 },
 });

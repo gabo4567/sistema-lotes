@@ -20,6 +20,11 @@ export const deactivateUser = async (uid) => {
   return res.data;
 };
 
+export const activateUser = async (uid) => {
+  const res = await api.post(`/users/${uid}/activate`);
+  return res.data;
+};
+
 export const resetPasswordUser = async (uid) => {
   const res = await api.post(`/users/${uid}/reset-password`);
   return res.data;

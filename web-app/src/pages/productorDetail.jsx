@@ -35,7 +35,12 @@ const ProductorDetail = () => {
             <div className="detail-item"><span className="detail-label">Email:</span> {prod.email || '-'}</div>
             <div className="detail-item"><span className="detail-label">Teléfono:</span> {prod.telefono || '-'}</div>
             <div className="detail-item"><span className="detail-label">Domicilio:</span> {prod.domicilioCasa || '-'}</div>
-            <div className="detail-item"><span className="detail-label">Ingreso al campo:</span> {prod.domicilioIngresoCampo ? `${prod.domicilioIngresoCampo.lat}, ${prod.domicilioIngresoCampo.lng}` : '-'}</div>
+            <div className="detail-item"><span className="detail-label">Ingreso al campo:</span> {
+              (()=>{
+                const c = prod.domicilioIngresoCoord || prod.domicilioIngresoCampo || (prod.ubicaciones && prod.ubicaciones.entradaCampo);
+                return (c && typeof c.lat === 'number' && typeof c.lng === 'number') ? `${c.lat}, ${c.lng}` : '-';
+              })()
+            }</div>
             <div className="detail-item"><span className="detail-label">Estado:</span> {prod.estado}</div>
             <div className="detail-item"><span className="detail-label">Requiere cambio de contraseña:</span> {String(prod.requiereCambioContrasena)}</div>
             <div className="detail-item"><span className="detail-label">Plantas/ha:</span> {prod.plantasPorHa ?? '-'}</div>

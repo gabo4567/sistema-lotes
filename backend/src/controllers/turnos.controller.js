@@ -190,11 +190,56 @@ export const crearTurno = async (req, res) => {
 export const obtenerTurnos = async (req, res) => {
   try {
     const snapshot = await db.collection("turnos").where("activo", "==", true).get();
-    const turnos = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...convertirTimestamps(doc.data()),
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const batch = db.batch(); let updates = 0;
+    const raws = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
+    const turnos = raws.map(({ id, ref, data }) => {
+      const raw = { ...data };
+      // Normalizar fechaTurno a Date
+      let fecha;
+      if (raw.fechaTurno && raw.fechaTurno._seconds) {
+        fecha = new Date(raw.fechaTurno._seconds * 1000);
+      } else if (typeof raw.fechaTurno === 'string') {
+        // aceptar 'YYYY-MM-DD' o ISO
+        const s = raw.fechaTurno.includes('T') ? raw.fechaTurno : `${raw.fechaTurno}T00:00:00.000Z`;
+        fecha = new Date(s);
+      } else {
+        fecha = new Date(raw.fecha || Date.now());
+      }
+      const estado = String(raw.estado || 'pendiente').toLowerCase();
+      if (estado === 'pendiente' && fecha instanceof Date && !isNaN(fecha.getTime())) {
+        const soloDia = new Date(fecha); soloDia.setHours(0,0,0,0);
+        if (soloDia.getTime() < hoy.getTime()) {
+          batch.update(ref, { estado: 'vencido', motivo: 'Vencido automáticamente por fecha', updatedAt: Timestamp.now() });
+          updates++;
+          raw.estado = 'vencido'; raw.motivo = 'Vencido automáticamente por fecha';
+        }
+      }
+      return { id, ref, ...convertirTimestamps(raw) };
+    });
+    if (updates > 0) await batch.commit();
+
+    // Enriquecer con nombre e IPT del productor
+    const prodInfo = new Map();
+    const ids = Array.from(new Set(turnos.map(t => String(t.productorId || '')))).filter(Boolean);
+    for (const pid of ids) {
+      try {
+        const pdoc = await db.collection('productores').doc(pid).get();
+        if (pdoc.exists) {
+          const pd = pdoc.data();
+          prodInfo.set(pid, { nombre: pd.nombreCompleto || pd.nombre || '', ipt: String(pd.ipt || '') });
+          continue;
+        }
+      } catch {}
+    }
+    const enriched = turnos.map(t => ({
+      ...t,
+      productorNombre: t.productorNombre || prodInfo.get(String(t.productorId || ''))?.nombre || '',
+      ipt: t.ipt || prodInfo.get(String(t.productorId || ''))?.ipt || '',
+      motivo: t.motivo || '-',
     }));
-    res.json(turnos);
+
+    res.json(enriched);
   } catch (error) {
     console.error("Error al obtener los turnos:", error);
     res.status(500).json({ message: "Error al obtener los turnos", error });
@@ -326,7 +371,10 @@ export const obtenerTurnosPorProductor = async (req, res) => {
       .where("activo", "==", true)
       .get();
 
-    const turnos = snapshot.docs.map(doc => ({ id: doc.id, ...convertirTimestamps(doc.data()) }));
+    const turnos = snapshot.docs.map(doc => {
+      const raw = doc.data();
+      return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || '-' }) };
+    });
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por productor:", error);

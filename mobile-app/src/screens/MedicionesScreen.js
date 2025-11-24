@@ -115,9 +115,7 @@ export default function MedicionesScreen({ navigation }) {
         <Text style={styles.obsText}>Obs: {item.observaciones}</Text>
       ) : null}
       
-      {item.tecnicoResponsable ? (
-        <Text style={styles.tecnicoText}>Técnico: {item.tecnicoResponsable}</Text>
-      ) : null}
+      {/* técnico eliminado */}
       
       {item.evidenciaUrl ? (
         <TouchableOpacity style={styles.imageContainer} onPress={() => openImageModal(item.evidenciaUrl)}>
@@ -318,11 +316,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontStyle: 'italic',
   },
-  tecnicoText: {
-    fontSize: 14,
-    color: '#8e44ad',
-    marginTop: 4,
-  },
+  // técnico eliminado
   imageContainer: {
     marginTop: 10,
     alignItems: 'center',

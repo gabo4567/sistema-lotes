@@ -31,9 +31,8 @@ export default function AppNavigator() {
           <Text style={{ marginTop: 12, color: "#1e8449" }}>Cargando…</Text>
         </View>
       ) : (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <>
+        user ? (
+          <Stack.Navigator key="auth" screenOptions={{ headerShown: false }} initialRouteName="Home">
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Lotes" component={LotesScreen} />
             <Stack.Screen name="Turnos" component={TurnosScreen} />
@@ -43,15 +42,14 @@ export default function AppNavigator() {
             <Stack.Screen name="MisUbicaciones" component={MisUbicacionesScreen} />
             <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
             <Stack.Screen name="Perfil" component={PerfilScreen} />
-          </>
+          </Stack.Navigator>
         ) : (
-          <>
+          <Stack.Navigator key="guest" screenOptions={{ headerShown: false }} initialRouteName="Login">
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-          </>
-        )}
-      </Stack.Navigator>
+          </Stack.Navigator>
+        )
       )}
     </NavigationContainer>
   );

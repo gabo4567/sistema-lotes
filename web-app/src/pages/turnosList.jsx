@@ -1,22 +1,33 @@
 import React, { useEffect, useState } from 'react'
 import { getTurnos, setEstadoTurno } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
-import { notify } from '../utils/alerts'
+import { notify, promptDialog } from '../utils/alerts'
+import { getProductores } from '../services/productores.service'
 import HomeButton from '../components/HomeButton'
 
 
 const TurnosList = () => {
 const [turnos, setTurnos] = useState([])
+const [prodMap, setProdMap] = useState(new Map())
 
 
 useEffect(()=>{(async ()=>{
-try{ setTurnos(await getTurnos()) }catch(e){console.error(e)}
+try{ 
+  const ts = await getTurnos()
+  setTurnos(ts)
+  try{
+    const { data: productores } = await getProductores()
+    const map = new Map()
+    (Array.isArray(productores)? productores:[]).forEach(p=>{ map.set(String(p.id), { nombre: p.nombreCompleto || p.nombre || '', ipt: String(p.ipt||'') }) })
+    setProdMap(map)
+  }catch{}
+}catch(e){console.error(e)}
 })()},[])
 
 
 const handleCambioEstado = async (id, nuevo)=>{
   const t = turnos.find(x=>x.id===id)
-  if (t && nuevo==='Aprobado' && String(t.tipoTurno).toLowerCase()==='insumo'){
+  if (t && (nuevo==='confirmado' || nuevo==='Aprobado') && String(t.tipoTurno).toLowerCase()==='insumo'){
     try{
       const { disponible } = await insumosService.disponibilidadPorProductor(t.productorId)
       await notify({ title: disponible ? 'Usted tiene turno para retirar.' : 'Usted no tiene insumos disponibles.', icon: disponible ? 'success' : 'warning' })
@@ -40,10 +51,10 @@ const formatDate = (d)=>{
 
 const estadoClass = (e)=>{
   const v = String(e||'').toLowerCase()
-  if(v.includes('aprob')) return 'estado-badge ok'
-  if(v.includes('cancel')) return 'estado-badge err'
-  if(v.includes('venc')) return 'estado-badge warn'
-  if(v.includes('conf')) return 'estado-badge ok'
+  if(v==='confirmado') return 'estado-badge ok'
+  if(v==='cancelado') return 'estado-badge err'
+  if(v==='vencido') return 'estado-badge warn'
+  if(v==='completado') return 'estado-badge ok'
   return 'estado-badge info'
 }
 
@@ -58,15 +69,17 @@ return (
             <div className="turno-date">{formatDate(t.fechaTurno)}</div>
             <div className={estadoClass(t.estado)}>{t.estado || 'Pendiente'}</div>
           </div>
-          <div className="turno-item"><span className="turno-label">Productor:</span> {t.productorId}</div>
+          <div className="turno-item"><span className="turno-label">Productor:</span> {t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'}</div>
+          <div className="turno-item"><span className="turno-label">IPT:</span> {t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'}</div>
           <div className="turno-item"><span className="turno-label">Tipo:</span> {t.tipoTurno}</div>
-          {t.motivo && <div className="turno-item"><span className="turno-label">Motivo:</span> {t.motivo}</div>}
+          <div className="turno-item"><span className="turno-label">Motivo:</span> {t.motivo || 'No especificado'}</div>
           <div className="turno-actions">
             <select className="select-inst" onChange={e=>handleCambioEstado(t.id, e.target.value)} defaultValue={t.estado}>
-              <option value="Solicitado">Solicitado</option>
-              <option value="Aprobado">Aprobado</option>
-              <option value="Cancelado">Cancelado</option>
-              <option value="Vencido">Vencido</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="cancelado">Cancelado</option>
+              <option value="completado">Completado</option>
+              <option value="vencido">Vencido</option>
             </select>
           </div>
         </div>

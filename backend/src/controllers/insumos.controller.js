@@ -4,7 +4,7 @@ const NOMBRES_PERMITIDOS = ["Arada", "Almácibo", "Transplante", "Cosecha", "Alm
 
 export const crearInsumo = async (req, res) => {
   try {
-    const { nombre, cantidadDisponible, unidad, descripcion } = req.body;
+    const { nombre, cantidadDisponible, unidad, descripcion, estado } = req.body;
     if (!nombre || !NOMBRES_PERMITIDOS.includes(String(nombre))) {
       return res.status(400).json({ error: "Nombre de insumo inválido" });
     }
@@ -32,6 +32,7 @@ export const crearInsumo = async (req, res) => {
       cantidadDisponible: cant,
       unidad: "bolsas",
       descripcion: descripcion ? String(descripcion) : "",
+      estado: (estado && ["disponible","no_disponible"].includes(String(estado))) ? String(estado) : "disponible",
       creadoEn: new Date(),
     };
     const docRef = await db.collection("insumos").add(insumo);
@@ -73,6 +74,12 @@ export const actualizarInsumo = async (req, res) => {
       const cant = Number(data.cantidadDisponible);
       if (!isFinite(cant) || cant < 0) return res.status(400).json({ error: "Cantidad disponible inválida" });
       data.cantidadDisponible = cant;
+    }
+    if (data.estado !== undefined) {
+      const est = String(data.estado);
+      const valid = ["disponible","no_disponible"];
+      if (!valid.includes(est)) return res.status(400).json({ error: "Estado inválido" });
+      data.estado = est;
     }
     data.unidad = "bolsas";
     data.updatedAt = new Date();
@@ -146,15 +153,19 @@ export const listarAsignacionesPorProductor = async (req, res) => {
 export const actualizarAsignacion = async (req, res) => {
   try {
     const { asignacionId } = req.params;
-    const { cantidadAsignada } = req.body;
-    const nueva = Number(cantidadAsignada);
-    if (!isFinite(nueva) || nueva < 0) return res.status(400).json({ error: "Cantidad inválida" });
+    const { cantidadAsignada, descripcion } = req.body;
     const ref = db.collection("productorInsumos").doc(String(asignacionId));
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "Asignación no encontrada" });
     const asign = snap.data();
     const vieja = Number(asign.cantidadAsignada || 0);
-    const delta = nueva - vieja;
+    let delta = 0;
+    let nueva = vieja;
+    if (cantidadAsignada !== undefined) {
+      nueva = Number(cantidadAsignada);
+      if (!isFinite(nueva) || nueva < 0) return res.status(400).json({ error: "Cantidad inválida" });
+      delta = nueva - vieja;
+    }
     if (delta !== 0) {
       const iref = db.collection("insumos").doc(String(asign.insumoId));
       const isnap = await iref.get();
@@ -168,7 +179,9 @@ export const actualizarAsignacion = async (req, res) => {
         await iref.update({ cantidadDisponible: stock + Math.abs(delta), updatedAt: new Date() });
       }
     }
-    await ref.update({ cantidadAsignada: nueva, updatedAt: new Date() });
+    const updateData = { cantidadAsignada: nueva, updatedAt: new Date() };
+    if (descripcion !== undefined) updateData.descripcion = String(descripcion || "");
+    await ref.update(updateData);
     res.json({ message: "Asignación actualizada" });
   } catch (e) {
     res.status(500).json({ error: "Error al actualizar asignación" });

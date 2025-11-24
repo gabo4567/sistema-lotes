@@ -4,7 +4,7 @@ import { db } from "../utils/firebase.js";
 // ➕ Crear una nueva medición
 export const crearMedicion = async (req, res) => {
   try {
-    const { productor, lote, fecha, tipo, valorNumerico, tecnicoResponsable, evidenciaUrl, observaciones } = req.body;
+    const { productor, lote, fecha, tipo, valorNumerico, evidenciaUrl, observaciones } = req.body;
     if (!productor || !lote || !fecha || !tipo) return res.status(400).json({ message: "Faltan campos requeridos" });
 
     const nuevaMedicion = {
@@ -13,7 +13,6 @@ export const crearMedicion = async (req, res) => {
       fecha,
       tipo,
       valorNumerico: valorNumerico != null ? Number(valorNumerico) : null,
-      tecnicoResponsable: tecnicoResponsable || "",
       evidenciaUrl: evidenciaUrl || "",
       observaciones: observaciones || "",
       activo: true,
@@ -83,7 +82,8 @@ export const obtenerMedicionPorId = async (req, res) => {
 export const actualizarMedicion = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = req.body;
+    const data = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(data, 'tecnicoResponsable')) delete data.tecnicoResponsable;
     await db.collection("mediciones").doc(id).update(data);
     res.json({ message: "Medición actualizada correctamente" });
   } catch (error) {

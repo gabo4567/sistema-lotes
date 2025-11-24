@@ -13,6 +13,12 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
     }
 
+    // Evitar correos duplicados en Firestore (además de la restricción de Firebase Auth)
+    const existingUsers = await db.collection("users").where("email", "==", String(email).toLowerCase()).limit(1).get();
+    if (!existingUsers.empty) {
+      return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
+    }
+
     const userRecord = await admin.auth().createUser({
       email,
       password,
@@ -22,7 +28,7 @@ export const registerUser = async (req, res) => {
     const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
     const finalRole = allowed.includes(role) ? role : "Tecnico";
     await db.collection("users").doc(userRecord.uid).set({
-      email,
+      email: String(email).toLowerCase(),
       nombre,
       role: finalRole,
       createdAt: new Date(),
@@ -210,8 +216,36 @@ export const loginProductor = async (req, res) => {
       email: data.email,
       productorId: doc.id
     });
+    try {
+      await doc.ref.update({ ultimoIngreso: new Date() });
+    } catch (e) {
+      console.error("No se pudo actualizar ultimoIngreso de productor", ipt, e);
+    }
     
-    await doc.ref.update({ historialIngresos: admin.firestore.FieldValue.increment(1) });
+    await doc.ref.update({ 
+      historialIngresos: admin.firestore.FieldValue.increment(1),
+      ultimoIngreso: new Date()
+    });
+    try {
+      await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
+    } catch (e) {
+      console.error("No se pudo registrar ingresoProductor", ipt, e);
+    }
+
+    try {
+      await db.collection("users").doc(uid).set({
+        email: (data.email ? String(data.email).toLowerCase() : ""),
+        nombre: data.nombreCompleto || data.nombre || "",
+        role: "Productor",
+        ipt: String(ipt),
+        estado: data.activo === false ? "Inactivo" : "Activo",
+        ultimoAcceso: new Date(),
+        updatedAt: new Date(),
+      }, { merge: true });
+    } catch (e) {
+      console.error("No se pudo actualizar users.ultimoAcceso para productor", ipt, e);
+    }
+
     return res.json({ token, requiereCambioContrasena: requiereCambio });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -266,6 +300,24 @@ export const cambiarPasswordProductor = async (req, res) => {
       email: data.email,
       productorId: doc.id
     });
+    try {
+      await db.collection("users").doc(uid).set({
+        email: (data.email ? String(data.email).toLowerCase() : ""),
+        nombre: data.nombreCompleto || data.nombre || "",
+        role: "Productor",
+        ipt: String(ipt),
+        estado: data.activo === false ? "Inactivo" : "Activo",
+        ultimoAcceso: new Date(),
+        updatedAt: new Date(),
+      }, { merge: true });
+    } catch (e) {
+      console.error("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseña", ipt, e);
+    }
+    try {
+      await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
+    } catch (e) {
+      console.error("No se pudo registrar ingresoProductor luego de cambio de contraseña", ipt, e);
+    }
     return res.json({ message: "Contraseña actualizada", token });
   } catch (error) {
     return res.status(500).json({ error: error.message });
