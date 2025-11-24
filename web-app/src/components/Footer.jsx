@@ -1,11 +1,12 @@
 import React from "react";
 
+
 const Footer = () => {
   return (
     <footer className="footer-inst">
       <div className="footer-grid">
         <div className="footer-col">
-          <div className="footer-brand">IPT</div>
+          <div className="footer-brand"><img src="assets/MINISTERIO-DE-PRODUCCION-05.png" alt="Logo IPT" /></div>
           <div className="footer-slogan">Junto al productor siempre!</div>
           <ul className="footer-contact">
             <li>📍 Agustín P. Justo 1187, Goya, Corrientes, 3450</li>

@@ -34,7 +34,7 @@ router.patch("/:uid", async (req, res) => {
   try {
     const { uid } = req.params;
     const { nombre, role, estado } = req.body;
-    const allowedRoles = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
+    const allowedRoles = ["Administrador", "Tecnico", "Técnico", "Supervisor", "Productor"];
     const updates = {};
     if (nombre) updates.nombre = nombre;
     if (role && allowedRoles.includes(role)) updates.role = role;

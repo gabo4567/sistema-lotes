@@ -64,6 +64,20 @@ const UsersList = () => {
   if (loading) return <div>Cargando usuarios...</div>;
   if (error) return <div className="text-red-700">{error}</div>;
 
+  const formatTimestamp = (ts) => {
+    if (!ts) return "-";
+    try {
+      if (typeof ts.toDate === "function") return ts.toDate().toLocaleString();
+      if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000).toLocaleString();
+      if (typeof ts._seconds === "number") return new Date(ts._seconds * 1000).toLocaleString(); // fallback si llega serializado
+      if (typeof ts === "number") return new Date(ts).toLocaleString();
+      if (typeof ts === "string") return new Date(ts).toLocaleString();
+      return "-";
+    } catch {
+      return "-";
+    }
+  };
+
   return (
     <div className="users-list">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
@@ -98,7 +112,7 @@ const UsersList = () => {
                   </select>
                 </td>
                 <td>{u.estado || 'Activo'}</td>
-                <td>{u.ultimoAcceso ? new Date(u.ultimoAcceso.seconds ? u.ultimoAcceso.seconds*1000 : u.ultimoAcceso).toLocaleString() : '-'}</td>
+                <td>{formatTimestamp(u.ultimoAcceso)}</td>
                 <td>
                   <div className="actions-row">
                     <button className="btn" onClick={()=>onResetPassword(u.id)}>Restablecer contraseña</button>

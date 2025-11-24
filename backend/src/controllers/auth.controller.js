@@ -20,11 +20,11 @@ export const registerUser = async (req, res) => {
     });
 
     const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
-    const finalRole = allowed.includes(role) ? role : undefined;
+    const finalRole = allowed.includes(role) ? role : "Tecnico";
     await db.collection("users").doc(userRecord.uid).set({
       email,
       nombre,
-      ...(finalRole ? { role: finalRole } : {}),
+      role: finalRole,
       createdAt: new Date(),
     });
 
@@ -34,12 +34,101 @@ export const registerUser = async (req, res) => {
         uid: userRecord.uid,
         email: userRecord.email,
         nombre: userRecord.displayName,
-        role: finalRole || undefined,
+        role: finalRole,
       },
     });
   } catch (error) {
     console.error("Error al registrar usuario:", error);
     res.status(500).json({ error: error.message });
+  }
+};
+
+// Registrar productor (crea doc en Firestore y asegura usuario en Firebase Auth)
+export const registerProductor = async (req, res) => {
+  try {
+    const {
+      ipt,
+      nombreCompleto,
+      cuil,
+      email,
+      telefono,
+      domicilioCasa,
+      domicilioIngresoCoord,
+      estado,
+      plantasPorHa,
+    } = req.body;
+
+    if (!ipt || !nombreCompleto || !cuil) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+
+    // Validar unicidad de IPT (si existe y está activo, no permitir duplicado)
+    const existing = await db
+      .collection("productores")
+      .where("ipt", "==", String(ipt))
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      const existingData = existing.docs[0].data();
+      if (existingData.activo !== false) {
+        return res.status(409).json({ error: "Ya existe un productor con ese IPT" });
+      }
+    }
+
+    const newProductor = {
+      ipt: String(ipt),
+      nombreCompleto,
+      cuil: String(cuil),
+      email: email || "",
+      telefono: telefono || "",
+      domicilioCasa: domicilioCasa || "",
+      domicilioIngresoCoord: domicilioIngresoCoord || null,
+      estado: estado || "Nuevo",
+      plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
+      requiereCambioContrasena: true, // Primer login con CUIL
+      historialIngresos: 0,
+      fechaRegistro: new Date(),
+      activo: true,
+    };
+
+    const docRef = await db.collection("productores").add(newProductor);
+
+    const authUid = `prod_${String(ipt)}`;
+
+    // Asegurar que exista un usuario en Firebase Auth con ese UID
+    try {
+      await admin.auth().getUser(authUid);
+    } catch (e) {
+      if (e && e.code === "auth/user-not-found") {
+        // Crear usuario solo con UID y displayName para evitar conflictos de email
+        await admin.auth().createUser({
+          uid: authUid,
+          displayName: nombreCompleto,
+        });
+      } else {
+        throw e;
+      }
+    }
+
+    // Asignar claims útiles para posteriores autorizaciones
+    await admin.auth().setCustomUserClaims(authUid, {
+      role: "productor",
+      ipt: String(ipt),
+      nombre: nombreCompleto,
+      email: email || undefined,
+      productorId: docRef.id,
+    });
+
+    return res.json({
+      message: "✅ Productor registrado correctamente",
+      id: docRef.id,
+      authUid,
+      ...newProductor,
+    });
+  } catch (error) {
+    console.error("Error al registrar productor:", error);
+    return res.status(500).json({ error: "Error al registrar productor" });
   }
 };
 
