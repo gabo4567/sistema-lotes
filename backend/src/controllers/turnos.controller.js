@@ -63,12 +63,12 @@ export const crearTurno = async (req, res) => {
       'renovación carnet': 'carnet',
       'renovacion carnet': 'carnet',
       
-      // Otras variaciones comunes
-      'otra': 'otra',
-      'otro': 'otra',
-      'otros': 'otra',
-      'varios': 'otra',
-      'vario': 'otra'
+      // Otras variaciones comunes (normalizamos a 'otro')
+      'otra': 'otro',
+      'otro': 'otro',
+      'otros': 'otro',
+      'varios': 'otro',
+      'vario': 'otro'
     };
     
     // Buscar coincidencia exacta primero
@@ -152,7 +152,11 @@ export const crearTurno = async (req, res) => {
     }
 
     // Crear el turno con fecha UTC para evitar problemas de zona horaria
-    const fechaParaFirestore = fechaProcesada || fechaFinal;
+    // Establecer 09:00 (AR) => 12:00 UTC
+    let fechaParaFirestore = fechaProcesada || fechaFinal;
+    if (fechaProcesada) {
+      fechaParaFirestore = `${fechaProcesada}T12:00:00.000Z`;
+    }
     console.log("💾 Guardando turno con fecha:", fechaParaFirestore);
     
     const turno = {
@@ -207,6 +211,18 @@ export const obtenerTurnos = async (req, res) => {
         fecha = new Date(raw.fecha || Date.now());
       }
       const estado = String(raw.estado || 'pendiente').toLowerCase();
+      // Normalizar tipo 'otra' -> 'otro'
+      if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
+        batch.update(ref, { tipoTurno: 'otro' });
+        raw.tipoTurno = 'otro';
+      }
+      // Ajustar hora por defecto a 09:00 AR (12:00 UTC) para documentos antiguos
+      if (typeof raw.fechaTurno === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.fechaTurno)) {
+        const iso = `${raw.fechaTurno}T12:00:00.000Z`;
+        batch.update(ref, { fechaTurno: iso });
+        raw.fechaTurno = iso;
+        fecha = new Date(iso);
+      }
       if (estado === 'pendiente' && fecha instanceof Date && !isNaN(fecha.getTime())) {
         const soloDia = new Date(fecha); soloDia.setHours(0,0,0,0);
         if (soloDia.getTime() < hoy.getTime()) {
@@ -265,6 +281,13 @@ export const actualizarTurno = async (req, res) => {
   try {
     const { id } = req.params;
     const data = { ...req.body, updatedAt: Timestamp.now() };
+
+    const snap = await db.collection("turnos").doc(id).get();
+    if (!snap.exists) return res.status(404).json({ message: "Turno no encontrado" });
+    const current = snap.data();
+    if (String(current.estado || '').toLowerCase() !== 'pendiente') {
+      return res.status(400).json({ message: `No puedes editar un turno ${String(current.estado||'').toLowerCase()}` });
+    }
 
     if (data.fechaTurno) {
       const fecha = new Date(data.fechaTurno);
@@ -329,7 +352,14 @@ export const cambiarEstadoTurno = async (req, res) => {
 export const eliminarTurno = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection("turnos").doc(id).update({ activo: false });
+    const doc = await db.collection("turnos").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
+    const turno = doc.data();
+    const estado = String(turno?.estado || '').toLowerCase();
+    if (estado !== 'pendiente') {
+      return res.status(400).json({ message: `No puedes eliminar un turno ${estado}` });
+    }
+    await db.collection("turnos").doc(id).update({ activo: false, updatedAt: Timestamp.now() });
     res.json({ message: "Turno desactivado correctamente" });
   } catch (error) {
     console.error("Error al eliminar el turno:", error);
@@ -371,10 +401,23 @@ export const obtenerTurnosPorProductor = async (req, res) => {
       .where("activo", "==", true)
       .get();
 
+    const batch = db.batch();
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();
+      // Normalizar tipo
+      if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
+        batch.update(doc.ref, { tipoTurno: 'otro' });
+        raw.tipoTurno = 'otro';
+      }
+      // Normalizar fecha: si solo hay día, fijar 12:00 UTC (09:00 AR)
+      if (typeof raw.fechaTurno === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.fechaTurno)) {
+        const iso = `${raw.fechaTurno}T12:00:00.000Z`;
+        batch.update(doc.ref, { fechaTurno: iso });
+        raw.fechaTurno = iso;
+      }
       return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || '-' }) };
     });
+    await batch.commit();
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por productor:", error);

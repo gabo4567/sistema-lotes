@@ -13,6 +13,7 @@ const InsumosList = () => {
   const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible' })
   const [productores, setProductores] = useState([])
   const [asignar, setAsignar] = useState({ productorId:'', cantidadAsignada:'' })
+  const [iptSearch, setIptSearch] = useState('')
   const [selectedProd, setSelectedProd] = useState('')
   const [asignacionesProd, setAsignacionesProd] = useState([])
   const [loadingAsign, setLoadingAsign] = useState(false)
@@ -219,12 +220,15 @@ const InsumosList = () => {
             {modal.type==='assign' && (
               <div>
                 <h3 style={{ marginTop:0 }}>Asignar a productor</h3>
-                <select className="select-inst" value={asignar.productorId} onChange={e=>setAsignar({ ...asignar, productorId:e.target.value })}>
-                  <option value="">Seleccione productor</option>
-                  {productores.map(p=> (
-                    <option key={p.id} value={p.id}>{p.nombreCompleto || p.ipt || p.id}</option>
-                  ))}
-                </select>
+                <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
+                  <input className="input-inst" placeholder="Buscar por IPT" value={iptSearch} onChange={e=>setIptSearch(e.target.value)} />
+                  <select className="select-inst" value={asignar.productorId} onChange={e=>setAsignar({ ...asignar, productorId:e.target.value })}>
+                    <option value="">Seleccione productor</option>
+                    {productores.filter(p=> iptSearch ? String(p.ipt||'').includes(String(iptSearch)) : true).map(p=> (
+                      <option key={p.id} value={p.id}>{p.nombreCompleto || p.ipt || p.id} {p.ipt ? `· ${p.ipt}`:''}</option>
+                    ))}
+                  </select>
+                </div>
                 <input className="input-inst" placeholder="Cantidad a asignar (bolsas)" value={asignar.cantidadAsignada} onChange={e=>setAsignar({ ...asignar, cantidadAsignada:e.target.value })} />
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>

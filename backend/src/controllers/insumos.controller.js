@@ -104,7 +104,7 @@ export const asignarInsumoAProductor = async (req, res) => {
   try {
     const { id } = req.params; // insumoId
     const { productorId, cantidadAsignada } = req.body;
-    if (!productorId) return res.status(400).json({ error: "productorId requerido" });
+    if (!productorId) return res.status(400).json({ error: "Debe seleccionar al productor para asignarle los insumos" });
     const cant = Number(cantidadAsignada);
     if (!isFinite(cant) || cant <= 0) return res.status(400).json({ error: "cantidadAsignada inválida" });
     const refInsumo = db.collection("insumos").doc(id);
@@ -112,17 +112,38 @@ export const asignarInsumoAProductor = async (req, res) => {
     if (!insSnap.exists) return res.status(404).json({ error: "Insumo no encontrado" });
     const ins = insSnap.data();
     const disponible = Number(ins.cantidadDisponible || 0);
-    if (disponible < cant) return res.status(400).json({ error: "Stock insuficiente" });
-    const asignacion = {
-      productorId: String(productorId),
-      insumoId: id,
-      cantidadAsignada: cant,
-      fechaAsignacion: new Date(),
-      estado: "pendiente",
-    };
-    const asignRef = await db.collection("productorInsumos").add(asignacion);
-    await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });
-    res.json({ id: asignRef.id, ...asignacion });
+    // Buscar asignación existente pendiente para este productor y este insumo
+    const existingSnap = await db.collection("productorInsumos")
+      .where("productorId", "==", String(productorId))
+      .where("insumoId", "==", String(id))
+      .where("estado", "==", "pendiente")
+      .limit(1)
+      .get();
+
+    if (existingSnap.empty) {
+      if (disponible < cant) return res.status(400).json({ error: "Stock insuficiente" });
+      const asignacion = {
+        productorId: String(productorId),
+        insumoId: id,
+        cantidadAsignada: cant,
+        fechaAsignacion: new Date(),
+        estado: "pendiente",
+      };
+      const asignRef = await db.collection("productorInsumos").add(asignacion);
+      await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });
+      return res.json({ id: asignRef.id, ...asignacion });
+    } else {
+      // Sumar cantidad en el mismo registro
+      const asignDoc = existingSnap.docs[0];
+      const data = asignDoc.data();
+      const actual = Number(data.cantidadAsignada || 0);
+      if (disponible < cant) return res.status(400).json({ error: "Stock insuficiente" });
+      const nueva = actual + cant;
+      await asignDoc.ref.update({ cantidadAsignada: nueva, updatedAt: new Date() });
+      await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });
+      const updated = await asignDoc.ref.get();
+      return res.json({ id: asignDoc.id, ...updated.data() });
+    }
   } catch (e) {
     res.status(500).json({ error: "Error al asignar insumo" });
   }

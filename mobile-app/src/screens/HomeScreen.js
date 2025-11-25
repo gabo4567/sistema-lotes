@@ -1,7 +1,7 @@
 // src/screens/HomeScreen.js
 
 import React, { useContext } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Alert } from "react-native";
 import { AuthContext } from "../context/AuthContext";
 import ButtonPrimary from "../components/ButtonPrimary";
 
@@ -9,6 +9,17 @@ export default function HomeScreen({ navigation }) {
   const { logout, user } = useContext(AuthContext);
 
   const displayName = user?.displayName || user?.email || "Usuario";
+
+  const confirmLogout = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro de que deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: logout },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -24,7 +35,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       <View style={{ marginTop: 10 }}>
-        <ButtonPrimary title="Cerrar sesión" onPress={logout} />
+        <ButtonPrimary title="Cerrar sesión" onPress={confirmLogout} />
       </View>
     </View>
   );

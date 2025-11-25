@@ -206,6 +206,40 @@ export const obtenerResumenGeneral = async (req, res) => {
     });
     const actividadMovil = Array.from(actividadMap.values()).filter(x=> x.productorIpt);
 
+    // Turnos detalle para tabla en resumen
+    let turnosLista = turnosSnap.docs
+      .map(tdoc => ({ id: tdoc.id, ...tdoc.data() }))
+      .filter(t => inRange(t.fechaTurno || t.fecha || t.creadoEn))
+      .map(t => {
+        const ipt = t.ipt ? String(t.ipt) : (t.productorId ? (prodById.get(String(t.productorId))?.ipt || '') : '');
+        const productorNombre = ipt ? (prodByIpt.get(ipt)?.nombre || '') : '';
+        const f = t.fechaTurno || t.fecha || t.creadoEn;
+        let fechaOut = '';
+        try {
+          let dt;
+          if (f && typeof f === 'object' && (f._seconds || f.seconds)) {
+            const secs = f._seconds ?? f.seconds;
+            dt = new Date(secs * 1000);
+          } else {
+            dt = new Date(f);
+          }
+          const pad2 = (n)=> String(n).padStart(2,'0');
+          fechaOut = `${pad2(dt.getDate())}/${pad2(dt.getMonth()+1)}/${dt.getFullYear()}, ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+        } catch { fechaOut = String(f||''); }
+        return {
+          id: t.id,
+          productorIpt: ipt,
+          productorNombre,
+          fecha: fechaOut,
+          estado: String(t.estado || 'pendiente').toLowerCase(),
+          tipo: String(t.tipoTurno || t.tipo || ''),
+          motivo: t.motivo || '-',
+        };
+      });
+
+    // Ocultar registro específico solicitado: IPT 123456, productor Juan Gabriel Pared, fecha 11/12/2025, 21:00
+    turnosLista = turnosLista.filter(r => !(String(r.productorIpt) === '123456' && String(r.productorNombre).trim() === 'Juan Gabriel Pared' && String(r.fecha) === '11/12/2025, 21:00'));
+
     // Mediciones resumen por tipo y recientes
     const conteoTipos = {};
     const medicionesLista = medicionesSnap.docs.map(m => ({ id: m.id, ...m.data() }))
@@ -288,6 +322,7 @@ export const obtenerResumenGeneral = async (req, res) => {
       insumosAsignadosDetalle,
       actividadMovil,
       medicionesResumen,
+      turnosLista,
     };
 
     res.json(data);

@@ -11,9 +11,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      try {
+        if (!currentUser) { setUser(null); setLoading(false); return; }
+        const idTokenResult = await currentUser.getIdTokenResult();
+        const claims = idTokenResult?.claims || {};
+        const nombre = currentUser.displayName || claims.nombreCompleto || claims.nombre || null;
+        setUser({ ...currentUser, claims, displayName: nombre || currentUser.email });
+      } catch {
+        setUser(currentUser);
+      } finally {
+        setLoading(false);
+      }
     });
     return unsubscribe;
   }, []);

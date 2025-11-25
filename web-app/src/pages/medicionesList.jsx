@@ -42,6 +42,21 @@ const MedicionesList = () => {
     return 'estado-badge info'
   }
 
+  const buildImageUrl = (u) => {
+    if (!u) return "";
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    const root = apiBase.replace(/\/api\/?$/, "");
+    try {
+      const url = new URL(u, root);
+      if (url.hostname === "localhost" || /:\\d+$/.test(url.host)) {
+        return root + url.pathname;
+      }
+      return url.href;
+    } catch {
+      return root + (u.startsWith("/") ? u : "/" + u);
+    }
+  };
+
   return (
     <div className="mediciones-list">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
@@ -65,7 +80,7 @@ const MedicionesList = () => {
               {/* técnico eliminado */}
               {m.observaciones && <div className="med-item"><span className="med-label">Observaciones:</span> {m.observaciones}</div>}
               {m.evidenciaUrl && (
-                <div className="med-item"><span className="med-label">Evidencia:</span> <button className="btn-compact" onClick={()=>setViewer({ url: m.evidenciaUrl })}>Ver archivo</button></div>
+                <div className="med-item"><span className="med-label">Evidencia:</span> <button className="btn-compact" onClick={()=>setViewer({ url: buildImageUrl(m.evidenciaUrl) })}>Ver archivo</button></div>
               )}
             </div>
           ))}
@@ -74,7 +89,8 @@ const MedicionesList = () => {
       {viewer && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }} onClick={()=>setViewer(null)}>
           <div style={{ position:'relative', maxWidth:'92%', maxHeight:'86vh' }} onClick={(e)=>e.stopPropagation()}>
-            <img src={viewer.url} alt="Evidencia" style={{ display:'block', maxWidth:'100%', maxHeight:'86vh', borderRadius:12, boxShadow:'0 12px 28px rgba(16,24,32,0.35)' }} />
+            <img src={viewer.url} alt="Evidencia" style={{ display:'block', maxWidth:'100%', maxHeight:'86vh', borderRadius:12, boxShadow:'0 12px 28px rgba(16,24,32,0.35)' }} onError={(e)=>{ e.currentTarget.alt='No se pudo cargar la imagen'; e.currentTarget.style.display='none'; }} />
+            {!viewer.url && (<div style={{ padding:12, textAlign:'center' }}>Sin imagen</div>)}
             <button onClick={()=>setViewer(null)} style={{ position:'absolute', top:-12, right:-12, background:'#fff', border:'1px solid #e5e7eb', borderRadius:999, width:36, height:36, boxShadow:'0 8px 20px rgba(16,24,32,0.25)', cursor:'pointer' }}>✕</button>
           </div>
         </div>

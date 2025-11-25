@@ -9,19 +9,22 @@ import HomeButton from '../components/HomeButton'
 const TurnosList = () => {
 const [turnos, setTurnos] = useState([])
 const [prodMap, setProdMap] = useState(new Map())
+const [loading, setLoading] = useState(true)
 
 
 useEffect(()=>{(async ()=>{
-try{ 
-  const ts = await getTurnos()
-  setTurnos(ts)
-  try{
-    const { data: productores } = await getProductores()
-    const map = new Map()
-    (Array.isArray(productores)? productores:[]).forEach(p=>{ map.set(String(p.id), { nombre: p.nombreCompleto || p.nombre || '', ipt: String(p.ipt||'') }) })
-    setProdMap(map)
-  }catch{}
-}catch(e){console.error(e)}
+  setLoading(true)
+  try {
+    const ts = await getTurnos()
+    setTurnos(ts)
+    try {
+      const { data: productores } = await getProductores()
+      const map = new Map()
+      (Array.isArray(productores)? productores:[]).forEach(p=>{ map.set(String(p.id), { nombre: p.nombreCompleto || p.nombre || '', ipt: String(p.ipt||'') }) })
+      setProdMap(map)
+    } catch {}
+  } catch(e) { console.error(e) }
+  finally { setLoading(false) }
 })()},[])
 
 
@@ -62,6 +65,9 @@ return (
   <div className="turnos-list">
     <div style={{ marginBottom: 8 }}><HomeButton /></div>
     <h2 className="users-title">Turnos</h2>
+    {loading ? (
+      <div style={{ padding: 16, color:'#166534' }}>Cargando turnos…</div>
+    ) : (
     <div className="turnos-grid">
       {turnos.map(t=> (
         <div key={t.id} className="turno-card">
@@ -71,7 +77,7 @@ return (
           </div>
           <div className="turno-item"><span className="turno-label">Productor:</span> {t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'}</div>
           <div className="turno-item"><span className="turno-label">IPT:</span> {t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'}</div>
-          <div className="turno-item"><span className="turno-label">Tipo:</span> {t.tipoTurno}</div>
+          <div className="turno-item"><span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}</div>
           <div className="turno-item"><span className="turno-label">Motivo:</span> {t.motivo || 'No especificado'}</div>
           <div className="turno-actions">
             <select className="select-inst" onChange={e=>handleCambioEstado(t.id, e.target.value)} defaultValue={t.estado}>
@@ -85,9 +91,16 @@ return (
         </div>
       ))}
     </div>
+    )}
   </div>
 )
 }
 
 
 export default TurnosList
+const tipoLabel = (raw)=>{
+  const s = String(raw||'').toLowerCase()
+  if (s==='insumo') return 'Insumo'
+  if (s==='carnet') return 'Renovación de Carnet'
+  return 'Otro'
+}

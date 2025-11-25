@@ -10,7 +10,7 @@ export default function TurnosScreen() {
   const [fechaInput, setFechaInput] = useState("");
   const [tipo, setTipo] = useState("");
   const [mostrarTipos, setMostrarTipos] = useState(false);
-  const tipoOptions = ["Insumo", "Renovación de Carnet", "Otra"];
+  const tipoOptions = ["Insumo", "Renovación de Carnet", "Otro"];
   const [disp, setDisp] = useState(null);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -370,8 +370,8 @@ export default function TurnosScreen() {
         tipoNormalizado = 'carnet';
         console.log("✅ Detectado como: carnet");
       } else {
-        tipoNormalizado = 'otra';
-        console.log("⚠️ No detectado, usando: otra");
+        tipoNormalizado = 'otro';
+        console.log("⚠️ No detectado, usando: otro");
       }
       
       const body = { 
@@ -430,6 +430,11 @@ export default function TurnosScreen() {
 
   const editarTurno = (turno) => {
     console.log("✏️ Editando turno:", turno);
+    const st = String(turno.estado || '').toLowerCase();
+    if (st !== 'pendiente') {
+      Alert.alert('No permitido', `No puedes editar un turno ${st}.`);
+      return;
+    }
     setTurnoEditando(turno);
     setFechaInput(formatDDMMYYYY(turno.fechaTurno));
     setTipo(getTipoLabel(turno.tipoTurno));
@@ -456,7 +461,7 @@ export default function TurnosScreen() {
       const diaSemana = fecha.getDay();
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
       const tipoNormalizado = tipo.toLowerCase().includes('insumo') ? 'insumo' :
-        (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) ? 'carnet' : 'otra';
+        (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) ? 'carnet' : 'otro';
       const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivo || "" };
       console.log("📤 Actualizando turno:", body);
       const resp = await fetch(`${API_URL}/turnos/${turnoEditando.id}`, {
@@ -486,6 +491,11 @@ export default function TurnosScreen() {
   };
 
   const confirmarEliminarTurno = (turno) => {
+    const st = String(turno.estado || '').toLowerCase();
+    if (st !== 'pendiente') {
+      Alert.alert('No permitido', `No puedes eliminar un turno ${st}.`);
+      return;
+    }
     Alert.alert(
       "Eliminar turno",
       `¿Estás seguro de eliminar el turno del ${formatDDMMYYYY(turno.fechaTurno)}?`,
@@ -557,7 +567,7 @@ export default function TurnosScreen() {
                 const tipoLower = tipo.toLowerCase();
                 const esInsumo = tipoLower.includes('insumo');
                 const esRenovacion = tipoLower.includes('renovación') || tipoLower.includes('renov');
-                return esInsumo ? 'insumo' : esRenovacion ? 'carnet' : 'otra';
+                return esInsumo ? 'insumo' : esRenovacion ? 'carnet' : 'otro';
               })()}
             </Text>
           ) : null}
@@ -577,12 +587,6 @@ export default function TurnosScreen() {
             <TouchableOpacity style={styles.btn} onPress={checkDisponibilidad}><Text style={styles.btnText}>Ver disponibilidad</Text></TouchableOpacity>
             <TouchableOpacity style={styles.btn} onPress={solicitarTurno} disabled={loading || disp !== true}><Text style={styles.btnText}>{loading ? "Solicitando..." : "Solicitar"}</Text></TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={testFlujoTurno}>
-            <Text style={styles.btnText}>🧪 Test Flujo Turno</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: '#e67e22' }]} onPress={testComunicacionBasica}>
-            <Text style={styles.btnText}>📡 Test Comunicación</Text>
-          </TouchableOpacity>
           {disp !== null && <Text style={{ marginTop: 8 }}>Disponibilidad: {disp ? "Sí" : "No"}</Text>}
         </View>
       )}
@@ -644,9 +648,9 @@ export default function TurnosScreen() {
                 
                 {/* Botones de acción */}
                 <View style={styles.turnoActions}>
-                  <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
-                    <Text style={styles.btnActionText}>Editar</Text>
-                  </TouchableOpacity>
+          <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
+            <Text style={styles.btnActionText}>Editar</Text>
+          </TouchableOpacity>
                   <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
                     <Text style={styles.btnActionText}>Eliminar</Text>
                   </TouchableOpacity>
@@ -706,8 +710,8 @@ const styles = StyleSheet.create({
     switch (tipo?.toLowerCase()) {
       case 'insumo': return 'Insumo';
       case 'carnet': return 'Renovación de Carnet';
-      case 'otra': return 'Otra';
-      default: return tipo || 'Otra';
+      case 'otro': return 'Otro';
+      default: return tipo || 'Otro';
     }
   };
 

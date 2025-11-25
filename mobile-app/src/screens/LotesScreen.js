@@ -345,7 +345,7 @@ export default function LotesScreen() {
           <Text style={styles.itemText}>Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono||[]).map(pt=>({latitude:pt.lat,longitude:pt.lng}))).toFixed(2)} ha</Text>
           <Text style={styles.itemText}>Método: {selected.metodoMarcado}</Text>
           <Text style={styles.itemText}>Observaciones (prod): {selected.observacionesProductor || "-"}</Text>
-          <Text style={styles.itemText}>Observaciones: {selected.observacionesTecnico || "-"}</Text>
+          <Text style={styles.itemText}>Observaciones (técnico): {selected.observacionesTecnico || "-"}</Text>
           {selected.estado !== "Validado" && (
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
               <TouchableOpacity style={[styles.btn, styles.primary]} onPress={() => { setEditNombre(selected.nombre || ""); setEditObservaciones(selected.observacionesProductor || ""); setEditModalVisible(true); }}>
@@ -372,6 +372,7 @@ export default function LotesScreen() {
                 <Text style={styles.itemText}>Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono||[]).map(pt=>({latitude:pt.lat,longitude:pt.lng}))).toFixed(2)} ha</Text>
                 <Text style={styles.itemText}>Método: {item.metodoMarcado}</Text>
                 <Text style={styles.itemText}>Observaciones (prod): {item.observacionesProductor || "-"}</Text>
+                <Text style={styles.itemText}>Observaciones (técnico): {item.observacionesTecnico || "-"}</Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
                   <TouchableOpacity style={[styles.btn, styles.primary]} onPress={() => selectItem(item)}>
                     <Text style={styles.btnText}>Ver detalle</Text>

@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }) => {
 // Funciones de login y logout
   const login = (token) => {
     localStorage.setItem("token", token);
+    sessionStorage.setItem("session_active", "1");
     const p = decodeToken(token);
     const role = normalizeRole(p?.role);
     setUser(p ? { token, ...p, role } : { token });
@@ -48,6 +49,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    sessionStorage.removeItem("session_active");
     setUser(null);
   };
 

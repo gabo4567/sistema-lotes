@@ -70,6 +70,8 @@ const Informes = () => {
       content += `<section><h3>Insumos asignados</h3>${tbl(['Tipo','Asignado','IPT','Productor'], det.map(r=>[r.tipo, r.cantidadAsignada, r.productorIpt, r.productorNombre]))}</section>`;
       const meds = Array.isArray(data.medicionesResumen?.lista)? data.medicionesResumen.lista: [];
       content += `<section><h3>Mediciones</h3>${tbl(['Tipo','Lote','Fecha','Valor','Unidad','IPT','Productor'], meds.map(r=>[r.tipo, r.lote, r.fecha, r.valorMedicion, r.unidadMedida, r.productorIpt, r.productorNombre]))}</section>`;
+      const trs = Array.isArray(data.turnosLista)? data.turnosLista: [];
+      content += `<section><h3>Turnos de productores</h3>${tbl(['IPT','Productor','Fecha','Estado','Tipo','Motivo'], trs.map(t=>[t.productorIpt, t.productorNombre, t.fecha, t.estado, t.tipo, t.motivo]))}</section>`;
     } else if (tipo === 'productores' && Array.isArray(data)) {
       content += `<section><h2>Productores activos</h2>${tbl(['IPT','Nombre','Estado','Lotes','Turnos'], data.map(p=>[p.ipt, p.nombreCompleto||p.nombre, p.estado, p.totalLotes??0, p.totalTurnos??0]))}</section>`;
     } else if (tipo === 'insumosResumen' && data && typeof data === 'object') {
@@ -271,6 +273,36 @@ const Informes = () => {
                   </tr>
                 ))}
                 {(!d.actividadMovil || d.actividadMovil.length===0) && (<tr><td colSpan={7} style={{ padding:8, textAlign:'center' }}>Sin datos</td></tr>)}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        {card('Turnos de productores', (
+          <div style={{ overflowX:'auto' }}>
+            <table className="table-inst" style={{ width:'100%', tableLayout:'fixed', minWidth: 980 }}>
+              <thead>
+                <tr style={{ background:'#f0fdf4' }}>
+                  <th style={{ textAlign:'center', width:'12%' }}>IPT</th>
+                  <th style={{ textAlign:'center', width:'22%' }}>Productor</th>
+                  <th style={{ textAlign:'center', width:'16%' }}>Fecha</th>
+                  <th style={{ textAlign:'center', width:'14%' }}>Estado</th>
+                  <th style={{ textAlign:'center', width:'16%' }}>Tipo</th>
+                  <th style={{ textAlign:'center', width:'20%' }}>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(Array.isArray(d.turnosLista)? d.turnosLista : []).map((t, idx)=> (
+                  <tr key={t.id || idx}>
+                    <td style={{ textAlign:'center', width:'12%' }}>{formatValue(t.productorIpt)}</td>
+                    <td style={{ textAlign:'center', width:'22%', whiteSpace:'normal' }}>{formatValue(t.productorNombre)}</td>
+                    <td style={{ textAlign:'center', width:'16%' }}>{formatValue(t.fecha)}</td>
+                    <td style={{ textAlign:'center', width:'14%' }}>{formatValue(t.estado)}</td>
+                    <td style={{ textAlign:'center', width:'16%' }}>{formatValue(t.tipo)}</td>
+                    <td style={{ textAlign:'center', width:'20%' }}>{formatValue(t.motivo)}</td>
+                  </tr>
+                ))}
+                {(!d.turnosLista || d.turnosLista.length===0) && (<tr><td colSpan={6} style={{ padding:8, textAlign:'center' }}>Sin datos</td></tr>)}
               </tbody>
             </table>
           </div>

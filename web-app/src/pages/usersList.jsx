@@ -30,7 +30,8 @@ const UsersList = () => {
           else if (preferJuanGabriel(cur)) map.set(key, cur);
           else if (norm(u?.estado)==='activo' && norm(cur?.estado)!=='activo') map.set(key, u);
         });
-        return Array.from(map.values());
+        // Excluir explícitamente al usuario indicado: nombre Gabriel y email gabriel@example.com
+        return Array.from(map.values()).filter(u => !(norm(u?.nombre)==='gabriel' && norm(u?.email)==='gabriel@example.com'));
       };
       setItems(dedup());
     } catch (e) {
@@ -112,7 +113,7 @@ const UsersList = () => {
 
   const onActivate = async (uid, estado) => {
     if (String(estado || '').toLowerCase() === 'activo') {
-      await notify({ title: 'El usuario ya está activo', icon: 'info' });
+      await notify({ title: 'El usuario está activo', icon: 'info' });
       return;
     }
     const ok = await confirmDialog({ title: '¿Estás seguro de que deseas activar este usuario?', text: '', icon: 'warning', confirmButtonText: 'Activar', cancelButtonText: 'Cancelar' });
@@ -131,12 +132,19 @@ const UsersList = () => {
   const formatTimestamp = (ts) => {
     if (!ts) return "-";
     try {
-      if (typeof ts.toDate === "function") return ts.toDate().toLocaleString();
-      if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000).toLocaleString();
-      if (typeof ts._seconds === "number") return new Date(ts._seconds * 1000).toLocaleString(); // fallback si llega serializado
-      if (typeof ts === "number") return new Date(ts).toLocaleString();
-      if (typeof ts === "string") return new Date(ts).toLocaleString();
-      return "-";
+      const d = typeof ts.toDate === "function" ? ts.toDate()
+        : typeof ts.seconds === "number" ? new Date(ts.seconds * 1000)
+        : typeof ts._seconds === "number" ? new Date(ts._seconds * 1000)
+        : typeof ts === "number" ? new Date(ts)
+        : new Date(ts);
+      if (isNaN(d.getTime())) return "-";
+      const dd = String(d.getDate()).padStart(2,'0');
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2,'0');
+      const min = String(d.getMinutes()).padStart(2,'0');
+      const ss = String(d.getSeconds()).padStart(2,'0');
+      return `${dd}/${mm}/${yyyy}, ${hh}:${min}:${ss}`;
     } catch {
       return "-";
     }
