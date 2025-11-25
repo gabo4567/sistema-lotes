@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: "AIzaSyCdkIQhs8Xe0GD53qara8p05kjky5sc2bE",
   authDomain: "sistema-lotes-4ce37.firebaseapp.com",
   projectId: "sistema-lotes-4ce37",
   storageBucket: "sistema-lotes-4ce37.firebasestorage.app",

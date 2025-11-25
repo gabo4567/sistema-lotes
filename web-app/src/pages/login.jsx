@@ -31,7 +31,7 @@ const Login = () => {
 
     } catch (err) {
       console.error(err);
-      const msg = err?.response?.data?.message || "Credenciales inválidas";
+      const msg = err?.response?.data?.error || err?.response?.data?.message || (err?.code === 'ECONNABORTED' ? 'No se pudo conectar al servidor' : "Credenciales inválidas");
       setError(msg);
     } finally {
       setLoading(false);

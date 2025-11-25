@@ -1,8 +1,30 @@
 import axios from "axios";
 
+const apiBase = (() => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+  const env = import.meta.env.VITE_API_URL;
+  // Si estamos en DevTunnels (frontend -5173), apuntar al backend -3000
+  const isTunnel = /devtunnels\.ms/.test(origin) && /-5173\./.test(origin);
+  if (isTunnel) {
+    const backendOrigin = origin.replace('-5173.', '-3000.');
+    return backendOrigin.replace(/\/$/, '') + '/api';
+  }
+  // Si hay env pero es http y la página es https, evitar mixed content usando el mismo origin
+  if (env) {
+    const isEnvHttp = /^http:\/\//i.test(env);
+    const isPageHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    if (isEnvHttp && isPageHttps) {
+      return origin.replace(/\/$/, '') + '/api';
+    }
+    return env;
+  }
+  return origin.replace(/\/$/, '') + '/api';
+})();
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
-  withCredentials: false, // true si usas cookies httpOnly
+  baseURL: apiBase,
+  withCredentials: false,
+  timeout: 10000,
 });
 
 // Interceptor para añadir token si existe

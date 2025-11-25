@@ -44,16 +44,31 @@ const MedicionesList = () => {
 
   const buildImageUrl = (u) => {
     if (!u) return "";
-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-    const root = apiBase.replace(/\/api\/?$/, "");
-    try {
-      const url = new URL(u, root);
-      if (url.hostname === "localhost" || /:\\d+$/.test(url.host)) {
-        return root + url.pathname;
+    const origin = window.location.origin;
+    const isTunnel = /devtunnels\.ms/.test(origin) && /-5173\./.test(origin);
+    let root;
+    const env = import.meta.env.VITE_API_URL;
+    if (isTunnel) {
+      root = origin.replace('-5173.', '-3000.');
+    } else if (env) {
+      // Evitar mixed content: si env es http y página https, usa origin
+      if (/^http:\/\//i.test(env) && window.location.protocol === 'https:') {
+        root = origin;
+      } else {
+        root = env.replace(/\/api\/?$/, "");
       }
-      return url.href;
+    } else {
+      root = origin;
+    }
+
+    try {
+      const abs = new URL(u);
+      // Si evidencia viene con host local/IP, usa solo el path
+      const pathname = abs.pathname || '/';
+      return root.replace(/\/$/,'') + pathname;
     } catch {
-      return root + (u.startsWith("/") ? u : "/" + u);
+      // u puede ser relativo, asegurar concatenación correcta
+      return root.replace(/\/$/,'') + (u.startsWith('/') ? u : '/' + u);
     }
   };
 

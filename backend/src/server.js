@@ -29,23 +29,16 @@ app.use(express.json());
 
 // CORS configurado para desarrollo - más permisivo para app móvil
 app.use((req, res, next) => {
-  // Permitir múltiples orígenes para desarrollo
-  const allowedOrigins = [
-    "http://localhost:5173",           // Web frontend
-    "http://localhost:19006",          // Expo web
-    "http://192.168.1.100:19006",      // Expo en red local
-    "http://10.0.2.2:3000",            // Android emulator
-    "exp://192.168.1.100:19000",       // Expo directo
-    "*"                                 // Temporal para debugging
-  ];
-  
   const origin = req.headers.origin;
-  
-  // Para desarrollo, permitir todos los orígenes temporalmente
-  res.header("Access-Control-Allow-Origin", "*");
+  // Si hay origin, reflejarlo para permitir credenciales; si no, usar '*'
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Credentials", "true");
+  } else {
+    res.header("Access-Control-Allow-Origin", "*");
+  }
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.header("Access-Control-Allow-Credentials", "true");
   res.header("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
