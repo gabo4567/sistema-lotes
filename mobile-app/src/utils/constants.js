@@ -8,4 +8,14 @@ const ENV_URL = process.env.EXPO_PUBLIC_API_URL;
 const scriptURL = NativeModules.SourceCode?.scriptURL || "";
 const m = scriptURL.match(/^[a-z]+:\/\/([^:/]+)(?::\d+)?/);
 const host = m ? m[1] : "localhost";
-export const API_URL = `${ENV_URL || `http://${host}:3000/api`}`;
+let base = ENV_URL || `http://${host}:3000`;
+
+// https://x547v1rs-3000.brs.devtunnels.ms/${host}
+
+base = String(base).replace(/\/+$/, "");
+export const API_URL = base.endsWith("/api") ? base : `${base}/api`;
+
+// http://${host}:3000
+
+// http://localhost:5173
+

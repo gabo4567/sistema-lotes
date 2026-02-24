@@ -14,6 +14,7 @@ const Login = () => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -43,19 +44,19 @@ const Login = () => {
       {/* LEFT - FORM */}
       <div className="left-col">
         <div className="auth-card">
-          <div className="d-flex align-items-center mb-3">
-            <img src={logo} alt="Logo" className="logo me-3" />
+          <div className="header-center mb-3">
+            <img src={logo} alt="Logo" className="logo" />
             <div>
-              <h3 className="mb-0">Login</h3>
-              <small className="text-muted">Panel de administración</small>
+              <div className="admin-title">Panel de administración</div>
+              <div className="admin-subtitle">Acceso exclusivo para personal autorizado del IPT</div>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
-            <div className="mb-3">
-              <label htmlFor="email" className="form-label visually-hidden">
+            <div className="mb-3 form-group">
+              <label htmlFor="email" className="form-label">
                 Email
-              </label><br />
+              </label>
               <input
                 id="email"
                 type="email"
@@ -68,42 +69,63 @@ const Login = () => {
               />
             </div>
 
-            <div className="mb-3">
-              <label
-                htmlFor="password"
-                className="form-label visually-hidden"
-              >
+            <div className="mb-3 form-group password-wrapper">
+              <label htmlFor="password" className="form-label">
                 Contraseña
-              </label><br />
-              <input
-                id="password"
-                type="password"
-                className="form-control"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
+              </label>
+              <div className="password-input-wrap">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  className="form-control"
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+
+                <button
+                  type="button"
+                  className="toggle-pass"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M3 3L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M9.88 9.88C9.33 10.42 9 11.19 9 12C9 13.66 10.34 15 12 15C12.81 15 13.58 14.67 14.12 14.12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 7C8 7 4.73 9.11 3 12C4.73 14.89 8 17 12 17C16 17 19.27 14.89 21 12C19.27 9.11 16 7 12 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              className="btn btn-primary btn-primary-custom"
-              disabled={loading}
-            >
-              {loading ? "Ingresando..." : "Entrar"}
-            </button>
-
-            {error && <div className="mensajeError">{error}</div>}
-
-            <div className="text-center mt-3">
-              <a
-                href="/reset-password"
-                style={{ color: "var(--color-2)", fontWeight: 700 }}
+            <div className="actions">
+              <button
+                type="submit"
+                className="btn btn-primary btn-primary-custom"
+                disabled={loading}
               >
-                ¿Olvidaste tu contraseña?
-              </a>
+                {loading ? "Ingresando..." : "Ingresar"}
+              </button>
+
+              {error && <div className="mensajeError">{error}</div>}
+
+              <div className="forgot-link">
+                <a href="/reset-password">¿Olvidaste tu contraseña?</a>
+              </div>
+
+              <div className="auth-card-footer">
+                <div>Versión 1.0.0</div>
+                <div>© 2026 IPT</div>
+              </div>
             </div>
           </form>
         </div>

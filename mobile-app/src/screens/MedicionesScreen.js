@@ -74,6 +74,27 @@ export default function MedicionesScreen({ navigation }) {
     }
   };
 
+  const buildImageUrl = (u) => {
+    if (!u) return null;
+    try {
+      const origin = String(API_URL).replace(/\/api\/?$/, "");
+      if (/^https?:\/\//i.test(u)) {
+        const abs = new URL(u);
+        if (abs.hostname === "localhost" || abs.hostname === "127.0.0.1" || abs.hostname === "::1") {
+          return origin + abs.pathname;
+        }
+        if (abs.pathname.startsWith("/uploads/")) {
+          return origin + abs.pathname;
+        }
+        return u;
+      }
+      if (u.startsWith("/")) return String(API_URL).replace(/\/api\/?$/, "") + u;
+      return u;
+    } catch {
+      return u;
+    }
+  };
+
   const getTipoColor = (tipo) => {
     const colores = {
       'superficie': '#3498db',
@@ -85,7 +106,7 @@ export default function MedicionesScreen({ navigation }) {
   };
 
   const openImageModal = (imageUrl) => {
-    setSelectedImage(imageUrl);
+    setSelectedImage(buildImageUrl(imageUrl));
     setImageModalVisible(true);
   };
 
@@ -119,7 +140,7 @@ export default function MedicionesScreen({ navigation }) {
       
       {item.evidenciaUrl ? (
         <TouchableOpacity style={styles.imageContainer} onPress={() => openImageModal(item.evidenciaUrl)}>
-          <Image source={{ uri: item.evidenciaUrl }} style={styles.medicionImage} />
+          <Image source={{ uri: buildImageUrl(item.evidenciaUrl) }} style={styles.medicionImage} />
         </TouchableOpacity>
       ) : null}
       <View style={styles.itemActions}>

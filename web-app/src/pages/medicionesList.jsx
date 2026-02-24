@@ -45,11 +45,11 @@ const MedicionesList = () => {
   const buildImageUrl = (u) => {
     if (!u) return "";
     const origin = window.location.origin;
-    const isTunnel = /devtunnels\.ms/.test(origin) && /-5173\./.test(origin);
+    const isTunnel = /devtunnels\.ms/.test(origin) && /-\d{4}\./.test(origin);
     let root;
     const env = import.meta.env.VITE_API_URL;
     if (isTunnel) {
-      root = origin.replace('-5173.', '-3000.');
+      root = origin.replace(/-\d{4}\./, '-3000.');
     } else if (env) {
       // Evitar mixed content: si env es http y página https, usa origin
       if (/^http:\/\//i.test(env) && window.location.protocol === 'https:') {
