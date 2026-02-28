@@ -50,7 +50,8 @@ export default function MisUbicacionesScreen({ navigation }) {
     return (
       <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <Text style={styles.title}>Mis Ubicaciones</Text>
-        <ActivityIndicator color="#2ecc71" />
+        <Text style={styles.loadingText}>Cargando ubicaciones...</Text>
+        <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
       </SafeAreaView>
     );
   }
@@ -95,4 +96,5 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 14, color: '#7f8c8d', marginTop: 6 },
   badge: { alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, color: '#fff', overflow: 'hidden' },
   error: { color: '#c0392b', textAlign: 'center' },
+  loadingText: { textAlign: 'center', color: '#1e8449', marginTop: 8 },
 });

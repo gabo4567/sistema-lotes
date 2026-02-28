@@ -37,8 +37,8 @@ export default function PerfilScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#2ecc71" />
-        <Text style={{ marginTop: 8 }}>Cargando perfil…</Text>
+        <Text style={{ marginTop: 8, color: '#1e8449' }}>Cargando perfil…</Text>
+        <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
       </View>
     );
   }
@@ -54,7 +54,7 @@ export default function PerfilScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Mi Perfil</Text>
       <View style={styles.card}>
-        <Text style={styles.item}>IPT: {data?.ipt}</Text>
+        <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
         <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
         <Text style={styles.item}>CUIL: {data?.cuil}</Text>
         <Text style={styles.item}>Email: {data?.email || "-"}</Text>
@@ -63,11 +63,41 @@ export default function PerfilScreen() {
         <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
         <Text style={styles.item}>Estado: {data?.estado}</Text>
         <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
-        <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura)</Text>
-        <Text style={styles.item}>Entrada domicilio: {data?.ubicaciones?.entradaDomicilio?.lat != null ? `${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}, ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}</Text>
-        <Text style={styles.item}>Domicilio/Casa: {data?.ubicaciones?.domicilioCasa?.lat != null ? `${data.ubicaciones.domicilioCasa.lat.toFixed(6)}, ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}</Text>
-        <Text style={styles.item}>Entrada campo: {data?.ubicaciones?.entradaCampo?.lat != null ? `${data.ubicaciones.entradaCampo.lat.toFixed(6)}, ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}</Text>
-        <Text style={styles.item}>Centro campo: {data?.ubicaciones?.centroCampo?.lat != null ? `${data.ubicaciones.centroCampo.lat.toFixed(6)}, ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}</Text>
+        
+        <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
+        
+        <View style={styles.ubicacionesContainer}>
+          <View style={styles.ubicacionItem}>
+            <Text style={styles.ubicacionLabel}>Entrada domicilio</Text>
+            <Text style={styles.ubicacionCoords}>
+              {data?.ubicaciones?.entradaDomicilio?.lat != null ? `Lat: ${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}
+            </Text>
+          </View>
+          <View style={styles.separator} />
+          
+          <View style={styles.ubicacionItem}>
+            <Text style={styles.ubicacionLabel}>Domicilio (Casa)</Text>
+            <Text style={styles.ubicacionCoords}>
+              {data?.ubicaciones?.domicilioCasa?.lat != null ? `Lat: ${data.ubicaciones.domicilioCasa.lat.toFixed(6)}  Lng: ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}
+            </Text>
+          </View>
+          <View style={styles.separator} />
+          
+          <View style={styles.ubicacionItem}>
+            <Text style={styles.ubicacionLabel}>Entrada campo</Text>
+            <Text style={styles.ubicacionCoords}>
+              {data?.ubicaciones?.entradaCampo?.lat != null ? `Lat: ${data.ubicaciones.entradaCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}
+            </Text>
+          </View>
+          <View style={styles.separator} />
+          
+          <View style={styles.ubicacionItem}>
+            <Text style={styles.ubicacionLabel}>Centro campo</Text>
+            <Text style={styles.ubicacionCoords}>
+              {data?.ubicaciones?.centroCampo?.lat != null ? `Lat: ${data.ubicaciones.centroCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -81,4 +111,9 @@ const styles = StyleSheet.create({
   section: { marginTop: 10, fontWeight: "bold" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   error: { color: "#c0392b" },
+  ubicacionesContainer: { marginTop: 12, backgroundColor: "#f8f9fa", borderRadius: 8, padding: 12 },
+  ubicacionItem: { alignItems: "center", paddingVertical: 8 },
+  ubicacionLabel: { fontSize: 14, fontWeight: "600", color: "#1e8449", marginBottom: 4 },
+  ubicacionCoords: { fontSize: 13, color: "#7f8c8d", textAlign: "center" },
+  separator: { height: 1, backgroundColor: "#e0e0e0", marginVertical: 8 },
 });

@@ -179,8 +179,8 @@ export default function MedicionesScreen({ navigation }) {
     return (
       <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <Text style={styles.title}>Mis Mediciones</Text>
-        <ActivityIndicator size="large" color="#3498db" style={styles.loader} />
         <Text style={styles.loadingText}>Cargando mediciones...</Text>
+        <ActivityIndicator size="large" color="#1e8449" style={[styles.loader, { marginTop: 8 }]} />
       </SafeAreaView>
     );
   }
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: '#1e8449',
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     textAlign: 'center',
-    color: '#7f8c8d',
+    color: '#1e8449',
     marginTop: 10,
   },
   error: {

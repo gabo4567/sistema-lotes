@@ -1,5 +1,5 @@
 import React, { useState, useContext } from "react";
-import { View, TextInput, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { View, TextInput, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { auth } from "../services/firebase";
 import { AuthContext } from "../context/AuthContext";
 import ButtonPrimary from "../components/ButtonPrimary";
@@ -99,9 +99,10 @@ export default function LoginScreen({ navigation }) {
           <ButtonPrimary title="Ingresar" onPress={handleLogin} />
         )}
 
-        <TouchableOpacity onPress={() => navigation.navigate("Register")}> 
-          <Text style={styles.link}>¿No tenés cuenta? Registrate</Text>
-        </TouchableOpacity>
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Versión 1.0.0</Text>
+          <Text style={styles.copyrightText}>© 2026 IPT</Text>
+        </View>
       </View>
     </View>
   );
@@ -116,6 +117,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10 },
   inputSpacing: { marginBottom: 12 },
   toggle: { position: "absolute", right: 12, top: 12, color: "#1e8449" },
-  link: { color: "#1e8449", textAlign: "center", marginTop: 12, fontWeight: "600" },
+  versionContainer: { marginTop: 20, alignItems: "center" },
+  versionText: { fontSize: 14, color: "#7f8c8d", fontWeight: "600" },
+  copyrightText: { fontSize: 12, color: "#95a5a6", marginTop: 4 },
   error: { color: "#c0392b", textAlign: "center", marginBottom: 8 },
 });

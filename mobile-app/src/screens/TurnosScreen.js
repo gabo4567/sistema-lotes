@@ -13,7 +13,7 @@ export default function TurnosScreen() {
   const tipoOptions = ["Insumo", "Renovación de Carnet", "Otro"];
   const [disp, setDisp] = useState(null);
   const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -23,6 +23,7 @@ export default function TurnosScreen() {
 
   const loadList = async () => {
     try {
+      setLoading(true);
       const tokenResult = await auth.currentUser?.getIdTokenResult();
       const uid = auth.currentUser?.uid;
       const idToken = await auth.currentUser?.getIdToken();
@@ -58,14 +59,11 @@ export default function TurnosScreen() {
       console.error("❌ Error cargando turnos:", error);
       setList([]);
     }
+    finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { 
-    loadList(); 
-    // Test de conectividad
-    testBackendConnection();
-  }, []);
-  
   const testBackendConnection = async () => {
     try {
       console.log("🧪 Testeando conexión con backend...");
@@ -76,6 +74,27 @@ export default function TurnosScreen() {
       console.error("❌ Error de conexión:", error);
     }
   };
+
+  useEffect(() => { 
+    loadList(); 
+    // Test de conectividad
+    testBackendConnection();
+  }, []);
+
+  useEffect(() => {
+    setError("");
+    setSuccess("");
+  }, [fechaInput, tipo, motivo]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}> 
+        <Text style={styles.title}>Turnos</Text>
+        <Text style={{ textAlign: 'center', color: '#1e8449', marginTop: 8 }}>Cargando turnos...</Text>
+        <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
+      </SafeAreaView>
+    );
+  }
   
   const testFlujoTurno = async () => {
     try {
@@ -252,11 +271,6 @@ export default function TurnosScreen() {
       Alert.alert("Error", `Error: ${error.message}`);
     }
   };
-  
-  useEffect(() => {
-    setError("");
-    setSuccess("");
-  }, [fechaInput, tipo, motivo]);
 
   const toIso = (s) => {
     console.log("🔄 Convirtiendo fecha:", s);
@@ -665,9 +679,14 @@ export default function TurnosScreen() {
   );
 }
 
+// (loading handled inside component)
+
+// Mostrar pantalla de carga cuando `loading` está activo
+if (false) {}
+
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12, backgroundColor: "#fff" },
-  title: { fontSize: 20, textAlign: "center", marginVertical: 10 },
+  title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
   topBar: { paddingHorizontal: 8, paddingTop: 4 },
   cardBar: { flexDirection: "row", gap: 12, backgroundColor: "#ffffff", padding: 10, borderRadius: 10, elevation: 3 },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 12 },

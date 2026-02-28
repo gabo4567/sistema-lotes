@@ -1,7 +1,7 @@
 // src/screens/LotesScreen.js
 
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Location from "expo-location";
@@ -261,28 +261,33 @@ export default function LotesScreen() {
           )}
         </MapView>
       ) : (
-        <Text>Cargando ubicación...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingLocation}>Cargando ubicación...</Text>
+          <ActivityIndicator size="large" color="#1e8449" style={{ marginTop: 8 }} />
+        </View>
       )}
 
       {creating && createStep === "polygon" && (
-        <View style={[styles.row, { marginBottom: Math.max(insets.bottom, 24) }]}>
-          <TouchableOpacity style={[styles.btn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
+        <View style={[styles.grid, { marginBottom: Math.max(insets.bottom, 24) }]}>
+          <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
             <Text style={styles.btnText}>Dibujo aéreo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
+          <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
             <Text style={styles.btnText}>GPS caminando</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btn} onPress={clearPolygon}>
+          <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
             <Text style={styles.btnText}>Limpiar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
+          <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
             <Text style={styles.btnText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {creating && createStep === "polygon" && (
-        <View style={[styles.formInfo, { marginBottom: Math.max(insets.bottom, 12) }]}><Text style={styles.itemText}>Dibujá el polígono para continuar</Text></View>
+        <View style={[styles.formInfo, { marginBottom: Math.max(insets.bottom, 12) }]}>
+          <Text style={[styles.itemText, { textAlign: 'center' }]}>Dibujá el polígono para continuar</Text>
+        </View>
       )}
 
       {creating && createStep === "polygon" && points.length >= 3 && (
@@ -436,7 +441,7 @@ export default function LotesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 20, textAlign: "center", marginVertical: 10 },
+  title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
   map: { flex: 1 },
   row: { flexDirection: "row", justifyContent: "space-around", padding: 8 },
   topBar: { paddingHorizontal: 8, paddingTop: 4 },
@@ -460,4 +465,9 @@ const styles = StyleSheet.create({
   details: { padding: 8, backgroundColor: "#ffffff" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   modalContent: { width: "90%", backgroundColor: "#fff", borderRadius: 12, padding: 12 },
+  loadingContainer: { justifyContent: "center", alignItems: "center", paddingVertical: 40 },
+  loadingLocation: { color: "#1e8449", marginTop: 0, textAlign: "center" },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  gridBtn: { width: '45%', margin: 6, justifyContent: 'center', alignItems: 'center', padding: 10, borderRadius: 8, backgroundColor: '#1e8449' },
+  formInfo: { padding: 8, alignItems: 'center' },
 });

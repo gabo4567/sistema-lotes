@@ -4,7 +4,6 @@ import React, { useContext } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import LoginScreen from "../screens/LoginScreen";
-import RegisterScreen from "../screens/RegisterScreen";
 import HomeScreen from "../screens/HomeScreen";
 import LotesScreen from "../screens/LotesScreen";
 import TurnosScreen from "../screens/TurnosScreen";
@@ -46,7 +45,6 @@ export default function AppNavigator() {
         ) : (
           <Stack.Navigator key="guest" screenOptions={{ headerShown: false }} initialRouteName="Login">
             <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
           </Stack.Navigator>
         )
