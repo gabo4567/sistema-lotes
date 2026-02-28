@@ -13,8 +13,19 @@ const MedicionesList = () => {
     setLoading(true);
     setError("");
     try {
-      const data = await getMediciones(filtros);
-      setItems(data || []);
+      // always fetch complete list and apply flexible filtering client-side
+      const data = await getMediciones();
+      const all = Array.isArray(data) ? data : [];
+      const match = (text, pattern) => {
+        if (!pattern) return true;
+        const pat = String(pattern).toLowerCase().trim();
+        const txt = String(text||"").toLowerCase();
+        return txt.includes(pat);
+      };
+      const filtered = all.filter(m =>
+        match(m.productor, filtros.productor) && match(m.lote, filtros.lote)
+      );
+      setItems(filtered);
     } catch (e) {
       setError("No se pudo cargar mediciones");
     } finally { setLoading(false); }

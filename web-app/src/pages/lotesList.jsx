@@ -10,6 +10,14 @@ const LotesList = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  const formatMetodo = (metodo) => {
+    if (!metodo) return '-';
+    const metodoLower = String(metodo).toLowerCase().trim();
+    if (metodoLower === 'aéreo' || metodoLower === 'aereo') return 'Aéreo';
+    if (metodoLower === 'gps') return 'GPS caminando';
+    return metodo;
+  };
+
   useEffect(() => {
     const fetchLotes = async () => {
       try {
@@ -28,7 +36,6 @@ const LotesList = () => {
     fetchLotes();
   }, []);
 
-  if (loading) return <div>Cargando lotes...</div>;
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
   return (
@@ -36,9 +43,13 @@ const LotesList = () => {
     <div>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2>Gestión de Lotes</h2>
-      <div className="flex gap-2">
-        <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
-      </div>
+      {loading ? (
+        <div>Cargando lotes...</div>
+      ) : (
+      <>
+        <div className="flex gap-2">
+          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
+        </div>
       
       {lotes.length === 0 ? (
         <p>No hay lotes registrados.</p>
@@ -46,25 +57,25 @@ const LotesList = () => {
         <table style={{ marginTop: '20px', borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr style={{ backgroundColor: '#f0f0f0' }}>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Nombre</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>IPT</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Estado</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Método</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Observaciones (prod)</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Observaciones (técnico)</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>Acciones</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Nombre</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>IPT</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Estado</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Método</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Observaciones (prod)</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Observaciones (técnico)</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {lotes.map((lote) => (
               <tr key={lote.id}>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.nombre || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.ipt || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.estado || 'Pendiente'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.metodoMarcado || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.observacionesProductor || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{lote.observacionesTecnico || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.nombre || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.ipt || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.estado || 'Pendiente'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{formatMetodo(lote.metodoMarcado)}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.observacionesProductor || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.observacionesTecnico || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                   <div className="actions-col">
                     <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}`)}>Ver</button>
                     <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}/editar`)}>Editar</button>
@@ -74,6 +85,8 @@ const LotesList = () => {
             ))}
           </tbody>
         </table>
+      )}
+      </>
       )}
     </div>
     

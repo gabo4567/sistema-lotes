@@ -126,7 +126,6 @@ const UsersList = () => {
       setError('No se pudo activar usuario');
     }
   };
-  if (loading) return <div>Cargando usuarios...</div>;
   if (error) return <div className="text-red-700">{error}</div>;
 
   const formatTimestamp = (ts) => {
@@ -151,41 +150,48 @@ const UsersList = () => {
   };
 
   return (
-    <div className="users-list">
+    <div className="users-list" style={{ width: '100%' }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 className="users-title">Usuarios</h2>
-      {msg && <div className="users-msg ok">{msg}</div>}
-      {error && <div className="users-msg err">{error}</div>}
-      <div className="table-wrap">
-        <table className="table-inst">
+      {loading ? (
+        <div>Cargando usuarios...</div>
+      ) : (
+      <>
+        {msg && <div className="users-msg ok">{msg}</div>}
+        {error && <div className="users-msg err">{error}</div>}
+      <div className="table-wrap" style={{ width: '100%' }}>
+        <table className="table-inst" style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>IPT</th>
-              <th>Email</th>
-              <th>Rol</th>
-              <th>Estado</th>
-              <th>Último acceso</th>
-              <th>Acciones</th>
+            <tr style={{ backgroundColor: '#f0f0f0' }}>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Email</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Rol</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Último acceso</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {items.map(u => (
               <tr key={u.id}>
-                <td>{u.nombre || '-'}</td>
-                <td>{u.ipt || u.productorIpt || '-'}</td>
-                <td>{u.email}</td>
-                <td>
-                  <select className="select-inst" value={u.role || ''} onChange={e=>onChangeRole(u.id, e.target.value)}>
-                    <option value="Administrador">Administrador</option>
-                    <option value="Técnico">Técnico</option>
-                    <option value="Supervisor">Supervisor</option>
-                    <option value="Productor">Productor</option>
-                  </select>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.nombre || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.ipt || u.productorIpt || '-'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.email}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                  {String(u.role || '').toLowerCase() === 'productor' ? (
+                    <span>{u.role || '-'}</span>
+                  ) : (
+                    <select className="select-inst" value={u.role || ''} onChange={e=>onChangeRole(u.id, e.target.value)}>
+                      <option value="Administrador">Administrador</option>
+                      <option value="Técnico">Técnico</option>
+                      <option value="Supervisor">Supervisor</option>
+                    </select>
+                  )}
                 </td>
-                <td>{u.estado || 'Activo'}</td>
-                <td>{formatTimestamp(u.ultimoAcceso)}</td>
-                <td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.estado || 'Activo'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{formatTimestamp(u.ultimoAcceso)}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
                   <div className="actions-col" style={{ display:'grid', gridTemplateColumns:'auto auto', gap:8, justifyItems:'center', alignItems:'center' }}>
                     <button className="btn btn-compact" onClick={()=>onActivate(u.id, u.estado)}>Activar</button>
                     <button className="btn btn-danger btn-compact" onClick={()=>onDeactivate(u.id)}>Desactivar</button>
@@ -199,6 +205,8 @@ const UsersList = () => {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };

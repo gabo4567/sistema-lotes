@@ -62,20 +62,23 @@ const ProductoresList = () => {
   const onVer = (id) => { navigate(`/productores/${id}`); };
   const onEditar = (id) => { navigate(`/productores/${id}/editar`); };
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
   if (error) return <div style={{ padding: 24, color: "#c0392b" }}>{error}</div>;
 
   return (
     <div className="section-card prod-list">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 className="users-title">Productores</h2>
-      <div style={{ marginBottom: 12 }}>
-        <Link to="/productores/nuevo" className="btn">Nuevo productor</Link>
-      </div>
-      <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8, marginBottom:12 }}>
-        <input className="input-inst" placeholder="Filtrar por IPT" value={iptFilter} onChange={e=>setIptFilter(e.target.value)} />
-        <input className="input-inst" placeholder="Filtrar por nombre" value={nameFilter} onChange={e=>setNameFilter(e.target.value)} />
-      </div>
+      {loading ? (
+        <div style={{ padding: 24 }}>Cargando…</div>
+      ) : (
+      <>
+        <div style={{ marginBottom: 12 }}>
+          <Link to="/productores/nuevo" className="btn">Nuevo productor</Link>
+        </div>
+        <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8, marginBottom:12 }}>
+          <input className="input-inst" placeholder="Filtrar por IPT" value={iptFilter} onChange={e=>setIptFilter(e.target.value)} />
+          <input className="input-inst" placeholder="Filtrar por nombre" value={nameFilter} onChange={e=>setNameFilter(e.target.value)} />
+        </div>
       <div className="table-wrap">
         <table className="table-inst">
           <thead>
@@ -109,6 +112,8 @@ const ProductoresList = () => {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };

@@ -61,6 +61,15 @@ const estadoClass = (e)=>{
   return 'estado-badge info'
 }
 
+const formatMotivo = (motivo)=>{
+  const m = String(motivo || '').trim()
+  // Si está vacío, mostrar guión
+  if(!m) return '-'
+  // Si contiene "vencido automáticamente por fecha", no mostrar
+  if(m.toLowerCase().includes('vencido automáticamente por fecha')) return '-'
+  return m
+}
+
 return (
   <div className="turnos-list">
     <div style={{ marginBottom: 8 }}><HomeButton /></div>
@@ -78,7 +87,7 @@ return (
           <div className="turno-item"><span className="turno-label">Productor:</span> {t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'}</div>
           <div className="turno-item"><span className="turno-label">IPT:</span> {t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'}</div>
           <div className="turno-item"><span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}</div>
-          <div className="turno-item"><span className="turno-label">Motivo:</span> {t.motivo || 'No especificado'}</div>
+          <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
           <div className="turno-actions">
             <select className="select-inst" onChange={e=>handleCambioEstado(t.id, e.target.value)} defaultValue={t.estado}>
               <option value="pendiente">Pendiente</option>

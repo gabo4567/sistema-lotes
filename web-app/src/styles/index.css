@@ -201,12 +201,22 @@ body {
   width: 100%;
   border: 1px solid rgba(16,24,32,0.08);
   box-sizing: border-box;
-  font-size: 1rem;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
 }
 .auth-card .form-control:focus {
   box-shadow: 0 8px 24px rgba(104,179,46,0.08);
   border-color: var(--color-1);
   outline: none;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+.auth-card .form-control:-webkit-autofill,
+.auth-card .form-control:-webkit-autofill:hover,
+.auth-card .form-control:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111 !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
 }
 
 /* Botón principal */
