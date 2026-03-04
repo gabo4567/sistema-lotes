@@ -1,5 +1,13 @@
 import api from '../api/axios'
-export const getTurnos = async ()=>{ const res = await api.get('/turnos'); return res.data }
+export const getTurnos = async (activo)=>{ 
+  const res = await api.get('/turnos', { params: { activo } }); 
+  return res.data 
+}
 export const setEstadoTurno = async (id, estado, motivo)=>{ const res = await api.patch(`/turnos/${id}/estado`, { estado, motivo }); return res.data }
-export const getTurnosPorProductor = async (ipt)=>{ const res = await api.get(`/turnos/productor/${ipt}`); return res.data }
+export const eliminarTurno = async (id, userId)=>{ const res = await api.delete(`/turnos/${id}`, { data: { userId } }); return res.data }
+export const restaurarTurno = async (id)=>{ const res = await api.patch(`/turnos/${id}/restaurar`); return res.data }
+export const getTurnosPorProductor = async (ipt, activo)=>{ 
+  const res = await api.get(`/turnos/productor/${ipt}`, { params: { activo } }); 
+  return res.data 
+}
 export const getDisponibilidad = async (fechaSolicitada, tipoTurno)=>{ const res = await api.get(`/turnos/disponibilidad`, { params: { fechaSolicitada, tipoTurno } }); return res.data }

@@ -36,6 +36,12 @@ export const getAllLotes = async (req, res) => {
   try {
     const snapshot = await db.collection("lotes").where("activo", "==", true).get();
     const lotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Ordenar por fechaCreacion descendente (más reciente primero)
+    lotes.sort((a, b) => {
+      const dateA = a.fechaCreacion?.toDate ? a.fechaCreacion.toDate() : new Date(a.fechaCreacion || 0);
+      const dateB = b.fechaCreacion?.toDate ? b.fechaCreacion.toDate() : new Date(b.fechaCreacion || 0);
+      return dateB - dateA;
+    });
     res.json(lotes);
   } catch (error) {
     console.error("Error al obtener lotes:", error);
@@ -48,6 +54,12 @@ export const getInactiveLotes = async (req, res) => {
   try {
     const snapshot = await db.collection("lotes").where("activo", "==", false).get();
     const lotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Ordenar por fechaCreacion descendente (más reciente primero)
+    lotes.sort((a, b) => {
+      const dateA = a.fechaCreacion?.toDate ? a.fechaCreacion.toDate() : new Date(a.fechaCreacion || 0);
+      const dateB = b.fechaCreacion?.toDate ? b.fechaCreacion.toDate() : new Date(b.fechaCreacion || 0);
+      return dateB - dateA;
+    });
     res.json(lotes);
   } catch (error) {
     console.error("Error al obtener lotes inactivos:", error);
@@ -81,7 +93,7 @@ export const updateLote = async (req, res) => {
     if (current.estado === "Validado") {
       return res.status(403).json({ error: "No se puede editar un lote validado" });
     }
-    const data = req.body;
+    const { fechaCreacion, id: _id, ...data } = req.body; // Evitar sobreescribir fechaCreacion
     await ref.update({ ...data, updatedAt: new Date() });
     res.json({ message: "✅ Lote actualizado correctamente" });
   } catch (error) {
@@ -118,6 +130,12 @@ export const getLotesByIpt = async (req, res) => {
       .where("activo", "==", true)
       .get();
     const lotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Ordenar por fechaCreacion descendente (más reciente primero)
+    lotes.sort((a, b) => {
+      const dateA = a.fechaCreacion?.toDate ? a.fechaCreacion.toDate() : new Date(a.fechaCreacion || 0);
+      const dateB = b.fechaCreacion?.toDate ? b.fechaCreacion.toDate() : new Date(b.fechaCreacion || 0);
+      return dateB - dateA;
+    });
     res.json(lotes);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener lotes por IPT" });
@@ -134,7 +152,11 @@ export const cambiarEstadoLote = async (req, res) => {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "Lote no encontrado" });
     const lote = snap.data();
-    await ref.update({ estado, observacionesTecnico: observacionesTecnico || "" });
+    await ref.update({ 
+      estado, 
+      observacionesTecnico: observacionesTecnico || "",
+      updatedAt: new Date()
+    });
     if (estado === "Validado") {
       try {
         const prodSnap = await db.collection("productores").where("ipt", "==", String(lote.ipt)).limit(1).get();

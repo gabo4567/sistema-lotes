@@ -11,4 +11,5 @@ export const insumosService = {
   async disponibilidadPorProductor(productorId){ const res = await api.get(`/insumos/productor/${productorId}/disponibilidad`); return res.data },
   async asignacionesPorProductor(productorId){ const res = await api.get(`/insumos/productor/${productorId}/asignaciones`); return res.data },
   async updateAsignacion(asignacionId, data){ const res = await api.put(`/insumos/asignaciones/${asignacionId}`, data); return res.data },
+  async updateAsignacionTipo(id, newInsumoId){ const res = await api.put(`/insumos/asignaciones/${id}/tipo`, { newInsumoId }); return res.data },
 }

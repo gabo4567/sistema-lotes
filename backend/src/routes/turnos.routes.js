@@ -10,6 +10,7 @@ import {
   actualizarTurno,
   cambiarEstadoTurno,
   eliminarTurno,
+  restaurarTurno,
   obtenerTurnosPorEstado,
   obtenerTurnosPorProductor,
   obtenerTurnosPorRangoFechas,
@@ -32,6 +33,7 @@ router.get("/", obtenerTurnos);
 router.get("/:id", obtenerTurnoPorId);
 router.put("/:id", actualizarTurno);
 router.patch("/:id/estado", cambiarEstadoTurno);
+router.patch("/:id/restaurar", restaurarTurno);
 router.delete("/:id", eliminarTurno);
 
 // 📊 Endpoints complementarios - requieren autenticación

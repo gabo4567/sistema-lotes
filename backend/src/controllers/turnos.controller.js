@@ -190,10 +190,20 @@ export const crearTurno = async (req, res) => {
 };
 
 
-// 📋 Obtener todos los turnos activos
+// 📋 Obtener todos los turnos (con filtros de activo/inactivo)
 export const obtenerTurnos = async (req, res) => {
   try {
-    const snapshot = await db.collection("turnos").where("activo", "==", true).get();
+    const { activo } = req.query;
+    let query = db.collection("turnos");
+    
+    if (activo !== undefined) {
+      query = query.where("activo", "==", activo === "true");
+    } else {
+      // Por defecto solo activos
+      query = query.where("activo", "==", true);
+    }
+
+    const snapshot = await query.get();
     const hoy = new Date(); hoy.setHours(0,0,0,0);
     const batch = db.batch(); let updates = 0;
     const raws = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
@@ -352,18 +362,42 @@ export const cambiarEstadoTurno = async (req, res) => {
 export const eliminarTurno = async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body; // Opcional: ID del usuario que realiza la acción
+    
     const doc = await db.collection("turnos").doc(id).get();
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
-    const turno = doc.data();
-    const estado = String(turno?.estado || '').toLowerCase();
-    if (estado !== 'pendiente') {
-      return res.status(400).json({ message: `No puedes eliminar un turno ${estado}` });
-    }
-    await db.collection("turnos").doc(id).update({ activo: false, updatedAt: Timestamp.now() });
-    res.json({ message: "Turno desactivado correctamente" });
+    
+    const updateData = { 
+      activo: false, 
+      desactivadoEn: Timestamp.now(),
+      desactivadoPor: userId || req.user?.uid || 'sistema',
+      updatedAt: Timestamp.now() 
+    };
+    
+    await db.collection("turnos").doc(id).update(updateData);
+    res.json({ message: "Turno desactivado correctamente", id });
   } catch (error) {
-    console.error("Error al eliminar el turno:", error);
-    res.status(500).json({ message: "Error al eliminar el turno", error });
+    console.error("Error al desactivar el turno:", error);
+    res.status(500).json({ message: "Error al desactivar el turno", error });
+  }
+};
+
+// ♻️ Restaurar un turno desactivado
+export const restaurarTurno = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await db.collection("turnos").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
+    
+    await db.collection("turnos").doc(id).update({ 
+      activo: true, 
+      restauradoEn: Timestamp.now(),
+      updatedAt: Timestamp.now() 
+    });
+    res.json({ message: "Turno restaurado correctamente", id });
+  } catch (error) {
+    console.error("Error al restaurar el turno:", error);
+    res.status(500).json({ message: "Error al restaurar el turno", error });
   }
 };
 
@@ -391,16 +425,19 @@ export const obtenerTurnosPorEstado = async (req, res) => {
   }
 };
 
-// 🔍 Obtener turnos por productorId
+// 🔍 Obtener turnos por productorId (con filtros de activo/inactivo)
 export const obtenerTurnosPorProductor = async (req, res) => {
   try {
     const { productorId } = req.params;
-    const snapshot = await db
-      .collection("turnos")
-      .where("productorId", "==", productorId)
-      .where("activo", "==", true)
-      .get();
+    const { activo } = req.query;
+    
+    let query = db.collection("turnos").where("productorId", "==", productorId);
+    
+    if (activo !== undefined) {
+      query = query.where("activo", "==", activo === "true");
+    }
 
+    const snapshot = await query.get();
     const batch = db.batch();
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();

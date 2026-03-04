@@ -1,7 +1,7 @@
 // mobile-app/src/screens/TurnosScreen.js
 
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
@@ -18,6 +18,8 @@ export default function TurnosScreen() {
   const [success, setSuccess] = useState("");
   const [motivo, setMotivo] = useState("");
   const [view, setView] = useState("list");
+  const [listMode, setListMode] = useState("activos"); // "activos" o "inactivos"
+  const [filtroEstado, setFiltroEstado] = useState("todos");
   const [turnoEditando, setTurnoEditando] = useState(null);
   const insets = useSafeAreaInsets();
 
@@ -30,30 +32,15 @@ export default function TurnosScreen() {
       
       if (!uid || !idToken) return;
       
-      // Usar el productorId de los claims si está disponible, sino usar el UID
       const productorId = tokenResult?.claims?.productorId || uid;
-      console.log("📋 Cargando turnos para productorId:", productorId);
-      console.log("🔍 UID de Firebase:", uid);
-      console.log("📄 Claims:", tokenResult?.claims);
+      const activo = listMode === "activos";
       
-      const resp = await fetch(`${API_URL}/turnos/productor/${productorId}`, {
+      const resp = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=${activo}`, {
         headers: {
           "Authorization": `Bearer ${idToken}`
         }
       });
-      const responseText = await resp.text();
-      console.log("📡 Respuesta cruda de turnos:", responseText);
-      
-      let j;
-      try {
-        j = JSON.parse(responseText);
-      } catch (e) {
-        console.error("❌ Error parseando JSON de turnos:", e);
-        setList([]);
-        return;
-      }
-      
-      console.log("📋 Turnos obtenidos:", j);
+      const j = await resp.json();
       setList(Array.isArray(j) ? j : []);
     } catch (error) {
       console.error("❌ Error cargando turnos:", error);
@@ -77,9 +64,7 @@ export default function TurnosScreen() {
 
   useEffect(() => { 
     loadList(); 
-    // Test de conectividad
-    testBackendConnection();
-  }, []);
+  }, [listMode]);
 
   useEffect(() => {
     setError("");
@@ -569,6 +554,76 @@ export default function TurnosScreen() {
         </View>
       </View>
 
+      {view === 'list' && (
+        <View style={{ flex: 1 }}>
+          {/* Filtros Activos/Inactivos */}
+          <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+            <View style={styles.listTabs}>
+              <TouchableOpacity 
+                style={[styles.listTab, listMode === "activos" && styles.listTabActive]}
+                onPress={() => setListMode("activos")}
+              >
+                <Text style={[styles.listTabText, listMode === "activos" && styles.listTabTextActive]}>Activos</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.listTab, listMode === "inactivos" && styles.listTabActive]}
+                onPress={() => setListMode("inactivos")}
+              >
+                <Text style={[styles.listTabText, listMode === "inactivos" && styles.listTabTextActive]}>Inactivos</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={{ flex: 1, padding: 8 }}>
+            <View style={styles.filterContainer}>
+              <Text style={styles.filterLabel}>Filtrar por estado:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+                {["todos", "pendiente", "confirmado", "cancelado", "completado", "vencido"].map(est => (
+                  <TouchableOpacity 
+                    key={est}
+                    style={[styles.filterBadge, filtroEstado === est && styles.filterBadgeActive]}
+                    onPress={() => setFiltroEstado(est)}
+                  >
+                    <Text style={[styles.filterBadgeText, filtroEstado === est && styles.filterBadgeTextActive]}>
+                      {est.charAt(0).toUpperCase() + est.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <FlatList 
+              data={list.filter(t => filtroEstado === "todos" || t.estado?.toLowerCase() === filtroEstado)} 
+              keyExtractor={(item) => item.id} 
+              ListEmptyComponent={<Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
+                  <View style={styles.turnoHeader}>
+                    <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
+                    <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
+                  </View>
+                  <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
+                  <Text style={styles.turnoMotivo}>Motivo: {item.motivo || 'No especificado'}</Text>
+                  
+                  {item.activo !== false && (
+                    <View style={styles.turnoActions}>
+                      <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
+                        <Text style={styles.btnActionText}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
+                        <Text style={styles.btnActionText}>Cancelar Turno</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )} 
+              contentContainerStyle={{ paddingBottom: 10 }}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      )}
+
       {view === 'form' && (
         <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <TextInput style={styles.input} placeholder="Fecha (DD-MM-YYYY)" value={fechaInput} onChangeText={setFechaInput} />
@@ -644,37 +699,6 @@ export default function TurnosScreen() {
           </View>
         </View>
       )}
-
-      {view === 'list' && (
-        <View style={{ padding: 8 }}>
-          <Text style={{ fontWeight: "bold", marginBottom: 6 }}>Mis turnos</Text>
-          <FlatList 
-            data={list} 
-            keyExtractor={(item) => item.id} 
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.turnoCard}>
-                <View style={styles.turnoHeader}>
-                  <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
-                  <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
-                </View>
-                <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
-                <Text style={styles.turnoMotivo}>Motivo: {item.motivo || 'No especificado'}</Text>
-                
-                {/* Botones de acción */}
-                <View style={styles.turnoActions}>
-          <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
-            <Text style={styles.btnActionText}>Editar</Text>
-          </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
-                    <Text style={styles.btnActionText}>Eliminar</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            )} 
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
-          />
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -714,6 +738,20 @@ const styles = StyleSheet.create({
   btnEditar: { backgroundColor: '#3498db', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   btnEliminar: { backgroundColor: '#e74c3c', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   btnActionText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  // Estilos nuevos para filtros y tabs
+  listTabs: { flexDirection: 'row', backgroundColor: '#f1f2f6', borderRadius: 8, padding: 4, marginBottom: 12 },
+  listTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+  listTabActive: { backgroundColor: '#ffffff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+  listTabText: { fontSize: 14, color: '#7f8c8d', fontWeight: '500' },
+  listTabTextActive: { color: '#2c3e50', fontWeight: '700' },
+  filterContainer: { marginBottom: 12 },
+  filterLabel: { fontSize: 12, color: '#7f8c8d', marginBottom: 6, fontWeight: '600' },
+  filterScroll: { flexDirection: 'row' },
+  filterBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f1f2f6', marginRight: 8, borderWeight: 1, borderColor: 'transparent' },
+  filterBadgeActive: { backgroundColor: '#e8f5e9', borderColor: '#2ecc71' },
+  filterBadgeText: { fontSize: 12, color: '#7f8c8d' },
+  filterBadgeTextActive: { color: '#1e8449', fontWeight: '700' },
+  emptyText: { textAlign: 'center', color: '#95a5a6', marginTop: 20, fontStyle: 'italic' },
 });
   const getEstadoColor = (estado) => {
     switch (estado?.toLowerCase()) {

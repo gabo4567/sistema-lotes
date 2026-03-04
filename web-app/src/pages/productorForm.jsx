@@ -72,12 +72,14 @@ const ProductorForm = () => {
         <input className="input-inst" placeholder="Domicilio (casa)" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
         <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
         <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
-        <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
-          <option value="Nuevo">Nuevo</option>
-          <option value="Vigente">Vigente</option>
-          <option value="Vencido">Vencido</option>
-          <option value="Re-empadronado">Re-empadronado</option>
-        </select>
+        {isEdit && (
+          <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
+            <option value="Nuevo">Nuevo</option>
+            <option value="Vigente">Vigente</option>
+            <option value="Vencido">Vencido</option>
+            <option value="Re-empadronado">Re-empadronado</option>
+          </select>
+        )}
         <label className="checkbox-inst">
           <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} /> Requiere cambio de contraseña
         </label>

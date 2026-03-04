@@ -18,6 +18,7 @@ const InsumosList = () => {
   const [asignacionesProd, setAsignacionesProd] = useState([])
   const [loadingAsign, setLoadingAsign] = useState(false)
   const [insumoNames, setInsumoNames] = useState({})
+  const [allInsumos, setAllInsumos] = useState([]) // Para el modal de cambio de tipo
 
   const load = async ()=>{
     try {
@@ -25,6 +26,7 @@ const InsumosList = () => {
       const data = await insumosService.getInsumos()
       setItems(Array.isArray(data)? data: [])
       setInsumoNames(Array.isArray(data) ? Object.fromEntries(data.map(i=>[i.id, i.nombre])) : {})
+      setAllInsumos(Array.isArray(data)? data: []) // Guardar todos los insumos para el selector
       setError('')
     } catch (e) {
       console.error(e)
@@ -167,7 +169,8 @@ const InsumosList = () => {
                           <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>onQuickAdjust(a, +1)}>+1</button>
                           <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>onQuickAdjust(a, -1)}>-1</button>
                           <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>setModal({ type:'assign-edit', asign: a })}>Modificar cantidad</button>
-                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }} onClick={()=>setModal({ type:'assign-desc', asign: a })}>Agregar descripción</button>
+                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8, marginRight:6 }} onClick={()=>setModal({ type:'assign-desc', asign: a })}>Agregar descripción</button>
+                          <button style={{ border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }} onClick={()=>setModal({ type:'assign-change-type', asign: a, newInsumoId: a.insumoId })}>Modificar tipo</button>
                         </div>
                       </td>
                     </tr>
@@ -254,6 +257,33 @@ const InsumosList = () => {
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={async()=>{ try{ await insumosService.updateAsignacion(modal.asign.id, { descripcion: modal.asign.descripcionEdit }); setModal(null); load(); if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) } } catch(e){ setError(e?.response?.data?.error||'Error al agregar descripción') } }}>Guardar</button>
+                </div>
+              </div>
+            )}
+            {modal.type==='assign-change-type' && (
+              <div>
+                <h3 style={{ marginTop:0 }}>Modificar tipo de insumo asignado</h3>
+                <div style={{ marginBottom: 8 }}>Insumo actual: {insumoNames[modal.asign.insumoId] || '-'}</div>
+                <select className="select-inst" value={modal.newInsumoId} onChange={e=>setModal(m=>({ ...m, newInsumoId: e.target.value }))}>
+                  <option value="">Seleccione nuevo insumo</option>
+                  {allInsumos.map(i=> (
+                    <option key={i.id} value={i.id}>{i.nombre}</option>
+                  ))}
+                </select>
+                <div className="form-actions" style={{ marginTop:8 }}>
+                  <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
+                  <button style={buttonStyle} onClick={async()=>{
+                    try{
+                      if (!modal.newInsumoId) { notify({ title: 'Debe seleccionar un nuevo insumo', icon: 'error' }); return }
+                      await insumosService.updateAsignacionTipo(modal.asign.id, modal.newInsumoId);
+                      setModal(null);
+                      load();
+                      if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }
+                      notify({ title: 'Tipo de insumo actualizado', icon: 'success' });
+                    } catch(e){
+                      notify({ title: e?.response?.data?.error||'Error al modificar tipo de insumo', icon: 'error' })
+                    }
+                  }}>Guardar</button>
                 </div>
               </div>
             )}

@@ -6,10 +6,9 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useContext(AuthContext);
 
   const hasToken = !!localStorage.getItem("token");
-  const hasSession = !!sessionStorage.getItem("session_active");
 
-  // Requerir inicio de sesión por pestaña: si no hay sesión de pestaña, forzar login
-  if (!hasSession) {
+  // Requerir inicio de sesión: si no hay token, forzar login
+  if (!hasToken) {
     return <Navigate to="/login" replace />;
   }
 

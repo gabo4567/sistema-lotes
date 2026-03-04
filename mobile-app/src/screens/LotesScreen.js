@@ -1,12 +1,13 @@
 // src/screens/LotesScreen.js
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import MapView, { Marker, Polygon } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
+import { useWalkingGPS } from "../hooks/useWalkingGPS";
 
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
@@ -26,6 +27,19 @@ export default function LotesScreen() {
   const [editObservaciones, setEditObservaciones] = useState("");
   const mapRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const { isWalking, route, startWalking, stopWalking, resetRoute, addManualPoint, undoLastPoint, currentLocation } = useWalkingGPS();
+
+  useEffect(() => {
+    if (mode === "gps" && route.length > 0) {
+      setPoints(route);
+    }
+  }, [route, mode]);
+
+  useEffect(() => {
+    return () => {
+      if (isWalking) stopWalking();
+    };
+  }, [isWalking, stopWalking]);
 
   useEffect(() => {
     (async () => {
@@ -64,21 +78,13 @@ export default function LotesScreen() {
   };
 
   useEffect(() => {
-    let watch;
-    (async () => {
-      if (creating && createStep === "polygon" && mode === "gps") {
-        watch = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 5 }, (pos) => {
-          const c = pos.coords;
-          setPoints((prev) => [...prev, { latitude: c.latitude, longitude: c.longitude }]);
-        });
-      }
-    })();
-    return () => {
-      if (watch) watch.remove();
-    };
+    // El modo GPS ahora se maneja mediante useWalkingGPS en lugar de este watcher local.
   }, [mode, creating, createStep]);
 
-  const clearPolygon = () => setPoints([]);
+  const clearPolygon = () => {
+    setPoints([]);
+    if (mode === "gps") resetRoute();
+  };
 
   const startCreate = () => {
     setCreating(true);
@@ -110,20 +116,43 @@ export default function LotesScreen() {
   const degreesToRadians = (deg) => (deg * Math.PI) / 180;
   const computeAreaHa = (pts) => {
     if (!Array.isArray(pts) || pts.length < 3) return 0;
-    const R = 6378137;
-    const lat0 = pts.reduce((s, p) => s + p.latitude, 0) / pts.length;
+    
+    // 1. Limpiar puntos: asegurar que sean números y filtrar duplicados consecutivos
+    const cleanPts = pts
+      .map(p => ({
+        lat: Number(p.latitude || p.lat || 0),
+        lng: Number(p.longitude || p.lng || 0)
+      }))
+      .filter((p, i, arr) => {
+        if (i === 0) return true;
+        // Ignorar si es idéntico al anterior para evitar división por cero o errores de precisión
+        return p.lat !== arr[i-1].lat || p.lng !== arr[i-1].lng;
+      });
+
+    if (cleanPts.length < 3) return 0;
+
+    const R = 6378137; // Radio medio de la Tierra en metros
+    const lat0 = cleanPts[0].lat;
+    const lon0 = cleanPts[0].lng;
     const cosLat0 = Math.cos(degreesToRadians(lat0));
-    const projected = pts.map((p) => {
-      const x = degreesToRadians(p.longitude) * R * cosLat0;
-      const y = degreesToRadians(p.latitude) * R;
+
+    // 2. Proyección plana local preservando precisión (restando el primer punto)
+    const projected = cleanPts.map((p) => {
+      const x = degreesToRadians(p.lng - lon0) * R * cosLat0;
+      const y = degreesToRadians(p.lat - lat0) * R;
       return { x, y };
     });
+
+    // 3. Fórmula de Shoelace para el área del polígono proyectado
     let area = 0;
-    for (let i = 0, j = projected.length - 1; i < projected.length; j = i++) {
-      area += projected[j].x * projected[i].y - projected[i].x * projected[j].y;
+    for (let i = 0; i < projected.length; i++) {
+      const j = (i + 1) % projected.length;
+      area += projected[i].x * projected[j].y;
+      area -= projected[j].x * projected[i].y;
     }
-    area = Math.abs(area) / 2; // m^2
-    return area / 10000; // ha
+    
+    area = Math.abs(area) / 2; // Área en metros cuadrados (m²)
+    return area / 10000; // Convertir a hectáreas (ha)
   };
 
   const currentAreaHa = computeAreaHa(points);
@@ -148,7 +177,11 @@ export default function LotesScreen() {
         resp = await fetch(`${API_URL}/lotes/${selected.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ poligono, metodoMarcado }),
+          body: JSON.stringify({ 
+            poligono, 
+            metodoMarcado, 
+            superficie: Number(currentAreaHa.toFixed(4)) 
+          }),
         });
       } else {
         if (!nombre || nombre.trim().length < 3) {
@@ -249,13 +282,26 @@ export default function LotesScreen() {
       {location ? (
         <MapView ref={mapRef} style={[styles.map, { marginBottom: Math.max(insets.bottom, 16) }]} initialRegion={location} onPress={onMapPress}>
           <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }} title="Mi ubicación" />
+          
+          {/* Marcador de posición actual del GPS mientras camina */}
+          {isWalking && currentLocation && (
+            <Marker coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}>
+              <View style={styles.currentPosMarker}>
+                <View style={styles.currentPosDot} />
+              </View>
+            </Marker>
+          )}
+
           {points.length >= 1 && (
             <>
               {points.map((p, i) => (
                 <Marker key={`p-${i}`} coordinate={p} />
               ))}
-              {points.length >= 3 && (
+              {points.length >= 3 && !isWalking && (
                 <Polygon coordinates={points} strokeColor="#1e8449" fillColor="rgba(46, 204, 113, 0.2)" strokeWidth={2} />
+              )}
+              {isWalking && points.length >= 2 && (
+                <Polyline coordinates={points} strokeColor="#1e8449" strokeWidth={3} lineDashPattern={[1]} />
               )}
             </>
           )}
@@ -269,18 +315,53 @@ export default function LotesScreen() {
 
       {creating && createStep === "polygon" && (
         <View style={[styles.grid, { marginBottom: Math.max(insets.bottom, 24) }]}>
-          <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
-            <Text style={styles.btnText}>Dibujo aéreo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
-            <Text style={styles.btnText}>GPS caminando</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
-            <Text style={styles.btnText}>Limpiar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
-            <Text style={styles.btnText}>Cancelar</Text>
-          </TouchableOpacity>
+          {!isWalking ? (
+            <>
+              <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
+                <Text style={styles.btnText}>Dibujo aéreo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
+                <Text style={styles.btnText}>GPS caminando</Text>
+              </TouchableOpacity>
+              {mode === "gps" && (
+                <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#2ecc71" }]} onPress={startWalking}>
+                  <Text style={styles.btnText}>▶ Iniciar recorrido</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
+                <Text style={styles.btnText}>Limpiar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
+                <Text style={styles.btnText}>Cancelar</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.gpsControls}>
+              <View style={styles.gpsStatusHeader}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.gpsStatusText}>Grabando recorrido: {points.length} puntos</Text>
+              </View>
+              
+              <View style={styles.gpsActionRow}>
+                <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#3498db" }]} onPress={addManualPoint}>
+                  <Text style={styles.btnText}>📍 Punto manual</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#f39c12" }]} onPress={undoLastPoint} disabled={points.length === 0}>
+                  <Text style={styles.btnText}>↩ Deshacer</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={[styles.gpsFinishBtn, { backgroundColor: "#c0392b" }]} onPress={() => {
+                if (points.length < 3) {
+                  Alert.alert("Aviso", "Necesitas al menos 3 puntos para finalizar el recorrido.");
+                } else {
+                  stopWalking();
+                }
+              }}>
+                <Text style={styles.btnText}>Finalizar y cerrar polígono</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
@@ -469,5 +550,14 @@ const styles = StyleSheet.create({
   loadingLocation: { color: "#1e8449", marginTop: 0, textAlign: "center" },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
   gridBtn: { width: '45%', margin: 6, justifyContent: 'center', alignItems: 'center', padding: 10, borderRadius: 8, backgroundColor: '#1e8449' },
+  gpsControls: { width: '95%', padding: 12, backgroundColor: '#fff', borderRadius: 12, elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  gpsStatusHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, justifyContent: 'center' },
+  gpsStatusText: { fontSize: 16, fontWeight: 'bold', color: '#2c3e50' },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#e74c3c', marginRight: 8 },
+  gpsActionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 10 },
+  gpsActionBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  gpsFinishBtn: { width: '100%', padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  currentPosMarker: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(52, 152, 219, 0.2)', alignItems: 'center', justifyContent: 'center' },
+  currentPosDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#3498db', borderWeight: 2, borderColor: '#fff' },
   formInfo: { padding: 8, alignItems: 'center' },
 });

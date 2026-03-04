@@ -265,3 +265,77 @@ export const eliminarAsignacionesPorIpt = async (req, res) => {
     res.status(500).json({ error: "Error al eliminar asignaciones" });
   }
 };
+
+export const actualizarTipoInsumoAsignado = async (req, res) => {
+  try {
+    const { asignacionId } = req.params;
+    const { newInsumoId } = req.body;
+
+    if (!newInsumoId) return res.status(400).json({ error: "Nuevo insumo ID es requerido" });
+
+    const asignacionRef = db.collection("productorInsumos").doc(asignacionId);
+    const asignacionSnap = await asignacionRef.get();
+
+    if (!asignacionSnap.exists) return res.status(404).json({ error: "Asignación no encontrada" });
+
+    const asignacionData = asignacionSnap.data();
+    const oldInsumoId = asignacionData.insumoId;
+    const productorId = asignacionData.productorId;
+    const cantidadAsignada = Number(asignacionData.cantidadAsignada || 0);
+
+    if (oldInsumoId === newInsumoId) {
+      return res.status(400).json({ error: "El nuevo insumo es el mismo que el actual" });
+    }
+
+    const batch = db.batch();
+
+    // 1. Devolver stock al insumo original
+    const oldInsumoRef = db.collection("insumos").doc(oldInsumoId);
+    const oldInsumoSnap = await oldInsumoRef.get();
+    if (oldInsumoSnap.exists) {
+      const oldInsumoData = oldInsumoSnap.data();
+      const oldStock = Number(oldInsumoData.cantidadDisponible || 0);
+      batch.update(oldInsumoRef, { cantidadDisponible: oldStock + cantidadAsignada, updatedAt: new Date() });
+    }
+
+    // 2. Restar stock del nuevo insumo (o consolidar si ya existe una asignación)
+    const newInsumoRef = db.collection("insumos").doc(newInsumoId);
+    const newInsumoSnap = await newInsumoRef.get();
+    if (!newInsumoSnap.exists) return res.status(404).json({ error: "Nuevo insumo no encontrado" });
+    const newInsumoData = newInsumoSnap.data();
+    const newStock = Number(newInsumoData.cantidadDisponible || 0);
+
+    if (newStock < cantidadAsignada) {
+      return res.status(400).json({ error: "Stock insuficiente para el nuevo insumo" });
+    }
+
+    // Buscar si ya existe una asignación para el productor y el nuevo insumo
+    const existingNewAsignacionSnap = await db.collection("productorInsumos")
+      .where("productorId", "==", productorId)
+      .where("insumoId", "==", newInsumoId)
+      .where("estado", "==", "pendiente")
+      .limit(1)
+      .get();
+
+    if (!existingNewAsignacionSnap.empty) {
+      // Consolidar en la asignación existente
+      const existingAsignacionDoc = existingNewAsignacionSnap.docs[0];
+      const existingAsignacionData = existingAsignacionDoc.data();
+      const nuevaCantidad = Number(existingAsignacionData.cantidadAsignada || 0) + cantidadAsignada;
+      batch.update(existingAsignacionDoc.ref, { cantidadAsignada: nuevaCantidad, updatedAt: new Date() });
+      batch.delete(asignacionRef); // Eliminar la asignación original
+    } else {
+      // Actualizar la asignación original con el nuevo insumoId
+      batch.update(asignacionRef, { insumoId: newInsumoId, updatedAt: new Date() });
+    }
+    
+    batch.update(newInsumoRef, { cantidadDisponible: newStock - cantidadAsignada, updatedAt: new Date() });
+
+    await batch.commit();
+    res.json({ message: "Tipo de insumo asignado actualizado exitosamente" });
+
+  } catch (e) {
+    console.error("Error al actualizar tipo de insumo asignado:", e);
+    res.status(500).json({ error: e.message || "Error al actualizar tipo de insumo asignado" });
+  }
+};

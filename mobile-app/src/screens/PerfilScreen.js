@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
 
@@ -7,6 +8,7 @@ export default function PerfilScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     let mounted = true;
@@ -51,62 +53,64 @@ export default function PerfilScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Mi Perfil</Text>
-      <View style={styles.card}>
-        <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
-        <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
-        <Text style={styles.item}>CUIL: {data?.cuil}</Text>
-        <Text style={styles.item}>Email: {data?.email || "-"}</Text>
-        <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
-        <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
-        <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
-        <Text style={styles.item}>Estado: {data?.estado}</Text>
-        <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
-        
-        <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
-        
-        <View style={styles.ubicacionesContainer}>
-          <View style={styles.ubicacionItem}>
-            <Text style={styles.ubicacionLabel}>Entrada domicilio</Text>
-            <Text style={styles.ubicacionCoords}>
-              {data?.ubicaciones?.entradaDomicilio?.lat != null ? `Lat: ${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}
-            </Text>
-          </View>
-          <View style={styles.separator} />
+    <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}>
+        <Text style={styles.title}>Mi Perfil</Text>
+        <View style={styles.card}>
+          <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
+          <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
+          <Text style={styles.item}>CUIL: {data?.cuil}</Text>
+          <Text style={styles.item}>Email: {data?.email || "-"}</Text>
+          <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
+          <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
+          <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
+          <Text style={styles.item}>Estado: {data?.estado}</Text>
+          <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
           
-          <View style={styles.ubicacionItem}>
-            <Text style={styles.ubicacionLabel}>Domicilio (Casa)</Text>
-            <Text style={styles.ubicacionCoords}>
-              {data?.ubicaciones?.domicilioCasa?.lat != null ? `Lat: ${data.ubicaciones.domicilioCasa.lat.toFixed(6)}  Lng: ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}
-            </Text>
-          </View>
-          <View style={styles.separator} />
+          <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
           
-          <View style={styles.ubicacionItem}>
-            <Text style={styles.ubicacionLabel}>Entrada campo</Text>
-            <Text style={styles.ubicacionCoords}>
-              {data?.ubicaciones?.entradaCampo?.lat != null ? `Lat: ${data.ubicaciones.entradaCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}
-            </Text>
-          </View>
-          <View style={styles.separator} />
-          
-          <View style={styles.ubicacionItem}>
-            <Text style={styles.ubicacionLabel}>Centro campo</Text>
-            <Text style={styles.ubicacionCoords}>
-              {data?.ubicaciones?.centroCampo?.lat != null ? `Lat: ${data.ubicaciones.centroCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}
-            </Text>
+          <View style={styles.ubicacionesContainer}>
+            <View style={styles.ubicacionItem}>
+              <Text style={styles.ubicacionLabel}>Entrada domicilio</Text>
+              <Text style={styles.ubicacionCoords}>
+                {data?.ubicaciones?.entradaDomicilio?.lat != null ? `Lat: ${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}
+              </Text>
+            </View>
+            <View style={styles.separator} />
+            
+            <View style={styles.ubicacionItem}>
+              <Text style={styles.ubicacionLabel}>Domicilio (Casa)</Text>
+              <Text style={styles.ubicacionCoords}>
+                {data?.ubicaciones?.domicilioCasa?.lat != null ? `Lat: ${data.ubicaciones.domicilioCasa.lat.toFixed(6)}  Lng: ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}
+              </Text>
+            </View>
+            <View style={styles.separator} />
+            
+            <View style={styles.ubicacionItem}>
+              <Text style={styles.ubicacionLabel}>Entrada campo</Text>
+              <Text style={styles.ubicacionCoords}>
+                {data?.ubicaciones?.entradaCampo?.lat != null ? `Lat: ${data.ubicaciones.entradaCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}
+              </Text>
+            </View>
+            <View style={styles.separator} />
+            
+            <View style={styles.ubicacionItem}>
+              <Text style={styles.ubicacionLabel}>Centro campo</Text>
+              <Text style={styles.ubicacionCoords}>
+                {data?.ubicaciones?.centroCampo?.lat != null ? `Lat: ${data.ubicaciones.centroCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  title: { fontSize: 22, fontWeight: "bold", color: "#1e8449", marginBottom: 12, textAlign: "center" },
-  card: { backgroundColor: "#ffffff", borderRadius: 12, padding: 16, elevation: 2 },
+  title: { fontSize: 22, fontWeight: "bold", color: "#1e8449", marginBottom: 20, textAlign: "center" },
+  card: { backgroundColor: "#ffffff", borderRadius: 12, padding: 16, elevation: 2, marginTop: 10 },
   item: { fontSize: 16, marginBottom: 6, color: "#34495e" },
   section: { marginTop: 10, fontWeight: "bold" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },

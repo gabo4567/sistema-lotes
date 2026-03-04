@@ -25,7 +25,7 @@ const LoteAdminForm = () => {
           superficie: data.superficie ?? "",
           ubicacionLat: data.ubicacion?.lat ?? "",
           ubicacionLng: data.ubicacion?.lng ?? "",
-          metodoMarcado: data.metodoMarcado || "aereo",
+          metodoMarcado: "aereo",
           observacionesTecnico: data.observacionesTecnico || "",
           poligonoText: polyText,
         });
@@ -78,10 +78,7 @@ const LoteAdminForm = () => {
         <input className="input-inst" placeholder="Ubicación lat" value={form.ubicacionLat} onChange={e=>onChange('ubicacionLat', e.target.value)} />
         <input className="input-inst" placeholder="Ubicación lng" value={form.ubicacionLng} onChange={e=>onChange('ubicacionLng', e.target.value)} />
         <input className="input-inst" placeholder="Superficie (ha)" value={form.superficie} onChange={e=>onChange('superficie', e.target.value)} />
-        <select className="select-inst" value={form.metodoMarcado} onChange={e=>onChange('metodoMarcado', e.target.value)}>
-          <option value="aereo">Aéreo</option>
-          <option value="GPS">GPS</option>
-        </select>
+        <input className="input-inst" value="Método: Aéreo" readOnly style={{ backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }} />
         <div className="map-card" style={{ gridColumn: '1 / -1' }}>
           <div style={{ marginBottom: 8 }}>Editar polígono en el mapa</div>
           <MapPolygonEditor points={poly} onChange={(pts)=>{ setPoly(pts); setForm(f=>({ ...f, poligonoText: pts.map(p=>`${p.lat},${p.lng}`).join('\n') })); }} />

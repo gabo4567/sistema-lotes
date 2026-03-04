@@ -12,6 +12,7 @@ import {
   listarAsignacionesPorProductor,
   actualizarAsignacion,
   eliminarAsignacionesPorIpt,
+  actualizarTipoInsumoAsignado,
 } from "../controllers/insumos.controller.js";
 
 const router = Router();
@@ -29,6 +30,7 @@ router.get("/productor/:productorId/disponibilidad", obtenerDisponibilidadInsumo
 router.post("/productor/:productorId/entregar", marcarAsignacionesEntregadas);
 router.get("/productor/:productorId/asignaciones", listarAsignacionesPorProductor);
 router.put("/asignaciones/:asignacionId", actualizarAsignacion);
+router.put("/asignaciones/:asignacionId/tipo", actualizarTipoInsumoAsignado);
 router.delete("/productor/ipt/:ipt/asignaciones", eliminarAsignacionesPorIpt);
 
 export default router;
