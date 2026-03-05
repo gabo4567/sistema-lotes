@@ -34,7 +34,8 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
     fontSize: "14px",
     outline: "none",
     transition: "border-color 0.2s",
-    width: "100%"
+    width: "100%",
+    boxSizing: "border-box"
   };
 
   const resetBtnStyle = {
@@ -75,6 +76,19 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
           value={filters.ipt}
           onChange={(e) => onFilterChange("ipt", e.target.value)}
         />
+      </div>
+
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Estado</label>
+        <select
+          style={inputStyle}
+          value={filters.activo}
+          onChange={(e) => onFilterChange("activo", e.target.value)}
+        >
+          <option value="activos">Activos</option>
+          <option value="inactivos">Inactivos</option>
+          <option value="todos">Todos</option>
+        </select>
       </div>
 
       <div style={fieldStyle}>

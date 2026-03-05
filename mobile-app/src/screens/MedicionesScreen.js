@@ -190,7 +190,7 @@ export default function MedicionesScreen({ navigation }) {
       <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <Text style={styles.title}>Mis Mediciones</Text>
         <Text style={styles.error}>{error}</Text>
-        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24) }]} onPress={loadMediciones}>
+        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24), backgroundColor: '#27ae60' }]} onPress={loadMediciones}>
           <Text style={styles.retryButtonText}>Reintentar</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -202,7 +202,7 @@ export default function MedicionesScreen({ navigation }) {
       <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <Text style={styles.title}>Mis Mediciones</Text>
         <Text style={styles.emptyText}>No tienes mediciones registradas</Text>
-        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24) }]} onPress={loadMediciones}>
+        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24), backgroundColor: '#27ae60' }]} onPress={loadMediciones}>
           <Text style={styles.retryButtonText}>Actualizar</Text>
         </TouchableOpacity>
       </SafeAreaView>

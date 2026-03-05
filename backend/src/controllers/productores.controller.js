@@ -20,6 +20,38 @@ export const createProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
+    // Validación de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+    }
+
+    // Validación de formato de teléfono
+    const telRegex = /^\d{10,13}$/;
+    if (telefono && !telRegex.test(telefono)) {
+      return res.status(400).json({ error: "El número debe contener solo dígitos (10 a 13 números)." });
+    }
+
+    // Validar unicidad de IPT
+    const existingIpt = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+    if (!existingIpt.empty) {
+      return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
+    }
+
+    // Validar unicidad de CUIL
+    const existingCuil = await db.collection("productores").where("cuil", "==", String(cuil)).limit(1).get();
+    if (!existingCuil.empty) {
+      return res.status(400).json({ error: "El CUIL ya se encuentra registrado." });
+    }
+
+    // Validar unicidad de Email
+    if (email) {
+      const existingEmail = await db.collection("productores").where("email", "==", String(email).toLowerCase()).limit(1).get();
+      if (!existingEmail.empty) {
+        return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
+      }
+    }
+
     const newProductor = {
       ipt: String(ipt),
       nombreCompleto,
@@ -28,7 +60,6 @@ export const createProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
-      estado: estado || "Nuevo",
       plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
       requiereCambioContrasena: true,
       historialIngresos: 0,
@@ -37,6 +68,46 @@ export const createProductor = async (req, res) => {
     };
 
     const docRef = await db.collection("productores").add(newProductor);
+
+    const authUid = `prod_${String(ipt)}`;
+
+    // Asegurar que exista un usuario en Firebase Auth con ese UID
+    try {
+      await admin.auth().getUser(authUid);
+    } catch (e) {
+      if (e && e.code === "auth/user-not-found") {
+        const authData = {
+          uid: authUid,
+          displayName: nombreCompleto,
+        };
+        // Si hay email, intentar asignarlo (puede fallar si ya existe)
+        if (email) {
+          try {
+            await admin.auth().getUserByEmail(email);
+            // Si no lanza error, el email ya está en uso. No lo asignamos a este Auth Record.
+          } catch (err) {
+            if (err.code === 'auth/user-not-found') {
+              authData.email = email;
+            }
+          }
+        }
+        await admin.auth().createUser(authData);
+      } else {
+        throw e;
+      }
+    }
+
+    // Sincronizar con la colección de usuarios
+    await db.collection("users").doc(authUid).set({
+      email: email || "",
+      nombre: nombreCompleto,
+      role: "Productor",
+      ipt: String(ipt),
+      activo: true,
+      ultimoAcceso: null,
+      updatedAt: new Date(),
+    }, { merge: true });
+
     res.json({ id: docRef.id, ...newProductor });
   } catch (error) {
     console.error("Error al crear productor:", error);
@@ -102,6 +173,47 @@ export const updateProductor = async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
+
+    // Validación de formato de email si se intenta actualizar
+    if (data.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.email)) {
+        return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+      }
+    }
+
+    // Validación de formato de teléfono si se intenta actualizar
+    if (data.telefono) {
+      const telRegex = /^\d{10,13}$/;
+      if (!telRegex.test(data.telefono)) {
+        return res.status(400).json({ error: "El número debe contener solo dígitos (10 a 13 números)." });
+      }
+    }
+
+    // Validar unicidad de IPT si se está cambiando
+    if (data.ipt) {
+      const existingIpt = await db.collection("productores").where("ipt", "==", String(data.ipt)).limit(1).get();
+      if (!existingIpt.empty && existingIpt.docs[0].id !== id) {
+        return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
+      }
+    }
+
+    // Validar unicidad de CUIL si se está cambiando
+    if (data.cuil) {
+      const existingCuil = await db.collection("productores").where("cuil", "==", String(data.cuil)).limit(1).get();
+      if (!existingCuil.empty && existingCuil.docs[0].id !== id) {
+        return res.status(400).json({ error: "El CUIL ya se encuentra registrado." });
+      }
+    }
+
+    // Validar unicidad de Email si se está cambiando
+    if (data.email) {
+      const existingEmail = await db.collection("productores").where("email", "==", String(data.email).toLowerCase()).limit(1).get();
+      if (!existingEmail.empty && existingEmail.docs[0].id !== id) {
+        return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
+      }
+    }
+
     const ref = db.collection("productores").doc(id);
     await ref.update(data);
     const snap = await ref.get();
@@ -110,20 +222,20 @@ export const updateProductor = async (req, res) => {
     const uid = `prod_${ipt}`;
     const nombre = d.nombreCompleto || d.nombre || "";
     const email = d.email ? String(d.email).toLowerCase() : "";
-    const estado = d.activo === false ? "Inactivo" : "Activo";
+    const activo = d.activo !== false;
     await db.collection("users").doc(uid).set({
       nombre,
       email,
       role: "Productor",
       ipt,
-      estado,
+      activo,
       updatedAt: new Date(),
     }, { merge: true });
 
     try {
       const byIpt = await db.collection("users").where("ipt", "==", ipt).get();
       for (const udoc of byIpt.docs) {
-        await udoc.ref.set({ nombre, email, role: "Productor", ipt, estado, updatedAt: new Date() }, { merge: true });
+        await udoc.ref.set({ nombre, email, role: "Productor", ipt, activo, updatedAt: new Date() }, { merge: true });
       }
     } catch (e) {
       console.error("Sync users por ipt falló", ipt, e);
@@ -133,7 +245,7 @@ export const updateProductor = async (req, res) => {
       if (email) {
         const byEmail = await db.collection("users").where("email", "==", email).get();
         for (const udoc of byEmail.docs) {
-          await udoc.ref.set({ nombre, role: "Productor", ipt, estado, updatedAt: new Date() }, { merge: true });
+          await udoc.ref.set({ nombre, role: "Productor", ipt, activo, updatedAt: new Date() }, { merge: true });
         }
       }
     } catch (e) {

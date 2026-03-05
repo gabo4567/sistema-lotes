@@ -33,6 +33,7 @@ export const crearInsumo = async (req, res) => {
       unidad: "bolsas",
       descripcion: descripcion ? String(descripcion) : "",
       estado: (estado && ["disponible","no_disponible"].includes(String(estado))) ? String(estado) : "disponible",
+      activo: true,
       creadoEn: new Date(),
     };
     const docRef = await db.collection("insumos").add(insumo);
@@ -128,6 +129,7 @@ export const asignarInsumoAProductor = async (req, res) => {
         cantidadAsignada: cant,
         fechaAsignacion: new Date(),
         estado: "pendiente",
+        activo: true,
       };
       const asignRef = await db.collection("productorInsumos").add(asignacion);
       await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });

@@ -12,6 +12,15 @@ const Register = () => {
   const onSubmit = async (e) => {
     e.preventDefault();
     setMessage(""); setError(""); setLoading(true);
+
+    // Validación de formato de email en frontend
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Ingrese un correo electrónico válido.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data } = await api.post("/auth/register", { nombre, email, password, role: "Administrador" });
       setMessage(`Usuario creado: ${data?.user?.email}`);

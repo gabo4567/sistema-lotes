@@ -451,6 +451,11 @@ export default function LotesScreen() {
           <FlatList
             data={list}
             keyExtractor={(item) => item.id}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+              </View>
+            }
             renderItem={({ item }) => (
               <View style={[styles.item, selected?.id === item.id ? styles.itemSelected : null]}>
                 <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
@@ -560,4 +565,20 @@ const styles = StyleSheet.create({
   currentPosMarker: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(52, 152, 219, 0.2)', alignItems: 'center', justifyContent: 'center' },
   currentPosDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#3498db', borderWeight: 2, borderColor: '#fff' },
   formInfo: { padding: 8, alignItems: 'center' },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    marginTop: 20,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  emptyText: {
+    color: '#7f8c8d',
+    fontSize: 16,
+    textAlign: 'center',
+  },
 });

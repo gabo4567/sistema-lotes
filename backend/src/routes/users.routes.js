@@ -43,7 +43,7 @@ router.get("/", async (req, res) => {
       let chosen = cur;
       if (preferJuanGabriel(u)) chosen = u;
       else if (preferJuanGabriel(cur)) chosen = cur;
-      else if (normalize(u?.estado) === "activo" && normalize(cur?.estado) !== "activo") chosen = u;
+      else if (u?.activo === true && cur?.activo !== true) chosen = u;
       // por defecto mantener el primero
       seen.set(key, chosen);
     }
@@ -67,16 +67,16 @@ router.get("/:uid", async (req, res) => {
   }
 });
 
-// 📌 Actualizar datos de usuario (nombre, rol, estado)
+// 📌 Actualizar datos de usuario (nombre, rol, activo)
 router.patch("/:uid", async (req, res) => {
   try {
     const { uid } = req.params;
-    const { nombre, role, estado, ipt } = req.body;
+    const { nombre, role, activo, ipt } = req.body;
     const allowedRoles = ["Administrador", "Tecnico", "Técnico", "Supervisor", "Productor"];
     const updates = {};
     if (nombre) updates.nombre = nombre;
     if (role && allowedRoles.includes(role)) updates.role = role;
-    if (estado) updates.estado = estado;
+    if (activo !== undefined) updates.activo = Boolean(activo);
     if (role === "Productor" && ipt) updates.ipt = String(ipt);
     if (!Object.keys(updates).length) return res.status(400).json({ error: "Sin cambios" });
     await db.collection("users").doc(uid).update({ ...updates, updatedAt: new Date() });
@@ -91,7 +91,7 @@ router.patch("/:uid", async (req, res) => {
 router.post("/:uid/deactivate", async (req, res) => {
   try {
     const { uid } = req.params;
-    await db.collection("users").doc(uid).update({ estado: "Inactivo", updatedAt: new Date() });
+    await db.collection("users").doc(uid).update({ activo: false, updatedAt: new Date() });
     res.json({ message: "Usuario desactivado" });
   } catch (error) {
     console.error("Error al desactivar usuario:", error);
@@ -103,7 +103,7 @@ router.post("/:uid/deactivate", async (req, res) => {
 router.post("/:uid/activate", async (req, res) => {
   try {
     const { uid } = req.params;
-    await db.collection("users").doc(uid).update({ estado: "Activo", updatedAt: new Date() });
+    await db.collection("users").doc(uid).update({ activo: true, updatedAt: new Date() });
     res.json({ message: "Usuario activado" });
   } catch (error) {
     console.error("Error al activar usuario:", error);

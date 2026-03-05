@@ -1,10 +1,11 @@
 import React, { useState, useContext } from "react";
-import { View, TextInput, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, TextInput, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
 import { auth } from "../services/firebase";
 import { AuthContext } from "../context/AuthContext";
 import ButtonPrimary from "../components/ButtonPrimary";
 import { API_URL } from "../utils/constants";
 import { signInWithCustomToken } from "firebase/auth";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen({ navigation }) {
   const { setUser } = useContext(AuthContext);
@@ -66,7 +67,7 @@ export default function LoginScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Sistema de Lotes - IPT</Text>
+        <Text style={styles.title}>Sistema de Gestión - IPT</Text>
         <Text style={styles.subtitle}>Iniciar sesión</Text>
 
         <TextInput
@@ -81,14 +82,24 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.inputWrapper}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { paddingRight: 45 }]}
             placeholder="Contraseña"
             placeholderTextColor="#7f8c8d"
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
           />
-          <Text style={styles.toggle} onPress={()=>setShowPassword(v=>!v)}>{showPassword?"Ocultar":"Ver"}</Text>
+          <TouchableOpacity 
+            style={styles.toggle} 
+            onPress={() => setShowPassword(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showPassword ? "eye-off-outline" : "eye-outline"} 
+              size={22} 
+              color="#7f8c8d" 
+            />
+          </TouchableOpacity>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -114,9 +125,16 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, textAlign: "center", marginBottom: 8, color: "#1e8449", fontWeight: "bold" },
   subtitle: { fontSize: 16, textAlign: "center", marginBottom: 16, color: "#1e8449" },
   inputWrapper: { position: "relative", marginBottom: 12 },
-  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10 },
+  input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10, color: "#2c3e50" },
   inputSpacing: { marginBottom: 12 },
-  toggle: { position: "absolute", right: 12, top: 12, color: "#1e8449" },
+  toggle: { 
+    position: "absolute", 
+    right: 0, 
+    height: "100%", 
+    width: 45, 
+    justifyContent: "center", 
+    alignItems: "center" 
+  },
   versionContainer: { marginTop: 20, alignItems: "center" },
   versionText: { fontSize: 14, color: "#7f8c8d", fontWeight: "600" },
   copyrightText: { fontSize: 12, color: "#95a5a6", marginTop: 4 },

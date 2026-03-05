@@ -8,6 +8,12 @@ export const registerUser = async (req, res) => {
   try {
     const { email, password, nombre, role } = req.body;
 
+    // Validación de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+    }
+
     const domain = process.env.WEB_EMAIL_DOMAIN;
     if (domain && !String(email).toLowerCase().endsWith(`@${domain.toLowerCase()}`)) {
       return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
@@ -68,17 +74,50 @@ export const registerProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
+    // Validación de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+    }
+
+    // Validación de formato de teléfono
+    const telRegex = /^\d{10,13}$/;
+    if (telefono && !telRegex.test(telefono)) {
+      return res.status(400).json({ error: "El número debe contener solo dígitos (10 a 13 números)." });
+    }
+
     // Validar unicidad de IPT (si existe y está activo, no permitir duplicado)
-    const existing = await db
+    const existingIpt = await db
       .collection("productores")
       .where("ipt", "==", String(ipt))
       .limit(1)
       .get();
+    
+    if (!existingIpt.empty) {
+      return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
+    }
 
-    if (!existing.empty) {
-      const existingData = existing.docs[0].data();
-      if (existingData.activo !== false) {
-        return res.status(409).json({ error: "Ya existe un productor con ese IPT" });
+    // Validar unicidad de CUIL
+    const existingCuil = await db
+      .collection("productores")
+      .where("cuil", "==", String(cuil))
+      .limit(1)
+      .get();
+    
+    if (!existingCuil.empty) {
+      return res.status(400).json({ error: "El CUIL ya se encuentra registrado." });
+    }
+
+    // Validar unicidad de Email
+    if (email) {
+      const existingEmail = await db
+        .collection("productores")
+        .where("email", "==", String(email).toLowerCase())
+        .limit(1)
+        .get();
+      
+      if (!existingEmail.empty) {
+        return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
       }
     }
 
@@ -90,7 +129,6 @@ export const registerProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
-      estado: estado || "Nuevo",
       plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
       requiereCambioContrasena: true, // Primer login con CUIL
       historialIngresos: 0,
@@ -107,15 +145,37 @@ export const registerProductor = async (req, res) => {
       await admin.auth().getUser(authUid);
     } catch (e) {
       if (e && e.code === "auth/user-not-found") {
-        // Crear usuario solo con UID y displayName para evitar conflictos de email
-        await admin.auth().createUser({
+        const authData = {
           uid: authUid,
           displayName: nombreCompleto,
-        });
+        };
+        // Si hay email, intentar asignarlo (puede fallar si ya existe)
+        if (email) {
+          try {
+            await admin.auth().getUserByEmail(email);
+            // Si no lanza error, el email ya está en uso. No lo asignamos a este Auth Record.
+          } catch (err) {
+            if (err.code === 'auth/user-not-found') {
+              authData.email = email;
+            }
+          }
+        }
+        await admin.auth().createUser(authData);
       } else {
         throw e;
       }
     }
+
+    // Crear o actualizar el registro en la colección de 'users' para que aparezca en la lista
+    await db.collection("users").doc(authUid).set({
+      email: email || "",
+      nombre: nombreCompleto,
+      role: "Productor",
+      ipt: String(ipt),
+      activo: true,
+      ultimoAcceso: null,
+      updatedAt: new Date(),
+    }, { merge: true });
 
     // Asignar claims útiles para posteriores autorizaciones
     await admin.auth().setCustomUserClaims(authUid, {
@@ -146,19 +206,66 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
-    const user = await admin.auth().getUserByEmail(email);
-    const userDoc = await db.collection("users").doc(user.uid).get();
-    if (userDoc.exists && userDoc.data().estado === "Inactivo") {
-      return res.status(403).json({ error: "Usuario inactivo" });
+    let user;
+    let uid;
+    let role;
+    let userData;
+
+    // 1. Buscar en la colección de usuarios por email
+    const userSnap = await db.collection("users").where("email", "==", String(email).toLowerCase()).limit(1).get();
+    
+    if (!userSnap.empty) {
+      const doc = userSnap.docs[0];
+      userData = doc.data();
+      uid = doc.id;
+      role = userData.role || "Tecnico";
+      
+      if (userData.activo === false) {
+        return res.status(403).json({ error: "Usuario inactivo" });
+      }
+
+      // 2. Si es productor, verificar contraseña (CUIL o Hash)
+      if (String(role).toLowerCase() === "productor") {
+        const pSnap = await db.collection("productores").where("ipt", "==", String(userData.ipt)).limit(1).get();
+        if (!pSnap.empty) {
+          const pData = pSnap.docs[0].data();
+          const requiereCambio = Boolean(pData.requiereCambioContrasena);
+          let ok = false;
+          if (requiereCambio) {
+            ok = String(password) === String(pData.cuil);
+          } else {
+            const salt = String(pData.ipt);
+            const hash = hashPassword(String(password), salt);
+            ok = hash && pData.passwordHash && hash === pData.passwordHash;
+          }
+          if (!ok) {
+            return res.status(401).json({ error: "Credenciales de productor inválidas" });
+          }
+        }
+      }
+    } else {
+      // 3. Fallback: buscar en Firebase Auth directamente (para admins/técnicos antiguos sin email en doc)
+      try {
+        user = await admin.auth().getUserByEmail(email);
+        uid = user.uid;
+        const userDoc = await db.collection("users").doc(uid).get();
+        if (userDoc.exists && userDoc.data().activo === false) {
+          return res.status(403).json({ error: "Usuario inactivo" });
+        }
+        role = userDoc.exists ? (userDoc.data().role || "Tecnico") : "Tecnico";
+      } catch (err) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
     }
-    const role = userDoc.exists ? (userDoc.data().role || "Tecnico") : "Tecnico";
-    await db.collection("users").doc(user.uid).set({
-      email: user.email,
-      nombre: user.displayName || "",
+
+    // Actualizar último acceso
+    await db.collection("users").doc(uid).set({
+      email: String(email).toLowerCase(),
       role,
       ultimoAcceso: new Date(),
     }, { merge: true });
-    const webToken = makeToken({ uid: user.uid, email: user.email, role });
+
+    const webToken = makeToken({ uid, email, role });
     res.json({ token: webToken, role });
   } catch (error) {
     console.error("Error al hacer login:", error);
@@ -238,7 +345,7 @@ export const loginProductor = async (req, res) => {
         nombre: data.nombreCompleto || data.nombre || "",
         role: "Productor",
         ipt: String(ipt),
-        estado: data.activo === false ? "Inactivo" : "Activo",
+        activo: data.activo !== false,
         ultimoAcceso: new Date(),
         updatedAt: new Date(),
       }, { merge: true });

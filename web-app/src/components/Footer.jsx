@@ -39,7 +39,7 @@ const Footer = () => {
         </div>
       </div>
       <div className="subfooter">
-        <div>© 2025 Derechos Reservados Instituto Provincial del Tabaco – Corrientes</div>
+        <div>© 2026 Derechos Reservados Instituto Provincial del Tabaco – Corrientes</div>
         <a href="https://ipt.gob.ar/" target="_blank" rel="noreferrer">Sitio oficial IPT</a>
       </div>
       {mapOpen && (

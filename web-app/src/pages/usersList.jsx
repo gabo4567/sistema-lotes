@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { getUsers, updateUser, deactivateUser, resetPasswordUser, activateUser } from "../services/users.service";
 import { notify } from "../utils/alerts";
 import { getProductorByIpt, resetPasswordProductor } from "../services/productores.service";
@@ -11,6 +11,12 @@ const UsersList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+
+  // Estados para filtros
+  const [filtros, setFiltros] = useState({
+    nombre: "",
+    rol: "todos"
+  });
 
   const load = async () => {
     setLoading(true); setError(""); setMsg("");
@@ -28,7 +34,7 @@ const UsersList = () => {
           const preferJuanGabriel = (x)=> norm(x?.nombre)==='juan gabriel' && norm(x?.role)==='productor';
           if (preferJuanGabriel(u)) map.set(key, u);
           else if (preferJuanGabriel(cur)) map.set(key, cur);
-          else if (norm(u?.estado)==='activo' && norm(cur?.estado)!=='activo') map.set(key, u);
+          else if (u?.activo === true && cur?.activo !== true) map.set(key, u);
         });
         // Excluir explícitamente al usuario indicado: nombre Gabriel y email gabriel@example.com
         return Array.from(map.values()).filter(u => !(norm(u?.nombre)==='gabriel' && norm(u?.email)==='gabriel@example.com'));
@@ -40,6 +46,23 @@ const UsersList = () => {
   };
 
   useEffect(()=>{ load(); }, []);
+
+  const itemsFiltrados = useMemo(() => {
+    return items.filter(u => {
+      // Filtro por nombre
+      if (filtros.nombre) {
+        const search = filtros.nombre.toLowerCase();
+        const matchNombre = (u.nombre || '').toLowerCase().includes(search);
+        const matchEmail = (u.email || '').toLowerCase().includes(search);
+        if (!matchNombre && !matchEmail) return false;
+      }
+      // Filtro por rol
+      if (filtros.rol !== 'todos') {
+        if (String(u.role || '').toLowerCase() !== filtros.rol.toLowerCase()) return false;
+      }
+      return true;
+    });
+  }, [items, filtros]);
 
   const onChangeRole = async (uid, role) => {
     try {
@@ -62,7 +85,7 @@ const UsersList = () => {
 
   const onDeactivate = async (uid) => {
     const u = items.find(x=>x.id===uid);
-    if (String(u?.estado||'').toLowerCase()==='inactivo') {
+    if (u?.activo === false) {
       await notify({ title: 'El usuario ya está desactivado', icon: 'info' });
       return;
     }
@@ -71,7 +94,7 @@ const UsersList = () => {
     try {
       await deactivateUser(uid);
       setMsg("Usuario desactivado");
-      setItems(items.map(u => u.id === uid ? { ...u, estado: "Inactivo" } : u));
+      setItems(items.map(u => u.id === uid ? { ...u, activo: false } : u));
     } catch {
       setError("No se pudo desactivar usuario");
     }
@@ -111,8 +134,8 @@ const UsersList = () => {
     }
   };
 
-  const onActivate = async (uid, estado) => {
-    if (String(estado || '').toLowerCase() === 'activo') {
+  const onActivate = async (uid, activo) => {
+    if (activo === true) {
       await notify({ title: 'El usuario está activo', icon: 'info' });
       return;
     }
@@ -121,7 +144,7 @@ const UsersList = () => {
     try {
       await activateUser(uid);
       setMsg('Usuario activado');
-      setItems(items.map(u => u.id === uid ? { ...u, estado: 'Activo' } : u));
+      setItems(items.map(u => u.id === uid ? { ...u, activo: true } : u));
     } catch {
       setError('No se pudo activar usuario');
     }
@@ -157,6 +180,55 @@ const UsersList = () => {
         <div>Cargando usuarios...</div>
       ) : (
       <>
+        {/* Barra de Filtros */}
+        <div className="filters-bar" style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 12, 
+          backgroundColor: '#f8fafc', 
+          padding: 16, 
+          borderRadius: 12, 
+          marginBottom: 20,
+          border: '1px solid #e2e8f0',
+          alignItems: 'flex-end'
+        }}>
+          <div className="filter-item" style={{ flex: 1, minWidth: 250 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
+            <input 
+              type="text" 
+              className="input-inst" 
+              placeholder="Buscar por nombre o email..."
+              value={filtros.nombre}
+              onChange={e => setFiltros({ ...filtros, nombre: e.target.value })}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div className="filter-item" style={{ width: 200 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Rol</label>
+            <select 
+              className="select-inst" 
+              value={filtros.rol}
+              onChange={e => setFiltros({ ...filtros, rol: e.target.value })}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            >
+              <option value="todos">Todos los roles</option>
+              <option value="Administrador">Administrador</option>
+              <option value="Técnico">Técnico</option>
+              <option value="Supervisor">Supervisor</option>
+              <option value="Productor">Productor</option>
+            </select>
+          </div>
+
+          <button 
+            className="btn secondary" 
+            onClick={() => setFiltros({ nombre: '', rol: 'todos' })}
+            style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            Limpiar Filtros
+          </button>
+        </div>
+
         {msg && <div className="users-msg ok">{msg}</div>}
         {error && <div className="users-msg err">{error}</div>}
       <div className="table-wrap" style={{ width: '100%' }}>
@@ -173,7 +245,7 @@ const UsersList = () => {
             </tr>
           </thead>
           <tbody>
-            {items.map(u => (
+            {itemsFiltrados.map(u => (
               <tr key={u.id}>
                 <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.nombre || '-'}</td>
                 <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.ipt || u.productorIpt || '-'}</td>
@@ -189,11 +261,11 @@ const UsersList = () => {
                     </select>
                   )}
                 </td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.estado || 'Activo'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.activo !== false ? 'Activo' : 'Inactivo'}</td>
                 <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{formatTimestamp(u.ultimoAcceso)}</td>
                 <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
                   <div className="actions-col" style={{ display:'grid', gridTemplateColumns:'auto auto', gap:8, justifyItems:'center', alignItems:'center' }}>
-                    <button className="btn btn-compact" onClick={()=>onActivate(u.id, u.estado)}>Activar</button>
+                    <button className="btn btn-compact" onClick={()=>onActivate(u.id, u.activo)}>Activar</button>
                     <button className="btn btn-danger btn-compact" onClick={()=>onDeactivate(u.id)}>Desactivar</button>
                     <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'center' }}>
                       <button className="btn" onClick={()=>onResetPassword(u.id)}>Restablecer contraseña</button>

@@ -15,7 +15,8 @@ const LotesList = () => {
   const [filters, setFilters] = useState({
     nombre: "",
     ipt: "",
-    orderBy: "newest"
+    orderBy: "newest",
+    activo: "activos"
   });
 
   const handleFilterChange = (key, value) => {
@@ -26,7 +27,8 @@ const LotesList = () => {
     setFilters({
       nombre: "",
       ipt: "",
-      orderBy: "newest"
+      orderBy: "newest",
+      activo: "activos"
     });
   };
 
@@ -76,7 +78,17 @@ const LotesList = () => {
       );
     }
 
-    // 3. Ordenamiento
+    // 3. Filtro por Activo/Inactivo
+    if (filters.activo !== 'todos') {
+      const isActivo = filters.activo === 'activos';
+      result = result.filter(lote => {
+        // Si el lote no tiene el campo 'activo', asumimos que es activo (true)
+        const loteActivo = lote.activo !== false;
+        return loteActivo === isActivo;
+      });
+    }
+
+    // 4. Ordenamiento
     result.sort((a, b) => {
       const getVal = (v) => {
         if (!v) return 0;

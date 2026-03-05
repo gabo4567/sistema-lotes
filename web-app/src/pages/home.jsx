@@ -24,8 +24,8 @@ const Home = () => {
   return (
     <div className="home-container">
       <div className="home-hero">
-        <h1 className="home-title">Sistema de Lotes - IPT (Administración)</h1>
-        <p className="home-subtitle">Gestión integrada de lotes, turnos y productores</p>
+        <h1 className="home-title">Sistema de Gestión Agrícola - IPT</h1>
+        <p className="home-subtitle">Administración de lotes, turnos y productores</p>
       </div>
 
       <div className="menu-grid">

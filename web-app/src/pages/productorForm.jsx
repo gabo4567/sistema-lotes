@@ -34,8 +34,33 @@ const ProductorForm = () => {
 
   const onChange = (k, v) => setForm({ ...form, [k]: v });
 
+  const onTelChange = (v) => {
+    // Solo permitir números
+    const onlyNums = v.replace(/\D/g, "");
+    // Limitar a 13 dígitos
+    if (onlyNums.length <= 13) {
+      onChange("telefono", onlyNums);
+    }
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault(); setError(""); setLoading(true);
+
+    // Validaciones de formato en frontend
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (form.email && !emailRegex.test(form.email)) {
+      setError("Ingrese un correo electrónico válido.");
+      setLoading(false);
+      return;
+    }
+
+    const telRegex = /^\d{10,13}$/;
+    if (form.telefono && !telRegex.test(form.telefono)) {
+      setError("El número debe contener solo dígitos (10 a 13 números).");
+      setLoading(false);
+      return;
+    }
+
     try {
       const payload = {
         ipt: String(form.ipt),
@@ -68,7 +93,7 @@ const ProductorForm = () => {
         <input className="input-inst" placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
         <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
         <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
-        <input className="input-inst" placeholder="Teléfono" value={form.telefono} onChange={e=>onChange('telefono', e.target.value)} />
+        <input className="input-inst" placeholder="Teléfono" value={form.telefono} onChange={e=>onTelChange(e.target.value)} />
         <input className="input-inst" placeholder="Domicilio (casa)" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
         <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
         <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
