@@ -50,45 +50,52 @@ useEffect(() => {
   loadData()
 }, [viewMode])
 
-const turnosFiltrados = useMemo(() => {
-  let result = turnos.filter(t => {
-    // Filtro por estado
-    if (filtros.estado !== 'todos' && String(t.estado).toLowerCase() !== filtros.estado) return false
-    
-    // Filtro por productor (nombre o IPT)
-    if (filtros.productor) {
-      const pInfo = prodMap.get(String(t.productorId))
-      const search = filtros.productor.toLowerCase()
-      const matchNombre = (pInfo?.nombre || '').toLowerCase().includes(search)
-      const matchIPT = (pInfo?.ipt || '').includes(search)
-      if (!matchNombre && !matchIPT) return false
-    }
-    
-    // Filtro por rango de fechas
-    const fechaT = new Date(t.fechaTurno)
-    if (filtros.desde) {
-      const d = new Date(filtros.desde)
-      d.setHours(0,0,0,0)
-      if (fechaT < d) return false
-    }
-    if (filtros.hasta) {
-      const h = new Date(filtros.hasta)
-      h.setHours(23,59,59,999)
-      if (fechaT > h) return false
-    }
-    
-    return true
-  })
-
-  // Ordenamiento
-  result.sort((a, b) => {
-    const da = new Date(a.fechaTurno).getTime()
-    const db = new Date(b.fechaTurno).getTime()
-    return filtros.orden === 'nuevos' ? db - da : da - db
-  })
-
-  return result
-}, [turnos, filtros, prodMap])
+  const turnosFiltrados = useMemo(() => {
+    return turnos.filter(t => {
+      // Filtro por estado
+      if (filtros.estado !== 'todos' && String(t.estado).toLowerCase() !== filtros.estado) return false
+      
+      // Filtro por productor (nombre o IPT)
+      if (filtros.productor) {
+        const search = filtros.productor.toLowerCase().trim()
+        if (!search) return true
+        
+        const pInfo = prodMap.get(String(t.productorId))
+        
+        // Verificar si pInfo existe antes de intentar acceder a sus propiedades
+        const nombre = (pInfo?.nombre || '').toLowerCase()
+        const ipt = String(pInfo?.ipt || '').toLowerCase()
+        const iptNum = String(pInfo?.iptNum || '')
+        
+        // Buscar coincidencia en nombre, ipt o iptNum
+        const matchNombre = nombre.includes(search)
+        const matchIPT = ipt.includes(search) || iptNum.includes(search)
+        
+        if (!matchNombre && !matchIPT) return false
+      }
+      
+      // Filtro por rango de fechas
+      if (filtros.desde || filtros.hasta) {
+        const fechaT = new Date(t.fechaTurno)
+        if (filtros.desde) {
+          const d = new Date(filtros.desde)
+          d.setHours(0,0,0,0)
+          if (fechaT < d) return false
+        }
+        if (filtros.hasta) {
+          const h = new Date(filtros.hasta)
+          h.setHours(23,59,59,999)
+          if (fechaT > h) return false
+        }
+      }
+      
+      return true
+    }).sort((a, b) => {
+      const da = new Date(a.fechaTurno).getTime()
+      const db = new Date(b.fechaTurno).getTime()
+      return filtros.orden === 'nuevos' ? db - da : da - db
+    })
+  }, [turnos, filtros, prodMap])
 
 const handleCambioEstado = async (id, nuevo)=>{
   const t = turnos.find(x=>x.id===id)
@@ -175,7 +182,7 @@ return (
   <div className="turnos-list">
     <div style={{ marginBottom: 8 }}><HomeButton /></div>
     
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
       <h2 className="users-title" style={{ margin: 0 }}>Gestión de Turnos</h2>
       <div className="view-tabs" style={{ display: 'flex', gap: 8 }}>
         <button 

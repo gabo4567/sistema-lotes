@@ -75,19 +75,19 @@ const ProductoresList = () => {
         <div style={{ marginBottom: 12 }}>
           <Link to="/productores/nuevo" className="btn">Nuevo productor</Link>
         </div>
-        <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8, marginBottom:12 }}>
-          <input className="input-inst" placeholder="Filtrar por IPT" value={iptFilter} onChange={e=>setIptFilter(e.target.value)} />
-          <input className="input-inst" placeholder="Filtrar por nombre" value={nameFilter} onChange={e=>setNameFilter(e.target.value)} />
+        <div className="filters-row" style={{ display:'flex', flexWrap: 'wrap', gap:8, marginBottom:12 }}>
+          <input className="input-inst" style={{ flex: '1 1 200px' }} placeholder="Filtrar por IPT" value={iptFilter} onChange={e=>setIptFilter(e.target.value)} />
+          <input className="input-inst" style={{ flex: '1 1 200px' }} placeholder="Filtrar por nombre" value={nameFilter} onChange={e=>setNameFilter(e.target.value)} />
         </div>
       <div className="table-wrap">
-        <table className="table-inst">
+        <table className="table-inst" style={{ minWidth: 1000, tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th>IPT</th>
-              <th>Nombre</th>
-              <th>Estado</th>
-              <th>Ingresos</th>
-              <th>Acciones</th>
+              <th style={{ width: '20%', textAlign: 'center' }}>IPT</th>
+              <th style={{ width: '20%', textAlign: 'center' }}>Nombre</th>
+              <th style={{ width: '20%', textAlign: 'center' }}>Estado</th>
+              <th style={{ width: '20%', textAlign: 'center' }}>Ingresos</th>
+              <th style={{ width: '20%', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -95,12 +95,12 @@ const ProductoresList = () => {
               <tr><td colSpan={5} style={{ padding:12, textAlign:'center' }}>Sin resultados</td></tr>
             ) : viewItems.map((p) => (
               <tr key={p.id}>
-                <td>{p.ipt}</td>
-                <td>{p.nombreCompleto}</td>
-                <td>{p.estado}</td>
-                <td>{p.historialIngresos ?? 0}</td>
-                <td>
-                  <div className="actions-col">
+                <td style={{ textAlign: 'center', width: '20%' }}>{p.ipt}</td>
+                <td style={{ textAlign: 'center', width: '20%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.nombreCompleto}>{p.nombreCompleto}</td>
+                <td style={{ textAlign: 'center', width: '20%' }}>{p.estado}</td>
+                <td style={{ textAlign: 'center', width: '20%' }}>{p.historialIngresos ?? 0}</td>
+                <td style={{ textAlign: 'center', width: '20%' }}>
+                  <div className="actions-col" style={{ justifyContent: 'center', display: 'flex', gap: 4 }}>
                     <button className="btn" onClick={() => onVer(p.id)}>Ver</button>
                     <button className="btn" onClick={() => onEditar(p.id)}>Editar</button>
                     <button className="btn" onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>

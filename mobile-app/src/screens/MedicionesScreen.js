@@ -202,7 +202,15 @@ export default function MedicionesScreen({ navigation }) {
       <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <Text style={styles.title}>Mis Mediciones</Text>
         <Text style={styles.emptyText}>No tienes mediciones registradas</Text>
-        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24), backgroundColor: '#27ae60' }]} onPress={loadMediciones}>
+        
+        <TouchableOpacity 
+          style={[styles.createButton, { marginTop: 20 }]} 
+          onPress={() => navigation.navigate('CrearMedicion')}
+        >
+          <Text style={styles.createButtonText}>➕ Nueva Medición</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.retryButton, { marginBottom: Math.max(insets.bottom, 24), backgroundColor: '#27ae60', marginTop: 12 }]} onPress={loadMediciones}>
           <Text style={styles.retryButtonText}>Actualizar</Text>
         </TouchableOpacity>
       </SafeAreaView>

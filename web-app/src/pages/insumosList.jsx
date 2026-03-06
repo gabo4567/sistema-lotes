@@ -119,7 +119,7 @@ const InsumosList = () => {
   return (
     <div className="insumos-list" style={{ padding: 16 }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <h2 style={{ marginTop: 0, color:'#14532d' }}>Insumos</h2>
+      <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
       <div style={{ color:'#166534', marginTop: 4, marginBottom: 12 }}>Insumos disponibles del IPT</div>
       {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
       <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -153,7 +153,13 @@ const InsumosList = () => {
             </thead>
             <tbody>
               {itemsFiltrados.length===0 ? (
-                <tr><td colSpan={6} style={{ padding: 12, textAlign:'center' }}>No hay insumos disponibles</td></tr>
+                <tr>
+                  <td colSpan={6} style={{ padding: 12, textAlign:'center' }}>
+                    {filterActivo === 'activos' ? 'No hay insumos activos' : 
+                     filterActivo === 'inactivos' ? 'No hay insumos inactivos' : 
+                     'No hay insumos disponibles'}
+                  </td>
+                </tr>
               ) : itemsFiltrados.map(i=> (
                 <tr key={i.id}>
                   <td style={{ textAlign:'center' }}>{i.nombre}</td>
@@ -287,7 +293,8 @@ const InsumosList = () => {
             border: '1px solid #e2e8f0', 
             borderRadius: '0 0 12px 12px',
             backgroundColor: '#fff',
-            overflow: 'hidden'
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch'
           }}>
             {loadingAsign ? (
               <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
@@ -321,13 +328,13 @@ const InsumosList = () => {
                 </div>
               </div>
             ) : (
-              <table className="table-inst" style={{ width:'100%', borderCollapse:'collapse', margin: 0 }}>
+              <table className="table-inst" style={{ width:'100%', minWidth: 700, borderCollapse:'collapse', margin: 0 }}>
                 <thead>
                   <tr style={{ background:'#f8fafc' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Insumo</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>Cantidad</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Descripción</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>Acciones</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Insumo</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Cantidad</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', minWidth: 200 }}>Descripción</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', minWidth: 280 }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>

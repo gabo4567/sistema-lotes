@@ -492,39 +492,48 @@ export default function TurnosScreen() {
   const confirmarEliminarTurno = (turno) => {
     const st = String(turno.estado || '').toLowerCase();
     if (st !== 'pendiente') {
-      Alert.alert('No permitido', `No puedes eliminar un turno ${st}.`);
+      Alert.alert('No permitido', `No puedes cancelar un turno ${st}.`);
       return;
     }
     Alert.alert(
-      "Eliminar turno",
-      `¿Estás seguro de eliminar el turno del ${formatDDMMYYYY(turno.fechaTurno)}?`,
+      "Cancelar turno",
+      `¿Estás seguro de cancelar el turno del ${formatDDMMYYYY(turno.fechaTurno)}?`,
       [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Eliminar", style: "destructive", onPress: () => eliminarTurno(turno) }
+        { text: "No", style: "cancel" },
+        { text: "Sí, cancelar", style: "destructive", onPress: () => cancelarTurno(turno) }
       ]
     );
   };
 
-  const eliminarTurno = async (turno) => {
+  const cancelarTurno = async (turno) => {
     setLoading(true);
     try {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
-      console.log("🗑️ Eliminando turno:", turno.id);
-      const resp = await fetch(`${API_URL}/turnos/${turno.id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${idToken}` }
+      console.log("🚫 Cancelando turno:", turno.id);
+      
+      const body = { estado: 'cancelado', motivo: 'Cancelado por el productor' };
+      
+      const resp = await fetch(`${API_URL}/turnos/${turno.id}/estado`, {
+        method: "PATCH",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}` 
+        },
+        body: JSON.stringify(body)
       });
+      
       if (!resp.ok) {
         const errorData = await resp.json();
-        throw new Error(errorData?.message || "Error al eliminar turno");
+        throw new Error(errorData?.message || "Error al cancelar turno");
       }
-      console.log("✅ Turno eliminado exitosamente");
-      setSuccess("Turno eliminado exitosamente");
+      
+      console.log("✅ Turno cancelado exitosamente");
+      setSuccess("Turno cancelado exitosamente");
       await loadList();
     } catch (error) {
-      console.error("❌ Error eliminando turno:", error);
-      setError(error.message || "Error al eliminar turno");
+      console.error("❌ Error cancelando turno:", error);
+      setError(error.message || "Error al cancelar turno");
     } finally {
       setLoading(false);
     }
