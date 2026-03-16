@@ -19,6 +19,12 @@ export default {
 
     assetBundlePatterns: ["**/*"],
 
+    extra: {
+      eas: {
+        projectId: "423de856-e848-434a-b490-07db8aa0f86a"
+      }
+    },
+
     plugins: [
       [
         "expo-location",
@@ -39,9 +45,9 @@ export default {
     },
 
     android: {
+      package: "com.jgpared.sistemalotes",
       config: {
         googleMaps: {
-          // ✔️ Ahora usa la variable del .env
           apiKey: process.env.GOOGLE_MAPS_API_KEY
         }
       },
