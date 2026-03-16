@@ -1,12 +1,10 @@
-// src/utils/constants.js
-
 export const COLORS = {
   primary: "#228B22",
   secondary: "#F4A300",
 };
 
-// URL de tu backend de prueba o localhost
-const FALLBACK_URL = "http://192.168.1.10:3000"; // reemplaza con la IP de tu PC si pruebas en red local
+// URL de fallback para producción (APK)
+const FALLBACK_URL = "http://192.168.1.10:3000"; // reemplaza con la IP de tu backend
 
 let base = FALLBACK_URL;
 

@@ -1,5 +1,3 @@
-// src/services/firebase.js
-
 import { initializeApp, getApps } from "firebase/app";
 import {
   initializeAuth,
@@ -21,7 +19,7 @@ let app;
 let auth;
 let db;
 
-// 🔥 INICIALIZACIÓN CORRECTA PARA EXPO GO
+// 🔥 INICIALIZACIÓN CORRECTA PARA EXPO GO Y STANDALONE
 if (!globalThis.__firebaseApp) {
   app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   globalThis.__firebaseApp = app;

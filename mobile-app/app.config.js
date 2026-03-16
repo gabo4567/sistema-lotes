@@ -1,5 +1,3 @@
-// mobile-app/app.config.js
-
 import 'dotenv/config';
 
 export default {
@@ -33,7 +31,6 @@ export default {
             "La app necesita acceder a tu ubicación para mostrar tus lotes en el mapa."
         }
       ]
-      // ❌ Se eliminó "react-native-maps" porque NO posee config plugin
     ],
 
     ios: {
@@ -46,10 +43,11 @@ export default {
 
     android: {
       package: "com.jgpared.sistemalotes",
+      // Temporal: comentar Google Maps si no hay API Key en EAS
       config: {
-        googleMaps: {
-          apiKey: process.env.GOOGLE_MAPS_API_KEY
-        }
+        // googleMaps: {
+        //   apiKey: process.env.GOOGLE_MAPS_API_KEY
+        // }
       },
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
