@@ -1,3 +1,5 @@
+// mobile-app/app.config.js
+
 import 'dotenv/config';
 
 export default {
@@ -17,10 +19,13 @@ export default {
 
     assetBundlePatterns: ["**/*"],
 
+    // 🔹 EXTRA PARA EAS
     extra: {
       eas: {
         projectId: "423de856-e848-434a-b490-07db8aa0f86a"
-      }
+      },
+      // Puedes agregar otras variables públicas si las necesitas, por ejemplo:
+      // apiUrl: process.env.EXPO_PUBLIC_API_URL
     },
 
     plugins: [
@@ -35,6 +40,7 @@ export default {
 
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.jgpared.sistemalotes", // Ajustado al mismo que android
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "Necesitamos tu ubicación para mostrar tus lotes en el mapa."

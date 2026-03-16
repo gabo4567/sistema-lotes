@@ -1,12 +1,17 @@
+// mobile-app/src/utils/constants.js
+
 export const COLORS = {
   primary: "#228B22",
   secondary: "#F4A300",
 };
 
-// URL de fallback para producción (APK)
-const FALLBACK_URL = "http://192.168.1.10:3000"; // reemplaza con la IP de tu backend
+// URL del backend de producción
+const PROD_URL = "https://sistema-lotes-backend.onrender.com";
 
-let base = FALLBACK_URL;
+// URL de fallback para desarrollo local
+const DEV_URL = "http://192.168.1.10:3000"; // reemplaza con la IP de tu backend local si pruebas en red local
+
+let base = process.env.EXPO_PUBLIC_API_URL || PROD_URL;
 
 // Para desarrollo en Expo Go
 if (__DEV__) {
@@ -15,7 +20,9 @@ if (__DEV__) {
   const scriptURL = NativeModules.SourceCode?.scriptURL || "";
   const m = scriptURL.match(/^[a-z]+:\/\/([^:/]+)(?::\d+)?/);
   const host = m ? m[1] : "localhost";
-  base = ENV_URL || `http://${host}:3000`;
+
+  // Usa la variable de entorno si está definida, sino DEV_URL
+  base = ENV_URL || `${DEV_URL}`;
 }
 
 base = String(base).replace(/\/+$/, "");
