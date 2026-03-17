@@ -60,6 +60,7 @@ const router = createBrowserRouter([
   { path: "/403", element: <Forbidden /> },
   { path: "/register", element: <Register /> },
   { path: "/reset-password", element: <ResetPassword /> },
+  { path: "/forgot-password", element: <ResetPassword /> },
 
   // Rutas protegidas con Layout
   {

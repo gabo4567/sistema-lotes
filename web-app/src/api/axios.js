@@ -1,6 +1,12 @@
 import axios from "axios";
 import { API_BASE_URL } from "../utils/apiConfig";
 
+let authFailureHandler = null;
+
+export const setAuthFailureHandler = (handler) => {
+  authFailureHandler = typeof handler === "function" ? handler : null;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: false,
@@ -16,6 +22,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status;
+    const hadToken = Boolean(localStorage.getItem("token"));
+    const skipAuthFailureHandler = Boolean(error.config?._skipAuthFailureHandler);
+
+    if (status === 401 && hadToken && !skipAuthFailureHandler && authFailureHandler) {
+      authFailureHandler();
+    }
+
     const backendMessage = error.response?.data?.error || error.response?.data?.message;
 
     if (backendMessage) {

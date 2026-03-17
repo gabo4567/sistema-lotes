@@ -18,6 +18,16 @@ function normalizeApiBaseUrl(value) {
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 export const API_ORIGIN = API_BASE_URL.replace(/\/api$/, "");
 
+if (import.meta.env.PROD) {
+  const configuredApiUrl = String(import.meta.env.VITE_API_URL || "").trim().toLowerCase();
+  if (!configuredApiUrl) {
+    throw new Error("VITE_API_URL es obligatoria en producción.");
+  }
+  if (configuredApiUrl.includes("localhost") || configuredApiUrl.includes("127.0.0.1")) {
+    throw new Error("VITE_API_URL no puede apuntar a localhost en producción.");
+  }
+}
+
 export function buildBackendAssetUrl(assetPath) {
   if (!assetPath) {
     return "";

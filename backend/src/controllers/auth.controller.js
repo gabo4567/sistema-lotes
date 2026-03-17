@@ -4,30 +4,38 @@ import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";
 import { logServerError, sendInternalError } from "../utils/httpErrors.js";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+const isValidEmail = (value) => EMAIL_REGEX.test(value);
+
 // Registrar usuario
 export const registerUser = async (req, res) => {
   try {
     const { email, password, nombre, role } = req.body;
+    const emailNormalized = normalizeEmail(email);
 
-    // Validación de formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(emailNormalized)) {
       return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
     }
 
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
+    }
+
     const domain = process.env.WEB_EMAIL_DOMAIN;
-    if (domain && !String(email).toLowerCase().endsWith(`@${domain.toLowerCase()}`)) {
+    if (domain && !emailNormalized.endsWith(`@${domain.toLowerCase()}`)) {
       return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
     }
 
     // Evitar correos duplicados en Firestore (además de la restricción de Firebase Auth)
-    const existingUsers = await db.collection("users").where("email", "==", String(email).toLowerCase()).limit(1).get();
+    const existingUsers = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
     if (!existingUsers.empty) {
       return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
     }
 
     const userRecord = await admin.auth().createUser({
-      email,
+      email: emailNormalized,
       password,
       displayName: nombre,
     });
@@ -35,7 +43,7 @@ export const registerUser = async (req, res) => {
     const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
     const finalRole = allowed.includes(role) ? role : "Tecnico";
     await db.collection("users").doc(userRecord.uid).set({
-      email: String(email).toLowerCase(),
+      email: emailNormalized,
       nombre,
       role: finalRole,
       createdAt: new Date(),
@@ -200,73 +208,62 @@ export const registerProductor = async (req, res) => {
 };
 
 // Login de usuario
+// Login de usuario (web panel) — recibe un Firebase ID token verificado desde el cliente
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Faltan campos requeridos" });
+    const { idToken } = req.body;
+    if (!idToken || typeof idToken !== "string") {
+      return res.status(400).json({ error: "Credenciales requeridas" });
     }
 
-    let user;
-    let uid;
-    let role;
-    let userData;
+    // 1. Verificar el ID token con Firebase Admin SDK
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
 
-    // 1. Buscar en la colección de usuarios por email
-    const userSnap = await db.collection("users").where("email", "==", String(email).toLowerCase()).limit(1).get();
-    
-    if (!userSnap.empty) {
-      const doc = userSnap.docs[0];
-      userData = doc.data();
-      uid = doc.id;
-      role = userData.role || "Tecnico";
-      
-      if (userData.activo === false) {
+    const { uid, email } = decodedToken;
+    const emailNormalized = normalizeEmail(email);
+
+    // 2. Buscar el rol del usuario en Firestore (por UID primero, luego por email)
+    let role = "Tecnico";
+    let resolvedUid = uid;
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      if (data.activo === false) {
         return res.status(403).json({ error: "Usuario inactivo" });
       }
-
-      // 2. Si es productor, verificar contraseña (CUIL o Hash)
-      if (String(role).toLowerCase() === "productor") {
-        const pSnap = await db.collection("productores").where("ipt", "==", String(userData.ipt)).limit(1).get();
-        if (!pSnap.empty) {
-          const pData = pSnap.docs[0].data();
-          const requiereCambio = Boolean(pData.requiereCambioContrasena);
-          let ok = false;
-          if (requiereCambio) {
-            ok = String(password) === String(pData.cuil);
-          } else {
-            const salt = String(pData.ipt);
-            const hash = hashPassword(String(password), salt);
-            ok = hash && pData.passwordHash && hash === pData.passwordHash;
-          }
-          if (!ok) {
-            return res.status(401).json({ error: "Credenciales de productor inválidas" });
-          }
-        }
-      }
-    } else {
-      // 3. Fallback: buscar en Firebase Auth directamente (para admins/técnicos antiguos sin email en doc)
-      try {
-        user = await admin.auth().getUserByEmail(email);
-        uid = user.uid;
-        const userDoc = await db.collection("users").doc(uid).get();
-        if (userDoc.exists && userDoc.data().activo === false) {
+      role = data.role || "Tecnico";
+    } else if (emailNormalized) {
+      // Fallback: buscar por email (usuarios registrados antes de indexar por UID)
+      const snap = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        if (data.activo === false) {
           return res.status(403).json({ error: "Usuario inactivo" });
         }
-        role = userDoc.exists ? (userDoc.data().role || "Tecnico") : "Tecnico";
-      } catch (err) {
-        return res.status(404).json({ error: "Usuario no encontrado" });
+        role = data.role || "Tecnico";
+        resolvedUid = snap.docs[0].id;
       }
     }
 
-    // Actualizar último acceso
-    await db.collection("users").doc(uid).set({
-      email: String(email).toLowerCase(),
+    // 3. Los productores usan la app móvil — no el panel web
+    if (String(role).toLowerCase() === "productor") {
+      return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
+    }
+
+    // 4. Actualizar último acceso
+    await db.collection("users").doc(resolvedUid).set({
+      email: emailNormalized,
       role,
       ultimoAcceso: new Date(),
     }, { merge: true });
 
-    const webToken = makeToken({ uid, email, role });
+    const webToken = makeToken({ uid: resolvedUid, email: emailNormalized, role });
     res.json({ token: webToken, role });
   } catch (error) {
     logServerError("Error al hacer login", error);
@@ -327,7 +324,7 @@ export const loginProductor = async (req, res) => {
     try {
       await doc.ref.update({ ultimoIngreso: new Date() });
     } catch (e) {
-      console.error("No se pudo actualizar ultimoIngreso de productor", ipt, e);
+      logServerError("No se pudo actualizar ultimoIngreso de productor", e);
     }
     
     await doc.ref.update({ 
@@ -337,7 +334,7 @@ export const loginProductor = async (req, res) => {
     try {
       await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
     } catch (e) {
-      console.error("No se pudo registrar ingresoProductor", ipt, e);
+      logServerError("No se pudo registrar ingresoProductor", e);
     }
 
     try {
@@ -351,7 +348,7 @@ export const loginProductor = async (req, res) => {
         updatedAt: new Date(),
       }, { merge: true });
     } catch (e) {
-      console.error("No se pudo actualizar users.ultimoAcceso para productor", ipt, e);
+      logServerError("No se pudo actualizar users.ultimoAcceso para productor", e);
     }
 
     return res.json({ token, requiereCambioContrasena: requiereCambio });
@@ -420,12 +417,12 @@ export const cambiarPasswordProductor = async (req, res) => {
         updatedAt: new Date(),
       }, { merge: true });
     } catch (e) {
-      console.error("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseña", ipt, e);
+      logServerError("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseña", e);
     }
     try {
       await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
     } catch (e) {
-      console.error("No se pudo registrar ingresoProductor luego de cambio de contraseña", ipt, e);
+      logServerError("No se pudo registrar ingresoProductor luego de cambio de contraseña", e);
     }
     return res.json({ message: "Contraseña actualizada", token });
   } catch (error) {
@@ -438,9 +435,30 @@ export const cambiarPasswordProductor = async (req, res) => {
 export const resetPasswordLink = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email requerido" });
-    const link = await admin.auth().generatePasswordResetLink(email);
-    return res.json({ link });
+    const emailNormalized = normalizeEmail(email);
+
+    if (!isValidEmail(emailNormalized)) {
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+    }
+
+    const continueUrl = String(process.env.WEB_PASSWORD_RESET_CONTINUE_URL || process.env.FRONTEND_URL || "").trim();
+    const actionCodeSettings = continueUrl ? { url: continueUrl, handleCodeInApp: false } : undefined;
+
+    try {
+      if (actionCodeSettings) {
+        await admin.auth().generatePasswordResetLink(emailNormalized, actionCodeSettings);
+      } else {
+        await admin.auth().generatePasswordResetLink(emailNormalized);
+      }
+    } catch (error) {
+      if (String(error?.code || "") !== "auth/user-not-found") {
+        throw error;
+      }
+    }
+
+    return res.json({
+      message: "Si el correo está registrado, se enviará un enlace para restablecer la contraseña.",
+    });
   } catch (error) {
     logServerError("Error generando reset link", error);
     return sendInternalError(res, "No se pudo generar el enlace de restablecimiento");

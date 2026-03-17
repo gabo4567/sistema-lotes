@@ -1,25 +1,66 @@
 import React, { useState } from "react";
-import api from "../api/axios";
-import Layout from "../components/Layout";
+import { Link, useSearchParams } from "react-router-dom";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { getFirebaseApp } from "../utils/firebaseClient";
+import { notify } from "../utils/alerts";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const FIREBASE_RESET_ERRORS = {
+  "auth/invalid-email": "Ingrese un correo electrónico válido.",
+  "auth/user-not-found": "No existe una cuenta asociada a ese correo.",
+  "auth/network-request-failed": "No se pudo conectar. Verifique su conexión a internet.",
+  "auth/too-many-requests": "Demasiados intentos. Intente nuevamente en unos minutos.",
+};
 
 const ResetPassword = () => {
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
   const [loading, setLoading] = useState(false);
-  const [link, setLink] = useState("");
+  const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
   const onSubmit = async (e) => {
-    e.preventDefault(); setError(""); setLink(""); setLoading(true);
+    e.preventDefault();
+    if (loading) return;
+
+    const emailNormalized = String(email || "").trim().toLowerCase();
+    setError("");
+    setSuccess("");
+
+    if (!EMAIL_REGEX.test(emailNormalized)) {
+      const msg = "Ingrese un correo electrónico válido.";
+      setError(msg);
+      await notify({ title: "Correo inválido", text: msg, icon: "error" });
+      return;
+    }
+
+    setLoading(true);
     try {
-      const { data } = await api.post("/auth/reset-password-link", { email });
-      setLink(data?.link || "");
+      const auth = getAuth(getFirebaseApp());
+      const continueUrl = import.meta.env.VITE_PASSWORD_RESET_CONTINUE_URL || `${window.location.origin}/login`;
+      await sendPasswordResetEmail(auth, emailNormalized, {
+        url: continueUrl,
+        handleCodeInApp: false,
+      });
+
+      const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+      setSuccess(message);
+      await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
     } catch (err) {
-      setError(err?.response?.data?.error || err.message);
+      const message = FIREBASE_RESET_ERRORS[err?.code] || "No se pudo procesar la recuperación de contraseña.";
+      setError(message);
+      await notify({ title: "No se pudo enviar el correo", text: message, icon: "error" });
     } finally { setLoading(false); }
   };
 
   return (
     <div style={{ maxWidth: 480, margin: "60px auto", padding: "32px", background: "#fff", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: "1px solid #e2e8f0" }}>
+      <div style={{ marginBottom: "20px" }}>
+        <Link to="/login" style={{ color: "#166534", fontSize: "14px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+          ← Volver al inicio de sesión
+        </Link>
+      </div>
       <h2 style={{ textAlign: "center", marginBottom: "24px", color: "#1e293b", fontSize: "24px", fontWeight: "700" }}>Recuperar contraseña</h2>
       <p style={{ textAlign: "center", color: "#64748b", marginBottom: "32px", fontSize: "14px" }}>
         Ingresa tu correo institucional y te enviaremos un enlace para restablecer tu acceso.
@@ -55,13 +96,13 @@ const ResetPassword = () => {
             marginTop: "8px"
           }}
         >
-          {loading ? 'Generando enlace...' : 'Enviar enlace de recuperación'}
+          {loading ? 'Enviando correo...' : 'Enviar enlace de recuperación'}
         </button>
 
-        {link && (
+        {success && (
           <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-            <div style={{ fontSize: "13px", color: "#166534", marginBottom: "4px", fontWeight: "600" }}>✅ Enlace generado con éxito:</div>
-            <a href={link} target="_blank" rel="noreferrer" style={{ color: '#15803d', wordBreak: "break-all", fontSize: "13px", textDecoration: "underline" }}>{link}</a>
+            <div style={{ fontSize: "13px", color: "#166534", marginBottom: "4px", fontWeight: "600" }}>✅ Solicitud registrada:</div>
+            <div style={{ color: '#15803d', wordBreak: "break-word", fontSize: "13px" }}>{success}</div>
           </div>
         )}
         

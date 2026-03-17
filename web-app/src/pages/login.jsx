@@ -1,12 +1,27 @@
 // src/pages/Login.jsx
 
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import api from "../api/axios";
 import { AuthContext } from "../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { getFirebaseApp } from "../utils/firebaseClient";
+import { notify } from "../utils/alerts";
 
 import bg from "../assets/470694502_1364235428284349_7836195038289849919_n.jpg";
 import logo from "../assets/cropped-ipt-logo-byn.png";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const FIREBASE_ERRORS = {
+  "auth/invalid-credential":    "Email o contraseña incorrectos.",
+  "auth/user-not-found":        "Email o contraseña incorrectos.",
+  "auth/wrong-password":        "Email o contraseña incorrectos.",
+  "auth/invalid-email":         "El formato del email no es válido.",
+  "auth/user-disabled":         "La cuenta ha sido deshabilitada. Contacte al administrador.",
+  "auth/too-many-requests":     "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.",
+  "auth/network-request-failed":"No se pudo conectar. Verifique su conexión a internet.",
+};
 
 const Login = () => {
   const { login } = useContext(AuthContext);
@@ -16,28 +31,67 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const validate = useCallback(() => {
+    const trimmed = email.trim();
+    setEmailError("");
+    setError("");
+    if (!trimmed) {
+      setEmailError("El email es requerido.");
+      return false;
+    }
+    if (!EMAIL_REGEX.test(trimmed)) {
+      setEmailError("Ingrese un email con formato válido.");
+      return false;
+    }
+    if (!password) {
+      setError("La contraseña es requerida.");
+      return false;
+    }
+    return true;
+  }, [email, password]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+
+    if (loading) return;
+    if (!validate()) return;
     setLoading(true);
-
     try {
-      const res = await api.post("/auth/login", { email, password });
-      const { token } = res.data;
+      // 1. Verificar credenciales en Firebase Auth
+      const auth = getAuth(getFirebaseApp());
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const idToken = await credential.user.getIdToken();
 
-      login(token);
+      // 2. Obtener JWT del sistema con rol desde el backend
+      const res = await api.post("/auth/login", { idToken });
+      login(res.data.token);
+      await notify({ title: "Inicio de sesión exitoso", icon: "success" });
       navigate("/home");
 
     } catch (err) {
-      console.error(err);
-      const msg = err?.response?.data?.error || err?.response?.data?.message || (err?.code === 'ECONNABORTED' ? 'No se pudo conectar al servidor' : "Credenciales inválidas");
-      setError(msg);
+      const fbMsg = FIREBASE_ERRORS[err?.code];
+      if (fbMsg) {
+        setError(fbMsg);
+        await notify({ title: "No se pudo iniciar sesión", text: fbMsg, icon: "error" });
+      } else if (err?.response?.data?.error) {
+        setError(err.response.data.error);
+        await notify({ title: "No se pudo iniciar sesión", text: err.response.data.error, icon: "error" });
+      } else if (err?.code === "ECONNABORTED") {
+        setError("No se pudo conectar al servidor. Intente más tarde.");
+        await notify({ title: "Error de conexión", text: "No se pudo conectar al servidor. Intente más tarde.", icon: "error" });
+      } else {
+        setError("No se pudo iniciar sesión. Intente de nuevo.");
+        await notify({ title: "No se pudo iniciar sesión", text: "Intente de nuevo en unos minutos.", icon: "error" });
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const forgotTo = `/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`;
 
   return (
     <div className="auth-split">
@@ -60,13 +114,15 @@ const Login = () => {
               <input
                 id="email"
                 type="email"
-                className="form-control"
+                className={`form-control${emailError ? " is-invalid" : ""}`}
                 placeholder="tucorreo@dominio.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
                 autoComplete="username"
               />
+              {emailError && (
+                <div className="invalid-feedback" style={{ display: "block" }}>{emailError}</div>
+              )}
             </div>
 
             <div className="mb-3 form-group password-wrapper">
@@ -81,7 +137,6 @@ const Login = () => {
                   placeholder="Contraseña"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                   autoComplete="current-password"
                 />
 
@@ -119,7 +174,7 @@ const Login = () => {
               {error && <div className="mensajeError">{error}</div>}
 
               <div className="forgot-link">
-                <a href="/reset-password">¿Olvidaste tu contraseña?</a>
+                <Link to={forgotTo}>¿Olvidaste tu contraseña?</Link>
               </div>
 
               <div className="auth-card-footer">

@@ -9,6 +9,20 @@ export const firebaseConfig = {
   appId: import.meta.env.VITE_FIRE_APP_ID,
 };
 
+const requiredKeys = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "appId",
+];
+
+if (import.meta.env.PROD) {
+  const missing = requiredKeys.filter((key) => !String(firebaseConfig[key] || "").trim());
+  if (missing.length > 0) {
+    throw new Error(`Faltan variables de entorno de Firebase en producción: ${missing.join(", ")}`);
+  }
+}
+
 export const getFirebaseApp = () => {
   if (getApps().length > 0) {
     return getApp();

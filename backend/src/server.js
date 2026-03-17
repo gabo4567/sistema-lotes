@@ -21,11 +21,27 @@ import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 import testRoutes from "./routes/test.routes.js";
 import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";
-import { sendInternalError } from "./utils/httpErrors.js";
+import { logServerError, sendInternalError } from "./utils/httpErrors.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const enableTestRoutes = process.env.NODE_ENV !== "production" || process.env.ENABLE_TEST_ROUTES === "true";
+
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET no configurado en producción");
+  }
+
+  if (!process.env.ALLOWED_ORIGINS) {
+    throw new Error("ALLOWED_ORIGINS no configurado en producción");
+  }
+
+  if (String(process.env.ALLOWED_ORIGINS).toLowerCase().includes("localhost")) {
+    throw new Error("ALLOWED_ORIGINS no debe incluir localhost en producción");
+  }
+}
+
+app.set("trust proxy", 1);
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
@@ -95,11 +111,11 @@ app.use((req, res, next) => {
 // Rutas API
 app.use("/api/users", requireAuth, requireRole(["Administrador"]), usersRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/lotes", lotesRoutes);
-app.use("/api/productores", productoresRoutes);
-app.use("/api/ordenes", ordenesRoutes);
-app.use("/api/mediciones", medicionesRoutes);
-app.use("/api/insumos", insumosRoutes);
+app.use("/api/lotes", requireFirebaseAuth, lotesRoutes);
+app.use("/api/productores", requireFirebaseAuth, productoresRoutes);
+app.use("/api/ordenes", requireFirebaseAuth, ordenesRoutes);
+app.use("/api/mediciones", requireFirebaseAuth, medicionesRoutes);
+app.use("/api/insumos", requireFirebaseAuth, insumosRoutes);
 
 // Primero registramos el endpoint público de disponibilidad CON RUTA COMPLETA
 app.get("/api/turnos/disponibilidad", (req, res, next) => {
@@ -123,10 +139,10 @@ if (enableTestRoutes) {
 app.use("/api/turnos", requireFirebaseAuth, turnosRoutes);
 
 // 🧭 Nueva ruta de informes
-app.use("/api/informes", informesRoutes);
+app.use("/api/informes", requireFirebaseAuth, informesRoutes);
 
 // 📸 Ruta para uploads de imágenes
-app.use("/api/upload", uploadRoutes);
+app.use("/api/upload", requireFirebaseAuth, uploadRoutes);
 
 // 📁 Servir archivos estáticos (imágenes subidas)
 // Servir archivos estáticos desde uploads
@@ -138,7 +154,7 @@ app.get("/", (req, res) => {
 
 // Middleware global de errores
 app.use((err, req, res, next) => {
-  console.error("❌ Error interno:", err);
+  logServerError("Error interno no manejado", err);
   sendInternalError(res, "Error interno del servidor");
 });
 
