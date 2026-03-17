@@ -2,7 +2,23 @@
 import api from "../api/axios";
 
 export const lotesService = {
-  async getLotes() {
+  async getLotes(options = {}) {
+    const activo = options.activo || "activos";
+
+    if (activo === "inactivos") {
+      const res = await api.get("/lotes/inactivos");
+      return res.data;
+    }
+
+    if (activo === "todos") {
+      const [activos, inactivos] = await Promise.all([
+        api.get("/lotes"),
+        api.get("/lotes/inactivos"),
+      ]);
+
+      return [...activos.data, ...inactivos.data];
+    }
+
     const res = await api.get("/lotes");
     return res.data;
   },
@@ -13,29 +29,11 @@ export const lotesService = {
   },
 
   async createLote(data) {
-    if (data && Array.isArray(data.poligono) && data.poligono.length >= 3) {
-      const res = await api.post("/lotes", data);
-      return res.data;
+    if (!data || !Array.isArray(data.poligono) || data.poligono.length < 3) {
+      throw new Error("El lote debe tener un poligono valido de al menos 3 puntos");
     }
-    const { nombre, lat, lng } = data || {};
-    const baseLat = Number(lat);
-    const baseLng = Number(lng);
-    const d = 0.0001;
-    const poligono = [
-      { lat: baseLat, lng: baseLng },
-      { lat: baseLat + d, lng: baseLng },
-      { lat: baseLat, lng: baseLng + d }
-    ];
-    const payload = {
-      ipt: "WEB_TMP",
-      superficie: null,
-      ubicacion: null,
-      poligono,
-      metodoMarcado: "aereo",
-      observacionesTecnico: "Creado desde formulario simple web",
-      nombre: nombre || "",
-    };
-    const res = await api.post("/lotes", payload);
+
+    const res = await api.post("/lotes", data);
     return res.data;
   },
 

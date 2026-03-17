@@ -5,11 +5,33 @@ const MapPolygon = ({ points = [] }) => {
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const containerRef = useRef(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-useEffect(() => {
-  if (!key) return;
-  loadGoogleMaps(key).then(() => setReady(true));
-}, [key]);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!key) {
+      setReady(false);
+      setLoadError("");
+      return;
+    }
+
+    loadGoogleMaps(key)
+      .then(() => {
+        if (cancelled) return;
+        setReady(true);
+        setLoadError("");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setReady(false);
+        setLoadError(error.message || "No se pudo cargar el mapa");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
 
 
   useEffect(() => {
@@ -17,13 +39,20 @@ useEffect(() => {
     const valid = Array.isArray(points) && points.length >= 1;
     const center = valid ? { lat: points[0].lat, lng: points[0].lng } : { lat: -29.18, lng: -59.26 };
     const map = new window.google.maps.Map(containerRef.current, { center, zoom: 15, mapTypeId: "terrain" });
+    let polygon = null;
     if (Array.isArray(points) && points.length >= 3) {
-      const poly = new window.google.maps.Polygon({ paths: points, strokeColor: "#1d4ed8", strokeWeight: 2, fillColor: "#93c5fd", fillOpacity: 0.6 });
-      poly.setMap(map);
+      polygon = new window.google.maps.Polygon({ paths: points, strokeColor: "#1d4ed8", strokeWeight: 2, fillColor: "#93c5fd", fillOpacity: 0.6 });
+      polygon.setMap(map);
       const bounds = new window.google.maps.LatLngBounds();
       points.forEach(p => bounds.extend(new window.google.maps.LatLng(p.lat, p.lng)));
       map.fitBounds(bounds);
     }
+
+    return () => {
+      if (polygon) {
+        polygon.setMap(null);
+      }
+    };
   }, [ready, points]);
 
   if (!key) {
@@ -43,6 +72,9 @@ useEffect(() => {
         </svg>
       </div>
     );
+  }
+  if (loadError) {
+    return <div style={{ color: "#b91c1c" }}>{loadError}</div>;
   }
   return <div ref={containerRef} className="map-container" style={{ width: '100%', height: 360, background: "#eef2ff", borderRadius: 12 }} />;
 };

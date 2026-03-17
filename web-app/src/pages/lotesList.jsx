@@ -44,19 +44,19 @@ const LotesList = () => {
     const fetchLotes = async () => {
       try {
         setLoading(true);
-        const data = await lotesService.getLotes();
+        const data = await lotesService.getLotes({ activo: filters.activo });
         setLotes(data);
         setError(null);
       } catch (err) {
         console.error("Error al cargar lotes:", err);
-        setError("Error al cargar los lotes. Por favor, intente nuevamente.");
+        setError(err.message || "Error al cargar los lotes. Por favor, intente nuevamente.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchLotes();
-  }, []);
+  }, [filters.activo]);
 
   // Lógica de filtrado y ordenamiento combinada
   const filteredAndSortedLotes = useMemo(() => {
@@ -78,17 +78,7 @@ const LotesList = () => {
       );
     }
 
-    // 3. Filtro por Activo/Inactivo
-    if (filters.activo !== 'todos') {
-      const isActivo = filters.activo === 'activos';
-      result = result.filter(lote => {
-        // Si el lote no tiene el campo 'activo', asumimos que es activo (true)
-        const loteActivo = lote.activo !== false;
-        return loteActivo === isActivo;
-      });
-    }
-
-    // 4. Ordenamiento
+    // 3. Ordenamiento
     result.sort((a, b) => {
       const getVal = (v) => {
         if (!v) return 0;

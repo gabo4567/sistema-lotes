@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getMediciones } from "../services/mediciones.service";
 import { getProductores } from "../services/productores.service";
 import HomeButton from "../components/HomeButton";
+import { buildBackendAssetUrl } from "../utils/apiConfig";
 
 const MedicionesList = () => {
   const [items, setItems] = useState([]);
@@ -41,110 +42,64 @@ const MedicionesList = () => {
   }
 
   const groupedItems = React.useMemo(() => {
-    // 1. Filtrar
     const match = (text, pattern) => {
       if (!pattern) return true;
       const pat = String(pattern).toLowerCase().trim();
-      const txt = String(text||"").toLowerCase();
+      const txt = String(text || "").toLowerCase();
       return txt.includes(pat);
     };
-    const filtered = items.filter(m =>
+
+    const filtered = items.filter((m) =>
       match(m.productor, filtros.productor) && match(m.lote, filtros.lote)
     );
 
-    // 2. Agrupar por productor (IPT + Nombre)
     const groups = {};
-    filtered.forEach(m => {
-      // Intentar extraer IPT y Nombre usando la lista de productores cargada
-      let prodNombre = 'Productor Desconocido';
-      let prodIpt = '';
+    filtered.forEach((m) => {
+      let prodNombre = "Productor Desconocido";
+      let prodIpt = "";
+      const val = String(m.productor || "").trim();
 
-      // m.productor puede ser un IPT (string numérico) o un nombre
-      const val = String(m.productor || '').trim();
-      
-      // Buscar en la lista de productores
-      // Intentamos coincidir por IPT o por Nombre Completo
-      // IMPORTANTE: Convertir a String para comparar
-      const found = productores.find(p => 
-        String(p.ipt) === val || 
-        String(p.nombreCompleto || '').trim().toLowerCase() === val.toLowerCase() ||
-        String(p.nombre || '').trim().toLowerCase() === val.toLowerCase()
+      const found = productores.find((p) =>
+        String(p.ipt) === val ||
+        String(p.nombreCompleto || "").trim().toLowerCase() === val.toLowerCase() ||
+        String(p.nombre || "").trim().toLowerCase() === val.toLowerCase()
       );
 
       if (found) {
-        prodNombre = found.nombreCompleto || found.nombre || 'Sin Nombre';
-        prodIpt = found.ipt || '';
+        prodNombre = found.nombreCompleto || found.nombre || "Sin Nombre";
+        prodIpt = found.ipt || "";
+      } else if (/^\d+$/.test(val)) {
+        prodIpt = val;
+        const foundByIpt = productores.find((p) => String(p.ipt) === val);
+        prodNombre = foundByIpt
+          ? foundByIpt.nombreCompleto || foundByIpt.nombre || "Sin Nombre"
+          : "Productor Desconocido";
       } else {
-        // Si no se encuentra, inferir
-        if (/^\d+$/.test(val)) {
-          // Si parece un número, asumimos que es el IPT
-          prodIpt = val;
-          // Intento de fallback: buscar si el productor existe aunque no coincida exactamente el campo 'productor' de la medición
-          const foundByIpt = productores.find(p => String(p.ipt) === val);
-          if (foundByIpt) {
-             prodNombre = foundByIpt.nombreCompleto || foundByIpt.nombre || 'Sin Nombre';
-          } else {
-             prodNombre = 'Productor Desconocido'; 
-          }
-        } else {
-          // Si no es número, asumimos que es el nombre
-          prodNombre = val || 'Productor Desconocido';
-          prodIpt = m.ipt || ''; // Si venía en el objeto original
-        }
+        prodNombre = val || "Productor Desconocido";
+        prodIpt = m.ipt || "";
       }
 
-      // Clave única para agrupar
       const key = prodIpt ? `${prodIpt}` : prodNombre;
-      
       if (!groups[key]) {
         groups[key] = {
           nombre: prodNombre,
           ipt: prodIpt,
-          mediciones: []
+          mediciones: [],
         };
       }
+
       groups[key].mediciones.push(m);
     });
 
     return Object.values(groups);
   }, [items, filtros, productores]);
 
-  const tipoBadge = (t)=>{
-    const v = String(t||'').toLowerCase()
-    if(v.includes('superficie')) return 'estado-badge ok'
-    if(v.includes('planta') || v.includes('densidad')) return 'estado-badge info'
-    if(v.includes('inspe')) return 'estado-badge warn'
-    return 'estado-badge info'
-  }
-
-  const buildImageUrl = (u) => {
-    if (!u) return "";
-    const origin = window.location.origin;
-    const isTunnel = /devtunnels\.ms/.test(origin) && /-\d{4}\./.test(origin);
-    let root;
-    const env = import.meta.env.VITE_API_URL;
-    if (isTunnel) {
-      root = origin.replace(/-\d{4}\./, '-3000.');
-    } else if (env) {
-      // Evitar mixed content: si env es http y página https, usa origin
-      if (/^http:\/\//i.test(env) && window.location.protocol === 'https:') {
-        root = origin;
-      } else {
-        root = env.replace(/\/api\/?$/, "");
-      }
-    } else {
-      root = origin;
-    }
-
-    try {
-      const abs = new URL(u);
-      // Si evidencia viene con host local/IP, usa solo el path
-      const pathname = abs.pathname || '/';
-      return root.replace(/\/$/,'') + pathname;
-    } catch {
-      // u puede ser relativo, asegurar concatenación correcta
-      return root.replace(/\/$/,'') + (u.startsWith('/') ? u : '/' + u);
-    }
+  const tipoBadge = (t) => {
+    const v = String(t || "").toLowerCase();
+    if (v.includes("superficie")) return "estado-badge ok";
+    if (v.includes("planta") || v.includes("densidad")) return "estado-badge info";
+    if (v.includes("inspe")) return "estado-badge warn";
+    return "estado-badge info";
   };
 
   return (
@@ -200,7 +155,7 @@ const MedicionesList = () => {
                     <div className="med-item"><span className="med-label">Valor:</span> {m.valorNumerico ?? '-'}</div>
                     {m.observaciones && <div className="med-item"><span className="med-label">Observaciones:</span> {m.observaciones}</div>}
                     {m.evidenciaUrl && (
-                      <div className="med-item"><span className="med-label">Evidencia:</span> <button className="btn-compact" onClick={()=>setViewer({ url: buildImageUrl(m.evidenciaUrl) })}>Ver archivo</button></div>
+                      <div className="med-item"><span className="med-label">Evidencia:</span> <button className="btn-compact" onClick={()=>setViewer({ url: buildBackendAssetUrl(m.evidenciaUrl) })}>Ver archivo</button></div>
                     )}
                   </div>
                 ))}

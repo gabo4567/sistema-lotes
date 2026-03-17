@@ -25,20 +25,57 @@ import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/aut
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildOriginMatcher = (pattern) => {
+  const normalized = String(pattern || "").trim();
+  if (!normalized) return null;
+
+  const regex = new RegExp(`^${escapeRegExp(normalized).replace(/\\\*/g, ".*")}$`);
+  return (origin) => regex.test(origin);
+};
+
+const configuredOriginPatterns = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+const allowedOriginMatchers = [
+  ...(process.env.NODE_ENV === "production" ? [] : DEFAULT_ALLOWED_ORIGINS),
+  ...configuredOriginPatterns,
+]
+  .map(buildOriginMatcher)
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (allowedOriginMatchers.length === 0) return process.env.NODE_ENV !== "production";
+  return allowedOriginMatchers.some((matcher) => matcher(origin));
+};
+
 app.use(express.json());
 
-// CORS configurado para desarrollo - más permisivo para app móvil
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  // Si hay origin, reflejarlo para permitir credenciales; si no, usar '*'
+
+  if (origin && !isOriginAllowed(origin)) {
+    return res.status(403).json({ message: "Origen no permitido por CORS" });
+  }
+
   if (origin) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
-  } else {
-    res.header("Access-Control-Allow-Origin", "*");
   }
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.header("Access-Control-Max-Age", "86400");
   res.header("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);

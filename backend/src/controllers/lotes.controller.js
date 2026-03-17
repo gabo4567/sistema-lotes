@@ -1,25 +1,120 @@
 // src/controllers/lotes.controller.js
 import { db } from "../utils/firebase.js";
 
+const METERS_PER_DEGREE_LAT = 111320;
+
+const toFiniteNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeText = (value, fallback = "") => {
+  if (value == null) return fallback;
+  return String(value).trim();
+};
+
+const normalizePolygon = (polygon) => {
+  if (!Array.isArray(polygon) || polygon.length < 3) {
+    throw new Error("El poligono debe tener al menos 3 puntos validos");
+  }
+
+  return polygon.map((point) => {
+    const lat = toFiniteNumber(point?.lat);
+    const lng = toFiniteNumber(point?.lng);
+
+    if (lat == null || lng == null) {
+      throw new Error("El poligono contiene coordenadas invalidas");
+    }
+
+    return { lat, lng };
+  });
+};
+
+const calculatePolygonAreaHa = (polygon) => {
+  if (!Array.isArray(polygon) || polygon.length < 3) return null;
+
+  const averageLatRadians = (polygon.reduce((sum, point) => sum + point.lat, 0) / polygon.length) * (Math.PI / 180);
+  const metersPerDegreeLng = METERS_PER_DEGREE_LAT * Math.cos(averageLatRadians);
+
+  let area = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    const currentX = current.lng * metersPerDegreeLng;
+    const currentY = current.lat * METERS_PER_DEGREE_LAT;
+    const nextX = next.lng * metersPerDegreeLng;
+    const nextY = next.lat * METERS_PER_DEGREE_LAT;
+    area += currentX * nextY - nextX * currentY;
+  }
+
+  return Math.abs(area / 2) / 10000;
+};
+
+const getPolygonCentroid = (polygon) => {
+  if (!Array.isArray(polygon) || polygon.length === 0) return null;
+
+  const sum = polygon.reduce(
+    (accumulator, point) => ({
+      lat: accumulator.lat + point.lat,
+      lng: accumulator.lng + point.lng,
+    }),
+    { lat: 0, lng: 0 }
+  );
+
+  return {
+    lat: sum.lat / polygon.length,
+    lng: sum.lng / polygon.length,
+  };
+};
+
+const normalizeLocation = (ubicacion, polygon) => {
+  const lat = toFiniteNumber(ubicacion?.lat);
+  const lng = toFiniteNumber(ubicacion?.lng);
+
+  if (lat != null && lng != null) {
+    return { lat, lng };
+  }
+
+  return getPolygonCentroid(polygon);
+};
+
+const normalizeSurface = (superficie, polygon) => {
+  const parsed = toFiniteNumber(superficie);
+  if (parsed != null && parsed > 0) {
+    return parsed;
+  }
+
+  return calculatePolygonAreaHa(polygon);
+};
+
+const buildLotePayload = (source, current = {}) => {
+  const polygon = normalizePolygon(source.poligono ?? current.poligono);
+  const ipt = normalizeText(source.ipt ?? current.ipt);
+  const metodoMarcado = normalizeText(source.metodoMarcado ?? current.metodoMarcado, "aereo") || "aereo";
+
+  if (!ipt) {
+    throw new Error("El IPT es obligatorio");
+  }
+
+  return {
+    ipt,
+    superficie: normalizeSurface(source.superficie ?? current.superficie, polygon),
+    ubicacion: normalizeLocation(source.ubicacion ?? current.ubicacion, polygon),
+    poligono: polygon,
+    metodoMarcado,
+    observacionesTecnico: normalizeText(source.observacionesTecnico ?? current.observacionesTecnico),
+    nombre: normalizeText(source.nombre ?? current.nombre) || null,
+    observacionesProductor: normalizeText(source.observacionesProductor ?? current.observacionesProductor),
+  };
+};
+
 // Crear un lote
 export const createLote = async (req, res) => {
   try {
-    const { ipt, superficie, ubicacion, poligono, metodoMarcado, observacionesTecnico, nombre, observacionesProductor } = req.body;
-    if (!ipt || !poligono || !Array.isArray(poligono) || poligono.length < 3 || !metodoMarcado) {
-      return res.status(400).json({ error: "Datos de lote inválidos" });
-    }
-
     const newLote = {
-      ipt: String(ipt),
-      superficie: superficie ? Number(superficie) : null,
-      ubicacion: ubicacion || null,
-      poligono,
-      metodoMarcado,
+      ...buildLotePayload(req.body),
       fechaCreacion: new Date(),
       estado: "Pendiente",
-      observacionesTecnico: observacionesTecnico || "",
-      nombre: nombre ? String(nombre) : null,
-      observacionesProductor: observacionesProductor || "",
       activo: true,
     };
 
@@ -27,7 +122,7 @@ export const createLote = async (req, res) => {
     res.json({ id: docRef.id, ...newLote });
   } catch (error) {
     console.error("Error al crear lote:", error);
-    res.status(500).json({ error: "Error al crear lote" });
+    res.status(error.message?.includes("obligatorio") || error.message?.includes("poligono") || error.message?.includes("coordenadas") ? 400 : 500).json({ error: error.message || "Error al crear lote" });
   }
 };
 
@@ -93,12 +188,12 @@ export const updateLote = async (req, res) => {
     if (current.estado === "Validado") {
       return res.status(403).json({ error: "No se puede editar un lote validado" });
     }
-    const { fechaCreacion, id: _id, ...data } = req.body; // Evitar sobreescribir fechaCreacion
-    await ref.update({ ...data, updatedAt: new Date() });
+    const nextPayload = buildLotePayload(req.body, current);
+    await ref.update({ ...nextPayload, updatedAt: new Date() });
     res.json({ message: "✅ Lote actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar lote:", error);
-    res.status(500).json({ error: "Error al actualizar lote" });
+    res.status(error.message?.includes("obligatorio") || error.message?.includes("poligono") || error.message?.includes("coordenadas") ? 400 : 500).json({ error: error.message || "Error al actualizar lote" });
   }
 };
 
