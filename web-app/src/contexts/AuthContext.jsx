@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useEffect, useMemo, useState } from 
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import api, { setAuthFailureHandler } from "../api/axios";
 import { getFirebaseApp } from "../utils/firebaseClient";
+import { tokenStore } from "../utils/tokenStore";
 
 export const AuthContext = createContext();
 
@@ -37,11 +38,11 @@ const isExpiredToken = (tokenPayload) => {
 export const AuthProvider = ({ children }) => {
   const auth = getAuth(getFirebaseApp());
   const [user, setUser] = useState(() => {
-    const t = localStorage.getItem("token");
+    const t = tokenStore.get();
     if (t) {
       const p = decodeToken(t);
       if (isExpiredToken(p)) {
-        localStorage.removeItem("token");
+        tokenStore.clear();
         return null;
       }
       const role = normalizeRole(p?.role);
@@ -53,14 +54,14 @@ export const AuthProvider = ({ children }) => {
   const [authReady, setAuthReady] = useState(false);
 
   const applySession = useCallback((token) => {
-    localStorage.setItem("token", token);
+    tokenStore.set(token);
     const p = decodeToken(token);
     const role = normalizeRole(p?.role);
     setUser(p ? { token, ...p, role } : { token });
   }, []);
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem("token");
+    tokenStore.clear();
     setUser(null);
   }, []);
 

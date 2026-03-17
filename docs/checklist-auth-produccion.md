@@ -255,11 +255,15 @@ Antes de ejecutar las pruebas verificar:
 | Variable | Valor esperado |
 |---|---|
 | `VITE_API_URL` | `https://[backend].onrender.com` (sin `/api`) |
-| `VITE_FIRE_API_KEY` | API Key de Firebase (producción) |
-| `VITE_FIRE_AUTH_DOMAIN` | `[proyecto].firebaseapp.com` |
-| `VITE_FIRE_PROJECT_ID` | ID del proyecto Firebase |
-| `VITE_FIRE_APP_ID` | App ID de Firebase |
+| `VITE_FIREBASE_API_KEY` | API Key de Firebase (producción) |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `[proyecto].firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | ID del proyecto Firebase |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Bucket de Firebase Storage |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Sender ID de Firebase |
+| `VITE_FIREBASE_APP_ID` | App ID de Firebase |
 | `VITE_PASSWORD_RESET_CONTINUE_URL` | `https://[tu-dominio].vercel.app/login` |
+
+> Compatibilidad temporal: el frontend también acepta `VITE_FIRE_*` por backward compatibility, pero para producción usar `VITE_FIREBASE_*`.
 
 ### Backend (Render)
 

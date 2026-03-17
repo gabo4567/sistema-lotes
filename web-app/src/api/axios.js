@@ -1,5 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "../utils/apiConfig";
+import { tokenStore } from "../utils/tokenStore";
 
 let authFailureHandler = null;
 
@@ -14,7 +15,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = tokenStore.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -23,7 +24,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    const hadToken = Boolean(localStorage.getItem("token"));
+    const hadToken = Boolean(tokenStore.get());
     const skipAuthFailureHandler = Boolean(error.config?._skipAuthFailureHandler);
 
     if (status === 401 && hadToken && !skipAuthFailureHandler && authFailureHandler) {
