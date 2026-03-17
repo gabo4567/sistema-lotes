@@ -9,6 +9,54 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
 
+const FIREBASE_SIGN_IN_ERRORS = {
+  INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales inválidas" },
+  INVALID_PASSWORD: { status: 401, message: "Credenciales inválidas" },
+  EMAIL_NOT_FOUND: { status: 401, message: "Credenciales inválidas" },
+  USER_DISABLED: { status: 403, message: "La cuenta ha sido deshabilitada" },
+  TOO_MANY_ATTEMPTS_TRY_LATER: { status: 429, message: "Demasiados intentos. Intente nuevamente en unos minutos." },
+};
+
+const resolveFirebaseWebApiKey = () => {
+  return String(
+    process.env.FIREBASE_WEB_API_KEY ||
+    process.env.FIREBASE_API_KEY ||
+    ""
+  ).trim();
+};
+
+const signInWithFirebasePassword = async ({ email, password }) => {
+  const apiKey = resolveFirebaseWebApiKey();
+  if (!apiKey) {
+    const configError = new Error("FIREBASE_WEB_API_KEY no configurada");
+    configError.kind = "config";
+    throw configError;
+  }
+
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password,
+      returnSecureToken: true,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data?.idToken) {
+    const code = String(data?.error?.message || "").trim();
+    const mapped = FIREBASE_SIGN_IN_ERRORS[code];
+    const authError = new Error(mapped?.message || "No se pudo validar las credenciales");
+    authError.kind = "auth";
+    authError.status = mapped?.status || 401;
+    throw authError;
+  }
+
+  return data.idToken;
+};
+
 // Registrar usuario
 export const registerUser = async (req, res) => {
   try {
@@ -211,21 +259,46 @@ export const registerProductor = async (req, res) => {
 // Login de usuario (web panel) — recibe un Firebase ID token verificado desde el cliente
 export const loginUser = async (req, res) => {
   try {
-    const { idToken } = req.body;
-    if (!idToken || typeof idToken !== "string") {
-      return res.status(400).json({ error: "Credenciales requeridas" });
+    const { idToken, email, password } = req.body;
+    let firebaseIdToken = typeof idToken === "string" ? String(idToken).trim() : "";
+
+    if (!firebaseIdToken) {
+      const emailNormalized = normalizeEmail(email);
+      const passwordNormalized = String(password || "");
+
+      if (!isValidEmail(emailNormalized) || !passwordNormalized) {
+        return res.status(400).json({ error: "Credenciales requeridas" });
+      }
+
+      try {
+        firebaseIdToken = await signInWithFirebasePassword({
+          email: emailNormalized,
+          password: passwordNormalized,
+        });
+      } catch (error) {
+        if (error?.kind === "config") {
+          logServerError("Configuración faltante para login Firebase", error);
+          return res.status(500).json({ error: "Configuración de autenticación incompleta" });
+        }
+
+        if (error?.kind === "auth") {
+          return res.status(error.status || 401).json({ error: error.message || "Credenciales inválidas" });
+        }
+
+        throw error;
+      }
     }
 
     // 1. Verificar el ID token con Firebase Admin SDK
     let decodedToken;
     try {
-      decodedToken = await admin.auth().verifyIdToken(idToken);
+      decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
     } catch {
       return res.status(401).json({ error: "Credenciales inválidas" });
     }
 
-    const { uid, email } = decodedToken;
-    const emailNormalized = normalizeEmail(email);
+    const { uid, email: firebaseEmail } = decodedToken;
+    const emailNormalized = normalizeEmail(firebaseEmail);
 
     // 2. Buscar el rol del usuario en Firestore (por UID primero, luego por email)
     let role = "Tecnico";

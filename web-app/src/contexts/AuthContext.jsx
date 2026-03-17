@@ -106,7 +106,10 @@ export const AuthProvider = ({ children }) => {
       if (!isMounted) return;
 
       if (!firebaseUser) {
-        clearSession();
+        const token = tokenStore.get();
+        if (!token) {
+          clearSession();
+        }
         setAuthReady(true);
         return;
       }

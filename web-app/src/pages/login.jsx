@@ -2,10 +2,8 @@
 
 import React, { useState, useContext, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import api from "../api/axios";
 import { AuthContext } from "../contexts/AuthContext";
-import { getFirebaseApp } from "../utils/firebaseClient";
 import { notify } from "../utils/alerts";
 
 import bg from "../assets/470694502_1364235428284349_7836195038289849919_n.jpg";
@@ -14,13 +12,10 @@ import logo from "../assets/cropped-ipt-logo-byn.png";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const FIREBASE_ERRORS = {
-  "auth/invalid-credential":    "Email o contraseña incorrectos.",
-  "auth/user-not-found":        "Email o contraseña incorrectos.",
-  "auth/wrong-password":        "Email o contraseña incorrectos.",
-  "auth/invalid-email":         "El formato del email no es válido.",
-  "auth/user-disabled":         "La cuenta ha sido deshabilitada. Contacte al administrador.",
-  "auth/too-many-requests":     "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.",
-  "auth/network-request-failed":"No se pudo conectar. Verifique su conexión a internet.",
+  "auth/invalid-credential": "Email o contraseña incorrectos.",
+  "auth/user-disabled": "La cuenta ha sido deshabilitada. Contacte al administrador.",
+  "auth/too-many-requests": "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.",
+  "auth/network-request-failed": "No se pudo conectar. Verifique su conexión a internet.",
 };
 
 const Login = () => {
@@ -60,25 +55,35 @@ const Login = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      // 1. Verificar credenciales en Firebase Auth
-      const auth = getAuth(getFirebaseApp());
-      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const idToken = await credential.user.getIdToken();
+      const res = await api.post("/auth/login", {
+        email: email.trim(),
+        password,
+      });
 
-      // 2. Obtener JWT del sistema con rol desde el backend
-      const res = await api.post("/auth/login", { idToken });
       login(res.data.token);
       await notify({ title: "Inicio de sesión exitoso", icon: "success" });
       navigate("/home");
 
     } catch (err) {
+      const backendMessage = err?.response?.data?.error || err?.message;
+
+      if (err?.response?.status === 429) {
+        const tooMany = "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.";
+        setError(tooMany);
+        await notify({ title: "No se pudo iniciar sesión", text: tooMany, icon: "error" });
+        return;
+      }
+
+      if (backendMessage) {
+        setError(backendMessage);
+        await notify({ title: "No se pudo iniciar sesión", text: backendMessage, icon: "error" });
+        return;
+      }
+
       const fbMsg = FIREBASE_ERRORS[err?.code];
       if (fbMsg) {
         setError(fbMsg);
         await notify({ title: "No se pudo iniciar sesión", text: fbMsg, icon: "error" });
-      } else if (err?.response?.data?.error) {
-        setError(err.response.data.error);
-        await notify({ title: "No se pudo iniciar sesión", text: err.response.data.error, icon: "error" });
       } else if (err?.code === "ECONNABORTED") {
         setError("No se pudo conectar al servidor. Intente más tarde.");
         await notify({ title: "Error de conexión", text: "No se pudo conectar al servidor. Intente más tarde.", icon: "error" });
