@@ -3,6 +3,10 @@
 import { db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 
+const console = process.env.DEBUG_TURNOS === "true"
+  ? globalThis.console
+  : { ...globalThis.console, log: () => {} };
+
 // ➕ Crear un nuevo turno
 export const crearTurno = async (req, res) => {
   try {
@@ -268,7 +272,7 @@ export const obtenerTurnos = async (req, res) => {
     res.json(enriched);
   } catch (error) {
     console.error("Error al obtener los turnos:", error);
-    res.status(500).json({ message: "Error al obtener los turnos", error });
+    res.status(500).json({ message: "Error al obtener los turnos", error: "Error al obtener los turnos" });
   }
 };
 
@@ -282,7 +286,7 @@ export const obtenerTurnoPorId = async (req, res) => {
     res.json({ id: doc.id, ...convertirTimestamps(doc.data()) });
   } catch (error) {
     console.error("Error al obtener el turno:", error);
-    res.status(500).json({ message: "Error al obtener el turno", error });
+    res.status(500).json({ message: "Error al obtener el turno", error: "Error al obtener el turno" });
   }
 };
 
@@ -311,7 +315,7 @@ export const actualizarTurno = async (req, res) => {
     res.json({ message: "Turno actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar el turno:", error);
-    res.status(500).json({ message: "Error al actualizar el turno", error });
+    res.status(500).json({ message: "Error al actualizar el turno", error: "Error al actualizar el turno" });
   }
 };
 
@@ -354,7 +358,7 @@ export const cambiarEstadoTurno = async (req, res) => {
     res.json({ message: `Estado del turno actualizado a '${estado}'` });
   } catch (error) {
     console.error("Error al cambiar el estado del turno:", error);
-    res.status(500).json({ message: "Error al cambiar el estado del turno", error });
+    res.status(500).json({ message: "Error al cambiar el estado del turno", error: "Error al cambiar el estado del turno" });
   }
 };
 
@@ -378,7 +382,7 @@ export const eliminarTurno = async (req, res) => {
     res.json({ message: "Turno desactivado correctamente", id });
   } catch (error) {
     console.error("Error al desactivar el turno:", error);
-    res.status(500).json({ message: "Error al desactivar el turno", error });
+    res.status(500).json({ message: "Error al desactivar el turno", error: "Error al desactivar el turno" });
   }
 };
 
@@ -397,7 +401,7 @@ export const restaurarTurno = async (req, res) => {
     res.json({ message: "Turno restaurado correctamente", id });
   } catch (error) {
     console.error("Error al restaurar el turno:", error);
-    res.status(500).json({ message: "Error al restaurar el turno", error });
+    res.status(500).json({ message: "Error al restaurar el turno", error: "Error al restaurar el turno" });
   }
 };
 
@@ -421,7 +425,7 @@ export const obtenerTurnosPorEstado = async (req, res) => {
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por estado:", error);
-    res.status(500).json({ message: "Error al obtener los turnos por estado", error });
+    res.status(500).json({ message: "Error al obtener los turnos por estado", error: "Error al obtener los turnos por estado" });
   }
 };
 
@@ -458,7 +462,7 @@ export const obtenerTurnosPorProductor = async (req, res) => {
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por productor:", error);
-    res.status(500).json({ message: "Error al obtener los turnos por productor", error });
+    res.status(500).json({ message: "Error al obtener los turnos por productor", error: "Error al obtener los turnos por productor" });
   }
 };
 

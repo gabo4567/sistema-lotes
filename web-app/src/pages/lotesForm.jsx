@@ -1,23 +1,28 @@
 import React, { useState } from "react";
 import { lotesService } from "../services/lotes.service";
-import Layout from "../components/Layout";
+import { notify } from "../utils/alerts";
 
 const LoteForm = () => {
   const [nombre, setNombre] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage("");
+    setError("");
     try {
       await lotesService.createLote({ nombre, lat: parseFloat(lat), lng: parseFloat(lng) });
-      alert("✅ Lote creado correctamente");
+      setMessage("Lote creado correctamente.");
+      notify({ title: "Lote creado correctamente", icon: "success" });
       setNombre("");
       setLat("");
       setLng("");
     } catch (e) {
       console.error(e);
-      alert("❌ Error al crear el lote");
+      setError(e?.response?.data?.message || e?.message || "No se pudo crear el lote.");
     }
   };
 
@@ -25,6 +30,8 @@ const LoteForm = () => {
     <div className="lotes-form">
       <form onSubmit={handleSubmit} className="max-w-md bg-white p-4 rounded shadow">
         <h2 className="text-xl mb-4 font-semibold">Crear Lote</h2>
+        {message ? <div className="text-green-700 mb-2">{message}</div> : null}
+        {error ? <div className="text-red-600 mb-2">{error}</div> : null}
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}

@@ -9,6 +9,7 @@ const TurnosList = () => {
 const [turnos, setTurnos] = useState([])
 const [prodMap, setProdMap] = useState(new Map())
 const [loading, setLoading] = useState(true)
+const [error, setError] = useState('')
 const [viewMode, setViewMode] = useState('activos') // 'activos', 'historial', 'todos'
 
 // Estados para filtros
@@ -22,6 +23,7 @@ const [filtros, setFiltros] = useState({
 
 const loadData = async () => {
   setLoading(true)
+  setError('')
   try {
     // Si es historial, pedimos activo=false, si es activos pedimos activo=true, si es todos no pasamos parámetro
     const activoParam = viewMode === 'activos' ? true : (viewMode === 'historial' ? false : undefined)
@@ -42,7 +44,10 @@ const loadData = async () => {
         setProdMap(map)
       } catch {}
     }
-  } catch(e) { console.error(e) }
+  } catch(e) {
+    console.error(e)
+    setError(e?.response?.data?.message || e?.message || 'No se pudieron cargar los turnos.')
+  }
   finally { setLoading(false) }
 }
 
@@ -108,9 +113,12 @@ const handleCambioEstado = async (id, nuevo)=>{
   try {
     await setEstadoTurno(id, nuevo)
     setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo } : t))
+    setError('')
     notify({ title: 'Estado actualizado', icon: 'success' })
   } catch (e) {
-    notify({ title: 'Error al actualizar estado', icon: 'error' })
+    const message = e?.response?.data?.message || e?.message || 'No se pudo actualizar el estado.'
+    setError(message)
+    notify({ title: message, icon: 'error' })
   }
 }
 
@@ -125,9 +133,12 @@ const handleDesactivar = async (id) => {
     try {
       await eliminarTurno(id)
       setTurnos(turnos.filter(t => t.id !== id))
+      setError('')
       notify({ title: 'Turno desactivado', icon: 'success' })
     } catch (e) {
-      notify({ title: 'Error al desactivar', icon: 'error' })
+      const message = e?.response?.data?.message || e?.message || 'No se pudo desactivar el turno.'
+      setError(message)
+      notify({ title: message, icon: 'error' })
     }
   }
 }
@@ -144,9 +155,12 @@ const handleRestaurar = async (id) => {
   try {
     await restaurarTurno(id)
     setTurnos(turnos.filter(t => t.id !== id))
+    setError('')
     notify({ title: 'Turno restaurado', icon: 'success' })
   } catch (e) {
-    notify({ title: 'Error al restaurar', icon: 'error' })
+    const message = e?.response?.data?.message || e?.message || 'No se pudo restaurar el turno.'
+    setError(message)
+    notify({ title: message, icon: 'error' })
   }
 }
 
@@ -202,6 +216,13 @@ return (
         >Todos</button>
       </div>
     </div>
+
+    {error ? (
+      <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#991b1b', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>{error}</span>
+        <button className="btn secondary" onClick={loadData} style={{ padding: '6px 12px' }}>Reintentar</button>
+      </div>
+    ) : null}
 
     {/* Barra de Filtros */}
     <div className="filters-bar" style={{ 

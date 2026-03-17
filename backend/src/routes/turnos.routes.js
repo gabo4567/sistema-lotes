@@ -1,7 +1,5 @@
 // src/routes/turnos.routes.js
 
-console.log("✅ turnos.routes.js cargado correctamente");
-
 import { Router } from "express";
 import {
   crearTurno,

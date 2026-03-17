@@ -19,7 +19,6 @@ import ResetPassword from "./pages/resetPassword.jsx";
 import LotesList from "./pages/lotesList.jsx";
 import LoteAdminForm from "./pages/loteAdminForm.jsx";
 import LoteDetail from "./pages/loteDetail.jsx";
-import LoteForm from "./pages/lotesForm.jsx";
 import TurnosList from "./pages/turnosList.jsx";
 import InsumosList from "./pages/insumosList.jsx";
 import Forbidden from "./pages/forbidden.jsx";
@@ -39,7 +38,16 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error) {}
   render() {
     if (this.state.hasError) {
-      return React.createElement('div', { style: { padding: 16 } }, `Error de render: ${this.state.error?.message || 'Desconocido'}`);
+      return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', padding: 24 } },
+        React.createElement('div', { style: { maxWidth: 560, width: '100%', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)' } },
+          React.createElement('h1', { style: { marginTop: 0, marginBottom: 12, fontSize: 24 } }, 'Se produjo un error inesperado'),
+          React.createElement('p', { style: { marginTop: 0, marginBottom: 16, color: '#475569' } }, this.state.error?.message || 'No se pudo renderizar la pantalla actual.'),
+          React.createElement('div', { style: { display: 'flex', gap: 12, flexWrap: 'wrap' } },
+            React.createElement('button', { className: 'btn primary', onClick: () => window.location.assign('/home') }, 'Ir al inicio'),
+            React.createElement('button', { className: 'btn secondary', onClick: () => window.location.reload() }, 'Recargar')
+          )
+        )
+      );
     }
     return this.props.children;
   }

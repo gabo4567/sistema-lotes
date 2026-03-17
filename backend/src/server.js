@@ -21,9 +21,11 @@ import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 import testRoutes from "./routes/test.routes.js";
 import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";
+import { sendInternalError } from "./utils/httpErrors.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const enableTestRoutes = process.env.NODE_ENV !== "production" || process.env.ENABLE_TEST_ROUTES === "true";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
@@ -99,48 +101,36 @@ app.use("/api/ordenes", ordenesRoutes);
 app.use("/api/mediciones", medicionesRoutes);
 app.use("/api/insumos", insumosRoutes);
 
-// 🧭 Rutas de turnos - disponibilidad sin autenticación
-console.log("📢 Intentando registrar las rutas de /api/turnos...");
-
 // Primero registramos el endpoint público de disponibilidad CON RUTA COMPLETA
 app.get("/api/turnos/disponibilidad", (req, res, next) => {
-  console.log("📅 Endpoint /api/turnos/disponibilidad llamado");
   disponibilidadTurno(req, res, next);
 });
 
-// Ruta de prueba SIN autenticación para verificar comunicación
-app.post("/api/test/public/test-turno", (req, res) => {
-  console.log("🧪 TEST PÚBLICO - Body recibido:", req.body);
-  console.log("🧪 TEST PÚBLICO - Headers:", req.headers);
-  
-  res.json({
-    success: true,
-    message: "Comunicación exitosa - El servidor recibe los datos correctamente",
-    datosRecibidos: req.body,
-    timestamp: new Date().toISOString()
+if (enableTestRoutes) {
+  app.post("/api/test/public/test-turno", (req, res) => {
+    res.json({
+      success: true,
+      message: "Comunicación exitosa - El servidor recibe los datos correctamente",
+      datosRecibidos: req.body,
+      timestamp: new Date().toISOString(),
+    });
   });
-});
 
-// Ruta de prueba para verificar el flujo de turnos
-app.use("/api/test", requireFirebaseAuth, testRoutes);
+  app.use("/api/test", requireFirebaseAuth, testRoutes);
+}
 
 // Luego registramos el resto de rutas con autenticación Firebase
 app.use("/api/turnos", requireFirebaseAuth, turnosRoutes);
 
-console.log("✅ Rutas de turnos registradas correctamente");
-
 // 🧭 Nueva ruta de informes
 app.use("/api/informes", informesRoutes);
-console.log("✅ Rutas de informes registradas correctamente");
 
 // 📸 Ruta para uploads de imágenes
 app.use("/api/upload", uploadRoutes);
-console.log("✅ Rutas de uploads registradas correctamente");
 
 // 📁 Servir archivos estáticos (imágenes subidas)
 // Servir archivos estáticos desde uploads
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-console.log("📁 Servidor de archivos estáticos configurado para /uploads");
 
 app.get("/", (req, res) => {
   res.send("Servidor del Sistema de Lotes funcionando correctamente 🚀");
@@ -149,7 +139,7 @@ app.get("/", (req, res) => {
 // Middleware global de errores
 app.use((err, req, res, next) => {
   console.error("❌ Error interno:", err);
-  res.status(500).json({ message: "Error interno del servidor", error: err.message });
+  sendInternalError(res, "Error interno del servidor");
 });
 
 app.listen(PORT, () => {

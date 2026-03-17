@@ -2,6 +2,7 @@
 import { db, admin } from "../utils/firebase.js";
 import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";
+import { logServerError, sendInternalError } from "../utils/httpErrors.js";
 
 // Registrar usuario
 export const registerUser = async (req, res) => {
@@ -50,8 +51,8 @@ export const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error al registrar usuario:", error);
-    res.status(500).json({ error: error.message });
+    logServerError("Error al registrar usuario", error);
+    res.status(500).json({ error: "No se pudo registrar el usuario" });
   }
 };
 
@@ -193,7 +194,7 @@ export const registerProductor = async (req, res) => {
       ...newProductor,
     });
   } catch (error) {
-    console.error("Error al registrar productor:", error);
+    logServerError("Error al registrar productor", error);
     return res.status(500).json({ error: "Error al registrar productor" });
   }
 };
@@ -268,8 +269,8 @@ export const loginUser = async (req, res) => {
     const webToken = makeToken({ uid, email, role });
     res.json({ token: webToken, role });
   } catch (error) {
-    console.error("Error al hacer login:", error);
-    res.status(500).json({ error: error.message });
+    logServerError("Error al hacer login", error);
+    res.status(500).json({ error: "No se pudo iniciar sesión" });
   }
 };
 
@@ -355,7 +356,8 @@ export const loginProductor = async (req, res) => {
 
     return res.json({ token, requiereCambioContrasena: requiereCambio });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    logServerError("Error al iniciar sesión de productor", error);
+    return res.status(500).json({ error: "No se pudo iniciar sesión" });
   }
 };
 
@@ -427,7 +429,8 @@ export const cambiarPasswordProductor = async (req, res) => {
     }
     return res.json({ message: "Contraseña actualizada", token });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    logServerError("Error al cambiar contraseña de productor", error);
+    return res.status(500).json({ error: "No se pudo actualizar la contraseña" });
   }
 };
 
@@ -439,7 +442,7 @@ export const resetPasswordLink = async (req, res) => {
     const link = await admin.auth().generatePasswordResetLink(email);
     return res.json({ link });
   } catch (error) {
-    console.error("Error generando reset link:", error);
-    return res.status(500).json({ error: error.message });
+    logServerError("Error generando reset link", error);
+    return sendInternalError(res, "No se pudo generar el enlace de restablecimiento");
   }
 };

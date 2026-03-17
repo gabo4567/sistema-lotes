@@ -3,6 +3,7 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { sendInternalError } from "../utils/httpErrors.js";
 
 const router = express.Router();
 
@@ -41,30 +42,32 @@ const upload = multer({
 });
 
 // Ruta para subir imagen de medición
-router.post("/medicion-imagen", upload.single("imagen"), (req, res) => {
-  try {
-    console.log('📸 Upload request recibido');
-    console.log('📁 Archivo recibido:', req.file);
-    console.log('📋 Body:', req.body);
-    
-    if (!req.file) {
-      console.log('❌ No se recibió archivo');
-      return res.status(400).json({ message: "No se proporcionó ninguna imagen" });
+router.post("/medicion-imagen", (req, res) => {
+  upload.single("imagen")(req, res, (error) => {
+    if (error) {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ message: "La imagen supera el tamaño máximo de 5 MB" });
+      }
+
+      return res.status(400).json({ message: error.message || "No se pudo procesar la imagen" });
     }
 
-    // Construir URL de la imagen
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/mediciones/${req.file.filename}`;
-    console.log('✅ URL generada:', imageUrl);
-    
-    res.json({
-      message: "Imagen subida exitosamente",
-      imageUrl: imageUrl,
-      filename: req.file.filename
-    });
-  } catch (error) {
-    console.error("❌ Error al subir imagen:", error);
-    res.status(500).json({ message: "Error al subir imagen", error: error.message });
-  }
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No se proporcionó ninguna imagen" });
+      }
+
+      const imageUrl = `${req.protocol}://${req.get("host")}/uploads/mediciones/${req.file.filename}`;
+
+      res.json({
+        message: "Imagen subida exitosamente",
+        imageUrl,
+        filename: req.file.filename,
+      });
+    } catch (uploadError) {
+      sendInternalError(res, "Error al subir imagen");
+    }
+  });
 });
 
 export default router;

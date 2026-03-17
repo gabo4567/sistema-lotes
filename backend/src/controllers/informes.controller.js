@@ -2,6 +2,7 @@
 
 import { db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
+import { logServerError, sendInternalError } from "../utils/httpErrors.js";
 
 // 📘 Resumen general del sistema
 export const obtenerResumenGeneral = async (req, res) => {
@@ -327,8 +328,8 @@ export const obtenerResumenGeneral = async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    console.error("❌ Error al obtener resumen general:", error);
-    res.status(500).json({ message: "Error al obtener resumen general", error: error.message });
+    logServerError("Error al obtener resumen general", error);
+    sendInternalError(res, "Error al obtener resumen general");
   }
 };
 
@@ -446,8 +447,8 @@ export const obtenerProductoresActivos = async (req, res) => {
 
     res.json(productores);
   } catch (error) {
-    console.error("❌ Error al obtener productores activos:", error);
-    res.status(500).json({ message: "Error al obtener productores activos", error: error.message });
+    logServerError("Error al obtener productores activos", error);
+    sendInternalError(res, "Error al obtener productores activos");
   }
 };
 
@@ -467,8 +468,8 @@ export const obtenerOrdenesPorMes = async (req, res) => {
     const resultado = Object.entries(conteoPorMes).map(([mes, ordenes]) => ({ mes, ordenes }));
     res.json(resultado);
   } catch (error) {
-    console.error("❌ Error al obtener órdenes por mes:", error);
-    res.status(500).json({ message: "Error al obtener órdenes por mes", error: error.message });
+    logServerError("Error al obtener órdenes por mes", error);
+    sendInternalError(res, "Error al obtener órdenes por mes");
   }
 };
 
@@ -510,8 +511,8 @@ export const obtenerTurnosPorEstado = async (req, res) => {
       porcentaje,
     });
   } catch (error) {
-    console.error("❌ Error al obtener turnos por estado:", error);
-    res.status(500).json({ message: "Error al obtener turnos por estado", error: error.message });
+    logServerError("Error al obtener turnos por estado", error);
+    sendInternalError(res, "Error al obtener turnos por estado");
   }
 };
 
@@ -537,8 +538,8 @@ export const obtenerMedicionesPorLote = async (req, res) => {
 
     res.json(resultado);
   } catch (error) {
-    console.error("❌ Error al obtener mediciones por lote:", error);
-    res.status(500).json({ message: "Error al obtener mediciones por lote", error: error.message });
+    logServerError("Error al obtener mediciones por lote", error);
+    sendInternalError(res, "Error al obtener mediciones por lote");
   }
 };
 
@@ -596,7 +597,8 @@ export const obtenerInsumosResumen = async (req, res) => {
       ultimaActualizacion: new Date().toISOString(),
     });
   } catch (error) {
-    res.status(500).json({ message: "Error en informe de insumos", error: error.message });
+    logServerError("Error en informe de insumos", error);
+    sendInternalError(res, "Error en informe de insumos");
   }
 };
 
@@ -630,7 +632,8 @@ export const obtenerTurnosEficiencia = async (req, res) => {
     const leadTimePromedioDias = leadCount ? Number((sumaLeadDias/leadCount).toFixed(2)) : 0;
     res.json({ conteo, totalTurnos, porcentaje, leadTimePromedioDias });
   } catch (error) {
-    res.status(500).json({ message: "Error en informe de turnos", error: error.message });
+    logServerError("Error en informe de turnos", error);
+    sendInternalError(res, "Error en informe de turnos");
   }
 };
 
@@ -640,8 +643,8 @@ export const exportarPDF = async (req, res) => {
     const { tipo } = req.query;
     res.json({ message: `Exportar informe a PDF - tipo solicitado: ${tipo}` });
   } catch (error) {
-    console.error("❌ Error al exportar PDF:", error);
-    res.status(500).json({ message: "Error al exportar PDF", error: error.message });
+    logServerError("Error al exportar PDF", error);
+    sendInternalError(res, "Error al exportar PDF");
   }
 };
 
@@ -651,7 +654,7 @@ export const exportarExcel = async (req, res) => {
     const { tipo } = req.query;
     res.json({ message: `Exportar informe a Excel - tipo solicitado: ${tipo}` });
   } catch (error) {
-    console.error("❌ Error al exportar Excel:", error);
-    res.status(500).json({ message: "Error al exportar Excel", error: error.message });
+    logServerError("Error al exportar Excel", error);
+    sendInternalError(res, "Error al exportar Excel");
   }
 };

@@ -1,5 +1,6 @@
 // src/controllers/lotes.controller.js
 import { db } from "../utils/firebase.js";
+import { sendValidationOrInternalError } from "../utils/httpErrors.js";
 
 const METERS_PER_DEGREE_LAT = 111320;
 
@@ -121,8 +122,10 @@ export const createLote = async (req, res) => {
     const docRef = await db.collection("lotes").add(newLote);
     res.json({ id: docRef.id, ...newLote });
   } catch (error) {
-    console.error("Error al crear lote:", error);
-    res.status(error.message?.includes("obligatorio") || error.message?.includes("poligono") || error.message?.includes("coordenadas") ? 400 : 500).json({ error: error.message || "Error al crear lote" });
+    sendValidationOrInternalError(res, error, {
+      validationMatchers: ["obligatorio", "poligono", "coordenadas"],
+      internalMessage: "Error al crear lote",
+    });
   }
 };
 
@@ -192,8 +195,10 @@ export const updateLote = async (req, res) => {
     await ref.update({ ...nextPayload, updatedAt: new Date() });
     res.json({ message: "✅ Lote actualizado correctamente" });
   } catch (error) {
-    console.error("Error al actualizar lote:", error);
-    res.status(error.message?.includes("obligatorio") || error.message?.includes("poligono") || error.message?.includes("coordenadas") ? 400 : 500).json({ error: error.message || "Error al actualizar lote" });
+    sendValidationOrInternalError(res, error, {
+      validationMatchers: ["obligatorio", "poligono", "coordenadas"],
+      internalMessage: "Error al actualizar lote",
+    });
   }
 };
 
