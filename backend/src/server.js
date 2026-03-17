@@ -142,6 +142,6 @@ app.use((err, req, res, next) => {
   sendInternalError(res, "Error interno del servidor");
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Servidor backend escuchando en http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Servidor backend escuchando en puerto ${PORT}`);
 });
