@@ -49,7 +49,17 @@ export const createRateLimiter = ({
     }
 
     if (current.count >= max) {
-      return res.status(429).json({ error: message });
+      const elapsedMs = nowMs() - current.firstSeen;
+      const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - elapsedMs) / 1000));
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        error: message,
+        code: "RATE_LIMIT_EXCEEDED",
+        attempts: current.count,
+        maxAttempts: max,
+        windowMs,
+        retryAfterSeconds,
+      });
     }
 
     current.count += 1;

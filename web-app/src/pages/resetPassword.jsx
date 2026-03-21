@@ -11,6 +11,22 @@ const BACKEND_RESET_ERRORS = {
   429: "Demasiados intentos. Intente nuevamente en unos minutos.",
 };
 
+const buildRateLimitMessage = (payload) => {
+  const attempts = Number(payload?.attempts);
+  const maxAttempts = Number(payload?.maxAttempts);
+  const retryAfterSeconds = Number(payload?.retryAfterSeconds);
+
+  if (Number.isFinite(attempts) && Number.isFinite(maxAttempts)) {
+    const base = `Se alcanzó el límite de recuperación de contraseña (${attempts}/${maxAttempts} intentos).`;
+    if (Number.isFinite(retryAfterSeconds)) {
+      return `${base} Intente nuevamente en ${retryAfterSeconds} segundos.`;
+    }
+    return `${base} Intente nuevamente en unos minutos.`;
+  }
+
+  return BACKEND_RESET_ERRORS[429];
+};
+
 const mapFirebaseResetError = (error) => {
   const code = String(error?.code || "").trim();
 
@@ -64,7 +80,7 @@ const ResetPassword = () => {
       await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
     } catch (err) {
       if (err?.response?.status === 429) {
-        const msg = BACKEND_RESET_ERRORS[429];
+        const msg = buildRateLimitMessage(err?.response?.data);
         setError(msg);
         await notify({ title: "No se pudo enviar el correo", text: msg, icon: "error" });
         return;
