@@ -11,20 +11,36 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      try {
-        if (!currentUser) { setUser(null); setLoading(false); return; }
-        const idTokenResult = await currentUser.getIdTokenResult();
-        const claims = idTokenResult?.claims || {};
-        const nombre = currentUser.displayName || claims.nombreCompleto || claims.nombre || null;
-        setUser({ ...currentUser, claims, displayName: nombre || currentUser.email });
-      } catch {
-        setUser(currentUser);
-      } finally {
-        setLoading(false);
-      }
-    });
-    return unsubscribe;
+    const watchdog = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        try {
+          if (!currentUser) { setUser(null); setLoading(false); return; }
+          const idTokenResult = await currentUser.getIdTokenResult();
+          const claims = idTokenResult?.claims || {};
+          const nombre = currentUser.displayName || claims.nombreCompleto || claims.nombre || null;
+          setUser({ ...currentUser, claims, displayName: nombre || currentUser.email });
+        } catch {
+          setUser(currentUser);
+        } finally {
+          setLoading(false);
+          clearTimeout(watchdog);
+        }
+      });
+    } catch {
+      setUser(null);
+      setLoading(false);
+      clearTimeout(watchdog);
+    }
+
+    return () => {
+      clearTimeout(watchdog);
+      unsubscribe();
+    };
   }, []);
 
   const logout = async () => await signOut(auth);

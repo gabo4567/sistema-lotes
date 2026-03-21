@@ -14,8 +14,14 @@ export default function App() {
     "The action 'RESET' with payload",
   ]);
   useEffect(() => {
-    setupNotifications();
-    registerPushToken();
+    (async () => {
+      try {
+        await setupNotifications();
+      } catch {}
+      try {
+        await registerPushToken();
+      } catch {}
+    })();
   }, []);
   return (
     <AuthProvider>

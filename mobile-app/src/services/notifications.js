@@ -11,15 +11,19 @@ const loadNotifications = async () => {
 };
 
 export async function setupNotifications() {
-  if (Constants?.appOwnership === "expo") return;
-  const Notifications = await loadNotifications();
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-    }),
-  });
+  try {
+    if (Constants?.appOwnership === "expo") return;
+    const Notifications = await loadNotifications();
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch (e) {
+    if (__DEV__) console.log("setupNotifications error:", e?.message);
+  }
 }
 
 export async function registerPushToken() {
