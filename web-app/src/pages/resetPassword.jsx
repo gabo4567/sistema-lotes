@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { notify } from "../utils/alerts";
+import { getFirebaseApp } from "../utils/firebaseClient";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,6 +17,7 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const auth = getAuth(getFirebaseApp());
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +47,26 @@ const ResetPassword = () => {
         await notify({ title: "No se pudo enviar el correo", text: msg, icon: "error" });
         return;
       }
+
+      const isRecoverableBackendFailure =
+        Number(err?.response?.status) >= 500 ||
+        String(err?.message || "").toLowerCase().includes("timeout") ||
+        String(err?.response?.data?.error || "").toLowerCase().includes("restablecimiento");
+
+      if (isRecoverableBackendFailure) {
+        try {
+          const continueUrl = String(import.meta.env.VITE_PASSWORD_RESET_CONTINUE_URL || window.location.origin + "/login").trim();
+          await sendPasswordResetEmail(auth, emailNormalized, { url: continueUrl, handleCodeInApp: false });
+
+          const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+          setSuccess(message);
+          await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
+          return;
+        } catch {
+          // continúa con error estándar
+        }
+      }
+
       const message = err?.response?.data?.error || "No se pudo procesar la recuperación de contraseña.";
       setError(message);
       await notify({ title: "No se pudo enviar el correo", text: message, icon: "error" });
