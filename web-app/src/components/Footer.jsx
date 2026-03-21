@@ -4,53 +4,53 @@ import React, { useState } from "react";
 const Footer = () => {
   const [mapOpen, setMapOpen] = useState(false);
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-      <footer className="footer-inst" style={{ backgroundColor: '#4b5563', color: '#fff', padding: '40px 0 40px 0', width: '100%' }}>
-        <div className="footer-grid" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', maxWidth: 1200, margin: '0 auto', padding: '0 20px', gap: 20 }}>
+    <div className="footer-root">
+      <footer className="footer-inst footer-inst--admin">
+        <div className="footer-grid footer-grid--admin">
           
           {/* Sección Izquierda: Logos y Contacto */}
-          <div className="footer-left" style={{ flex: '1 1 600px', display: 'flex', flexDirection: 'column', gap: 40 }}>
+          <div className="footer-left">
             
             {/* Logos alineados horizontalmente, centrados hacia la izquierda, más grandes y separados */}
-            <div style={{ display: 'flex', gap: 60, alignItems: 'center', justifyContent: 'center', marginLeft: '0' }}>
+            <div className="footer-logos">
               <img 
                 src="https://ipt.gob.ar/wp-content/uploads/2023/05/IPT-LOGO-06.png" 
                 alt="Logo IPT" 
-                style={{ height: 120, objectFit: 'contain' }} 
+                className="footer-logo footer-logo--ipt"
               />
               <img 
                 src="https://ipt.gob.ar/wp-content/uploads/2023/05/MINISTERIO-DE-PRODUCCION-05.png" 
                 alt="Ministerio de Producción" 
-                style={{ height: 110, objectFit: 'contain' }} 
+                className="footer-logo"
               />
               <img 
                 src="https://ipt.gob.ar/wp-content/uploads/2023/05/GOBIERNO-DE-CORRIENTES-2-05.png" 
                 alt="Gobierno de Corrientes" 
-                style={{ height: 110, objectFit: 'contain' }} 
+                className="footer-logo"
               />
             </div>
 
             {/* Información de contacto alineada a la izquierda abajo */}
-            <ul className="footer-contact" style={{ listStyle: 'none', padding: 0, fontSize: 17, lineHeight: 2.2, marginLeft: '20px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <ul className="footer-contact footer-contact--admin">
+              <li className="footer-contact-item">
                 <span>📍</span> Agustín P. Justo 1187, Goya, Corrientes, 3450
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <li className="footer-contact-item">
                 <span>📞</span> +54 3777 433066
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <li className="footer-contact-item">
                 <span>✉️</span> contacto@ipt.gob.ar
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <li className="footer-contact-item">
                 <span>🕒</span> Lunes a Viernes de 7:00hs a 13:00hs
               </li>
             </ul>
           </div>
 
           {/* Sección Derecha: Mapa */}
-          <div className="footer-map" style={{ flex: '0 1 350px' }}>
-            <div className="footer-title" style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>Dónde nos encontramos</div>
-            <div className="map-embed" style={{ borderRadius: 8, overflow: 'hidden', height: 220 }}>
+          <div className="footer-map footer-map--admin">
+            <div className="footer-title footer-title--admin">Dónde nos encontramos</div>
+            <div className="map-embed map-embed--admin">
               <iframe
                 title="Ubicación IPT"
                 src="https://maps.google.com/maps?q=Instituto%20Provincial%20del%20Tabaco%20Goya&t=&z=15&ie=UTF8&iwloc=&output=embed"
@@ -61,19 +61,19 @@ const Footer = () => {
                 referrerPolicy="no-referrer-when-downgrade"
               />
             </div>
-            <div style={{ marginTop: 12 }}>
-              <button className="btn" onClick={()=>setMapOpen(true)} style={{ backgroundColor: '#fff', color: '#166534', border: 'none', fontWeight: 600 }}>Ampliar mapa</button>
+            <div className="footer-map-action">
+              <button className="btn footer-map-btn" onClick={()=>setMapOpen(true)}>Ampliar mapa</button>
             </div>
           </div>
         </div>
       </footer>
 
       {/* Subfooter fuera del fondo gris, ocupando todo el ancho */}
-      <div className="subfooter-container" style={{ backgroundColor: '#fff', width: '100%', borderTop: '1px solid #e5e7eb' }}>
-        <div className="subfooter" style={{ padding: '30px 40px', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#374151', textAlign: 'center' }}>© 2026 Derechos Reservados Instituto Provincial del Tabaco – Corrientes</div>
-          <div style={{ position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)' }}>
-            <a href="https://ipt.gob.ar/" target="_blank" rel="noreferrer" style={{ color: '#22c55e', textDecoration: 'underline', fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap' }}>Sitio oficial IPT</a>
+      <div className="subfooter-container">
+        <div className="subfooter subfooter--admin">
+          <div className="subfooter-copy">© 2026 Derechos Reservados Instituto Provincial del Tabaco – Corrientes</div>
+          <div className="subfooter-link-wrap">
+            <a href="https://ipt.gob.ar/" target="_blank" rel="noreferrer" className="subfooter-link">Sitio oficial IPT</a>
           </div>
         </div>
       </div>
