@@ -562,7 +562,22 @@ export const resetPasswordLink = async (req, res) => {
     }
 
     // 3. Enviar email HTML personalizado
-    await sendResetPasswordEmail({ to: emailNormalized, resetLink, nombre });
+    try {
+      await sendResetPasswordEmail({ to: emailNormalized, resetLink, nombre });
+    } catch (mailError) {
+      const mailCode = String(mailError?.code || "").toUpperCase();
+      const isSmtpUnavailable = ["ETIMEDOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].includes(mailCode);
+
+      if (isSmtpUnavailable) {
+        logServerError("SMTP no disponible para reset link", { code: mailCode, message: mailError?.message });
+        return res.status(503).json({
+          error: "Servicio de correo temporalmente no disponible",
+          code: "SMTP_UNAVAILABLE",
+        });
+      }
+
+      throw mailError;
+    }
 
     return res.json({
       message: "Si el correo estÃ¡ registrado, se enviarÃ¡ un enlace para restablecer la contraseÃ±a.",
