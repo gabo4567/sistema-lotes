@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
-import { auth } from "./firebase";
 import { API_URL } from "../utils/constants";
+import { authFetch, getCurrentAuthContext } from "../api/api";
 
 let NotificationsMod = null;
 const loadNotifications = async () => {
@@ -39,10 +39,9 @@ export async function registerPushToken() {
     if (finalStatus !== "granted") return null;
 
     const token = (await Notifications.getExpoPushTokenAsync()).data;
-    const tokenResult = await auth.currentUser?.getIdTokenResult();
-    const ipt = tokenResult?.claims?.ipt;
+    const { ipt } = await getCurrentAuthContext();
     if (!ipt || !token) return token;
-    await fetch(`${API_URL}/productores/ipt/${ipt}/push-token`, {
+    await authFetch(`${API_URL}/productores/ipt/${ipt}/push-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),

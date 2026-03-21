@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
+import { authFetch, getCurrentAuthContext } from "../api/api";
 
 export default function PerfilScreen() {
   const [data, setData] = useState(null);
@@ -14,11 +14,9 @@ export default function PerfilScreen() {
     let mounted = true;
     (async () => {
       try {
-        const idToken = await auth.currentUser?.getIdToken(true);
-        const tokenResult = await auth.currentUser?.getIdTokenResult();
-        const ipt = tokenResult?.claims?.ipt;
+        const { ipt } = await getCurrentAuthContext();
         if (!ipt) throw new Error("No se encontró IPT en el token");
-        const resp = await fetch(`${API_URL}/productores/ipt/${ipt}`);
+        const resp = await authFetch(`${API_URL}/productores/ipt/${ipt}`);
         if (!resp.ok) {
           const j = await resp.json().catch(() => ({}));
           throw new Error(j?.error || "No se pudo obtener el perfil");

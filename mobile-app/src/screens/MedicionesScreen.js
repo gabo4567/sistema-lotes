@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Image, RefreshControl, Modal, ScrollView, Alert } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../services/firebase";
-import { API_URL } from "../utils/constants";
+import { API_URL, API_ORIGIN } from "../utils/constants";
 
 export default function MedicionesScreen({ navigation }) {
   const [mediciones, setMediciones] = useState([]);
@@ -77,18 +77,14 @@ export default function MedicionesScreen({ navigation }) {
   const buildImageUrl = (u) => {
     if (!u) return null;
     try {
-      const origin = String(API_URL).replace(/\/api\/?$/, "");
       if (/^https?:\/\//i.test(u)) {
         const abs = new URL(u);
-        if (abs.hostname === "localhost" || abs.hostname === "127.0.0.1" || abs.hostname === "::1") {
-          return origin + abs.pathname;
-        }
         if (abs.pathname.startsWith("/uploads/")) {
-          return origin + abs.pathname;
+          return API_ORIGIN + abs.pathname;
         }
         return u;
       }
-      if (u.startsWith("/")) return String(API_URL).replace(/\/api\/?$/, "") + u;
+      if (u.startsWith("/")) return API_ORIGIN + u;
       return u;
     } catch {
       return u;

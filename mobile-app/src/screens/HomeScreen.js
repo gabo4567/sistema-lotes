@@ -35,7 +35,12 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       <View style={{ marginTop: 10 }}>
-        <ButtonPrimary title="Cerrar sesión" onPress={confirmLogout} />
+        <ButtonPrimary
+          title="Cerrar sesión"
+          onPress={confirmLogout}
+          style={styles.logoutButton}
+          textStyle={styles.logoutButtonText}
+        />
       </View>
     </View>
   );
@@ -46,4 +51,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, textAlign: "center", marginBottom: 8, color: "#1e8449", fontWeight: "bold" },
   subtitle: { fontSize: 16, textAlign: "center", marginBottom: 20, color: "#2ecc71" },
   actions: { marginVertical: 8 },
+  logoutButton: { backgroundColor: "#f9caca" },
+  logoutButtonText: { color: "#8b1e2d" },
 });

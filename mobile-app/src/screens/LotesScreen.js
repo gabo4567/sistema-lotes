@@ -5,9 +5,9 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, M
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
-import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
 import { useWalkingGPS } from "../hooks/useWalkingGPS";
+import { authFetch, getCurrentAuthContext } from "../api/api";
 
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
@@ -62,13 +62,20 @@ export default function LotesScreen() {
 
   const loadList = async () => {
     try {
-      const tokenResult = await auth.currentUser?.getIdTokenResult();
-      const ipt = tokenResult?.claims?.ipt;
-      if (!ipt) return;
-      const resp = await fetch(`${API_URL}/lotes/productor/${ipt}`);
+      setErrorMsg(null);
+      const { ipt } = await getCurrentAuthContext();
+      if (!ipt) throw new Error("No se encontró IPT del productor");
+      const resp = await authFetch(`${API_URL}/lotes/productor/${ipt}`);
+      if (!resp.ok) {
+        const payload = await resp.json().catch(() => ({}));
+        throw new Error(payload?.error || "No se pudieron cargar los lotes");
+      }
       const j = await resp.json();
       setList(Array.isArray(j) ? j : []);
-    } catch {}
+    } catch (error) {
+      setList([]);
+      setErrorMsg(error.message || "No se pudieron cargar los lotes");
+    }
   };
 
   const onMapPress = (e) => {
@@ -168,13 +175,12 @@ export default function LotesScreen() {
     }
     setSaving(true);
     try {
-      const tokenResult = await auth.currentUser?.getIdTokenResult();
-      const ipt = tokenResult?.claims?.ipt;
+      const { ipt } = await getCurrentAuthContext();
       const poligono = points.map((p) => ({ lat: p.latitude, lng: p.longitude }));
       const metodoMarcado = mode === "gps" ? "GPS" : "aereo";
       let resp;
       if (selected && selected.estado !== "Validado") {
-        resp = await fetch(`${API_URL}/lotes/${selected.id}`, {
+        resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -188,7 +194,7 @@ export default function LotesScreen() {
           throw new Error("Nombre del lote inválido (mínimo 3 caracteres)");
         }
         const body = { ipt, poligono, metodoMarcado, nombre: nombre.trim(), observacionesProductor: observacionesProductor?.slice(0,500) || "", superficie: Number(currentAreaHa.toFixed(4)) };
-        resp = await fetch(`${API_URL}/lotes`, {
+        resp = await authFetch(`${API_URL}/lotes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -244,7 +250,7 @@ export default function LotesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const resp = await fetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
+              const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
               if (!resp.ok) {
                 const j = await resp.json().catch(() => ({}));
                 throw new Error(j?.error || "No se pudo eliminar el lote");
@@ -496,7 +502,7 @@ export default function LotesScreen() {
                   try {
                     if (!selected) return;
                     if (!editNombre || editNombre.trim().length < 3) throw new Error("Nombre inválido");
-                    const resp = await fetch(`${API_URL}/lotes/${selected.id}`, {
+                    const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ nombre: editNombre.trim(), observacionesProductor: editObservaciones?.slice(0,500) || "" }),

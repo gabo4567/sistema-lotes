@@ -98,12 +98,23 @@
    
 - Configurar variables de entorno
 
-- Crear un archivo .env con las claves necesarias:
+- Crear un archivo `.env` (puedes copiar `.env.example`) con:
    ```
-   API_URL=<URL_DEL_BACKEND>
-   GOOGLE_MAPS_API_KEY=<CLAVE_API>
-   FIREBASE_CONFIG=<CONFIGURACION_FIREBASE>
+   EXPO_PUBLIC_API_URL=https://sistema-lotes-backend.onrender.com
+   EXPO_PUBLIC_FIREBASE_API_KEY=<API_KEY_MOVIL_EXPO_GO>
    ```
+
+- Nota de entorno demo institucional estable:
+  - La app móvil toma la URL del backend desde `EXPO_PUBLIC_API_URL`.
+  - Si no existe la variable, usa por defecto el backend productivo en Render.
+   - Firebase permanece apuntando al proyecto productivo configurado en `src/services/firebase.js`.
+   - Recomendado: usar una API key separada para mobile Expo Go (`EXPO_PUBLIC_FIREBASE_API_KEY`) con restricción de aplicación en `None` y restricción de API limitada a Firebase Auth/Installations (y Firestore si aplica).
+
+- Ejecutar con Expo Go (Android):
+   ```
+   npx expo start
+   ```
+  Luego escanear el QR desde Expo Go.
 
 ---
 

@@ -2,24 +2,20 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, Image, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from "../utils/constants";
+import { API_ORIGIN } from "../utils/constants";
 
 const SimpleImagePicker = ({ onImageCaptured, existingImageUrl = null }) => {
   const buildImageUrl = (u) => {
     if (!u) return null;
     try {
-      const origin = String(API_URL).replace(/\/api\/?$/, "");
       if (/^https?:\/\//i.test(u)) {
         const abs = new URL(u);
-        if (abs.hostname === "localhost" || abs.hostname === "127.0.0.1" || abs.hostname === "::1") {
-          return origin + abs.pathname;
-        }
         if (abs.pathname.startsWith("/uploads/")) {
-          return origin + abs.pathname;
+          return API_ORIGIN + abs.pathname;
         }
         return u;
       }
-      if (u.startsWith("/")) return origin + u;
+      if (u.startsWith("/")) return API_ORIGIN + u;
       return u;
     } catch {
       return u;

@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { auth } from '../services/firebase';
 import { API_URL } from '../utils/constants';
+import { authFetch, getCurrentAuthContext } from '../api/api';
 
 const UBIC_TYPES = [
   { key: 'entradaDomicilio', label: 'Entrada del domicilio' },
@@ -22,10 +22,9 @@ export default function MisUbicacionesScreen({ navigation }) {
     try {
       setLoading(true);
       setError('');
-      const tokenResult = await auth.currentUser?.getIdTokenResult();
-      const ipt = tokenResult?.claims?.ipt;
+      const { ipt } = await getCurrentAuthContext();
       if (!ipt) throw new Error('No se encontró IPT');
-      const resp = await fetch(`${API_URL}/productores/ipt/${ipt}`);
+      const resp = await authFetch(`${API_URL}/productores/ipt/${ipt}`);
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));
         throw new Error(j?.error || 'No se pudo cargar el productor');
