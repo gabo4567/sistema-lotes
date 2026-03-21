@@ -541,6 +541,19 @@ export const resetPasswordLink = async (req, res) => {
       }
     } catch (linkError) {
       const code = String(linkError?.code || "");
+      const rawMessage = String(linkError?.message || "").toUpperCase();
+
+      const isResetLimitExceeded =
+        code === "auth/too-many-requests" ||
+        rawMessage.includes("RESET_PASSWORD_EXCEED_LIMIT");
+
+      if (isResetLimitExceeded) {
+        return res.status(429).json({
+          error: "Demasiados intentos de recuperación. Intente nuevamente en unos minutos.",
+          code: "RESET_PASSWORD_EXCEED_LIMIT",
+        });
+      }
+
       if (code === "auth/user-not-found") {
         // No revelar si el email existe o no
         return res.json({
