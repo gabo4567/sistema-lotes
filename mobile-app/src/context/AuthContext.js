@@ -11,6 +11,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If Firebase failed to initialize, bail out immediately
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const watchdog = setTimeout(() => {
       setLoading(false);
     }, 8000);

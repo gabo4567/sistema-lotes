@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import {
   initializeAuth,
+  getAuth,
   getReactNativePersistence,
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,36 +21,46 @@ let auth;
 let db;
 
 // 🔥 INICIALIZACIÓN CORRECTA PARA EXPO GO Y STANDALONE
-if (!globalThis.__firebaseApp) {
-  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  globalThis.__firebaseApp = app;
-} else {
-  app = globalThis.__firebaseApp;
-}
+// Wrapped in try/catch so any initialization failure doesn't crash the app
+try {
+  if (!globalThis.__firebaseApp) {
+    app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    globalThis.__firebaseApp = app;
+  } else {
+    app = globalThis.__firebaseApp;
+  }
 
-if (!globalThis.__firebaseAuth) {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  });
-  globalThis.__firebaseAuth = auth;
-} else {
-  auth = globalThis.__firebaseAuth;
-}
+  if (!globalThis.__firebaseAuth) {
+    try {
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    } catch (authErr) {
+      // auth/already-initialized: another call already set it up – reuse it
+      auth = getAuth(app);
+    }
+    globalThis.__firebaseAuth = auth;
+  } else {
+    auth = globalThis.__firebaseAuth;
+  }
 
-if (!globalThis.__firebaseDb) {
-  db = getFirestore(app);
-  globalThis.__firebaseDb = db;
-} else {
-  db = globalThis.__firebaseDb;
-}
+  if (!globalThis.__firebaseDb) {
+    db = getFirestore(app);
+    globalThis.__firebaseDb = db;
+  } else {
+    db = globalThis.__firebaseDb;
+  }
 
-if (__DEV__) {
-  try {
+  if (__DEV__) {
     console.log("firebase project:", {
       projectId: firebaseConfig.projectId,
       authDomain: firebaseConfig.authDomain,
     });
-  } catch {}
+  }
+} catch (e) {
+  // Store the error so AuthContext can surface it to the user
+  globalThis.__firebaseInitError = e?.message || "Firebase init failed";
+  if (__DEV__) console.error("Firebase initialization error:", e?.message);
 }
 
 export { auth, db };
