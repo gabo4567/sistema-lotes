@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import api from "../api/axios";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { notify } from "../utils/alerts";
+import { getFirebaseApp } from "../utils/firebaseClient";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -17,6 +18,7 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const auth = getAuth(getFirebaseApp());
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -35,21 +37,19 @@ const ResetPassword = () => {
 
     setLoading(true);
     try {
-      const response = await api.post("/auth/reset-password-link", { email: emailNormalized });
+      const continueUrl = String(import.meta.env.VITE_PASSWORD_RESET_CONTINUE_URL || window.location.origin + "/login").trim();
+      const actionCodeSettings = {
+        url: continueUrl,
+        handleCodeInApp: false,
+      };
 
-      const message = response?.data?.message || "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+      await sendPasswordResetEmail(auth, emailNormalized, actionCodeSettings);
+
+      const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
       setSuccess(message);
       await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
     } catch (err) {
-      if (err?.response?.status === 429) {
-        const tooMany = "Demasiados intentos. Intente nuevamente en unos minutos.";
-        setError(tooMany);
-        await notify({ title: "No se pudo enviar el correo", text: tooMany, icon: "error" });
-        return;
-      }
-
-      const backendMessage = err?.response?.data?.error;
-      const message = backendMessage || FIREBASE_RESET_ERRORS[err?.code] || "No se pudo procesar la recuperación de contraseña.";
+      const message = FIREBASE_RESET_ERRORS[err?.code] || "No se pudo procesar la recuperación de contraseña.";
       setError(message);
       await notify({ title: "No se pudo enviar el correo", text: message, icon: "error" });
     } finally { setLoading(false); }

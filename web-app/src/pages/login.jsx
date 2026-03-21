@@ -2,9 +2,11 @@
 
 import React, { useState, useContext, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import api from "../api/axios";
 import { AuthContext } from "../contexts/AuthContext";
 import { notify } from "../utils/alerts";
+import { getFirebaseApp } from "../utils/firebaseClient";
 
 import bg from "../assets/470694502_1364235428284349_7836195038289849919_n.jpg";
 import logo from "../assets/cropped-ipt-logo-byn.png";
@@ -21,6 +23,7 @@ const FIREBASE_ERRORS = {
 const Login = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const auth = getAuth(getFirebaseApp());
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,10 +57,15 @@ const Login = () => {
     if (loading) return;
     if (!validate()) return;
     setLoading(true);
+    let firebaseAuthenticated = false;
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const credentials = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      firebaseAuthenticated = true;
+      const idToken = await credentials.user.getIdToken();
+
       const res = await api.post("/auth/login", {
-        email: email.trim(),
-        password,
+        idToken,
       });
 
       login(res.data.token);
@@ -65,7 +73,22 @@ const Login = () => {
       navigate("/home");
 
     } catch (err) {
+      if (firebaseAuthenticated) {
+        try {
+          await signOut(auth);
+        } catch {
+          // noop
+        }
+      }
+
       const backendMessage = err?.response?.data?.error || err?.message;
+
+      const fbMsg = FIREBASE_ERRORS[err?.code];
+      if (fbMsg) {
+        setError(fbMsg);
+        await notify({ title: "No se pudo iniciar sesión", text: fbMsg, icon: "error" });
+        return;
+      }
 
       if (err?.response?.status === 429) {
         const tooMany = "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.";
@@ -80,11 +103,7 @@ const Login = () => {
         return;
       }
 
-      const fbMsg = FIREBASE_ERRORS[err?.code];
-      if (fbMsg) {
-        setError(fbMsg);
-        await notify({ title: "No se pudo iniciar sesión", text: fbMsg, icon: "error" });
-      } else if (err?.code === "ECONNABORTED") {
+      if (err?.code === "ECONNABORTED") {
         setError("No se pudo conectar al servidor. Intente más tarde.");
         await notify({ title: "Error de conexión", text: "No se pudo conectar al servidor. Intente más tarde.", icon: "error" });
       } else {

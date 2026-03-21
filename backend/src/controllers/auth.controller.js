@@ -519,12 +519,22 @@ export const resetPasswordLink = async (req, res) => {
 
     try {
       if (actionCodeSettings) {
-        await admin.auth().generatePasswordResetLink(emailNormalized, actionCodeSettings);
+        try {
+          await admin.auth().generatePasswordResetLink(emailNormalized, actionCodeSettings);
+        } catch (error) {
+          const code = String(error?.code || "");
+          if (code === "auth/invalid-continue-uri" || code === "auth/unauthorized-continue-uri") {
+            await admin.auth().generatePasswordResetLink(emailNormalized);
+          } else {
+            throw error;
+          }
+        }
       } else {
         await admin.auth().generatePasswordResetLink(emailNormalized);
       }
     } catch (error) {
-      if (String(error?.code || "") !== "auth/user-not-found") {
+      const code = String(error?.code || "");
+      if (code !== "auth/user-not-found") {
         throw error;
       }
     }
