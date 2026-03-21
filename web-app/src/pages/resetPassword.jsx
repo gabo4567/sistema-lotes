@@ -11,6 +11,28 @@ const BACKEND_RESET_ERRORS = {
   429: "Demasiados intentos. Intente nuevamente en unos minutos.",
 };
 
+const mapFirebaseResetError = (error) => {
+  const code = String(error?.code || "").trim();
+
+  if (code === "auth/too-many-requests") {
+    return "Demasiados intentos. Intente nuevamente en unos minutos.";
+  }
+
+  if (code === "auth/invalid-email") {
+    return "Ingrese un correo electrónico válido.";
+  }
+
+  if (code.startsWith("auth/requests-from-referer-")) {
+    return "Firebase bloqueó este dominio en la API key o en dominios autorizados.";
+  }
+
+  if (code === "auth/unauthorized-continue-uri") {
+    return "La URL de continuación no está autorizada en Firebase.";
+  }
+
+  return null;
+};
+
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") || "");
@@ -54,16 +76,27 @@ const ResetPassword = () => {
         String(err?.response?.data?.error || "").toLowerCase().includes("restablecimiento");
 
       if (isRecoverableBackendFailure) {
+        let firebaseFallbackError = null;
         try {
           const continueUrl = String(import.meta.env.VITE_PASSWORD_RESET_CONTINUE_URL || window.location.origin + "/login").trim();
-          await sendPasswordResetEmail(auth, emailNormalized, { url: continueUrl, handleCodeInApp: false });
+          try {
+            await sendPasswordResetEmail(auth, emailNormalized, { url: continueUrl, handleCodeInApp: false });
+          } catch (firstFallbackError) {
+            firebaseFallbackError = firstFallbackError;
+            await sendPasswordResetEmail(auth, emailNormalized);
+          }
 
           const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
           setSuccess(message);
           await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
           return;
-        } catch {
-          // continúa con error estándar
+        } catch (finalFallbackError) {
+          const mappedFirebase = mapFirebaseResetError(finalFallbackError || firebaseFallbackError);
+          if (mappedFirebase) {
+            setError(mappedFirebase);
+            await notify({ title: "No se pudo enviar el correo", text: mappedFirebase, icon: "error" });
+            return;
+          }
         }
       }
 
