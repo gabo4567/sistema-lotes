@@ -3,6 +3,28 @@ const GOOGLE_MAPS_LIBRARIES = ["drawing", "geometry", "places"];
 
 let googleMapsPromise = null;
 
+async function ensureGoogleMapsLibraries() {
+  const mapsApi = window.google?.maps;
+
+  if (!mapsApi) {
+    throw new Error("Google Maps no expuso la API global esperada");
+  }
+
+  if (typeof mapsApi.importLibrary === "function") {
+    await mapsApi.importLibrary("maps");
+
+    for (const library of GOOGLE_MAPS_LIBRARIES) {
+      await mapsApi.importLibrary(library);
+    }
+  }
+
+  if (typeof window.google?.maps?.Map !== "function") {
+    throw new Error("Google Maps no cargo correctamente el constructor del mapa");
+  }
+
+  return window.google.maps;
+}
+
 function buildGoogleMapsUrl(apiKey) {
   const params = new URLSearchParams({
     key: apiKey,
@@ -17,10 +39,18 @@ function waitForGoogleMaps(timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
 
-    const poll = () => {
+    const poll = async () => {
       if (window.google?.maps) {
-        resolve(window.google.maps);
-        return;
+        try {
+          const mapsApi = await ensureGoogleMapsLibraries();
+          resolve(mapsApi);
+          return;
+        } catch (error) {
+          if (Date.now() - start >= timeoutMs) {
+            reject(error);
+            return;
+          }
+        }
       }
 
       if (Date.now() - start >= timeoutMs) {
@@ -40,8 +70,8 @@ export function loadGoogleMaps(apiKey) {
     return Promise.reject(new Error("Falta VITE_GOOGLE_MAPS_API_KEY"));
   }
 
-  if (window.google?.maps) {
-    return Promise.resolve(window.google.maps);
+  if (window.google?.maps && typeof window.google.maps.Map === "function") {
+    return ensureGoogleMapsLibraries();
   }
 
   if (googleMapsPromise) {

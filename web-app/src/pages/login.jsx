@@ -20,6 +20,17 @@ const FIREBASE_ERRORS = {
   "auth/network-request-failed": "No se pudo conectar. Verifique su conexión a internet.",
 };
 
+const mapFirebaseError = (err) => {
+  const code = String(err?.code || "").trim();
+  if (FIREBASE_ERRORS[code]) return FIREBASE_ERRORS[code];
+
+  if (code.startsWith("auth/requests-from-referer-")) {
+    return "Firebase bloqueó solicitudes desde este dominio. Configure Authorized Domains en Firebase Auth y los HTTP referrers del API key en Google Cloud.";
+  }
+
+  return null;
+};
+
 const Login = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -69,7 +80,6 @@ const Login = () => {
       });
 
       login(res.data.token);
-      await notify({ title: "Inicio de sesión exitoso", icon: "success" });
       navigate("/home");
 
     } catch (err) {
@@ -83,7 +93,7 @@ const Login = () => {
 
       const backendMessage = err?.response?.data?.error || err?.message;
 
-      const fbMsg = FIREBASE_ERRORS[err?.code];
+      const fbMsg = mapFirebaseError(err);
       if (fbMsg) {
         setError(fbMsg);
         await notify({ title: "No se pudo iniciar sesión", text: fbMsg, icon: "error" });

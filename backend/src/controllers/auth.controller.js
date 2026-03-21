@@ -1,8 +1,9 @@
-// src/controllers/auth.controller.js
+﻿// src/controllers/auth.controller.js
 import { db, admin } from "../utils/firebase.js";
 import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";
 import { logServerError, sendInternalError } from "../utils/httpErrors.js";
+import { sendResetPasswordEmail } from "../utils/email.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -10,9 +11,9 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
 
 const FIREBASE_SIGN_IN_ERRORS = {
-  INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales inválidas" },
-  INVALID_PASSWORD: { status: 401, message: "Credenciales inválidas" },
-  EMAIL_NOT_FOUND: { status: 401, message: "Credenciales inválidas" },
+  INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales invÃ¡lidas" },
+  INVALID_PASSWORD: { status: 401, message: "Credenciales invÃ¡lidas" },
+  EMAIL_NOT_FOUND: { status: 401, message: "Credenciales invÃ¡lidas" },
   USER_DISABLED: { status: 403, message: "La cuenta ha sido deshabilitada" },
   TOO_MANY_ATTEMPTS_TRY_LATER: { status: 429, message: "Demasiados intentos. Intente nuevamente en unos minutos." },
 };
@@ -64,11 +65,11 @@ export const registerUser = async (req, res) => {
     const emailNormalized = normalizeEmail(email);
 
     if (!isValidEmail(emailNormalized)) {
-      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+      return res.status(400).json({ error: "Ingrese un correo electrÃ³nico vÃ¡lido." });
     }
 
     if (!password || String(password).length < 6) {
-      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
+      return res.status(400).json({ error: "La contraseÃ±a debe tener al menos 6 caracteres." });
     }
 
     const domain = process.env.WEB_EMAIL_DOMAIN;
@@ -76,7 +77,7 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
     }
 
-    // Evitar correos duplicados en Firestore (además de la restricción de Firebase Auth)
+    // Evitar correos duplicados en Firestore (ademÃ¡s de la restricciÃ³n de Firebase Auth)
     const existingUsers = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
     if (!existingUsers.empty) {
       return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
@@ -88,7 +89,7 @@ export const registerUser = async (req, res) => {
       displayName: nombre,
     });
 
-    const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
+    const allowed = ["Administrador", "Tecnico", "TÃ©cnico", "Supervisor"];
     const finalRole = allowed.includes(role) ? role : "Tecnico";
     await db.collection("users").doc(userRecord.uid).set({
       email: emailNormalized,
@@ -98,7 +99,7 @@ export const registerUser = async (req, res) => {
     });
 
     res.json({
-      message: "✅ Usuario creado correctamente",
+      message: "âœ… Usuario creado correctamente",
       user: {
         uid: userRecord.uid,
         email: userRecord.email,
@@ -131,19 +132,19 @@ export const registerProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
-    // Validación de formato de email
+    // ValidaciÃ³n de formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email && !emailRegex.test(email)) {
-      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+      return res.status(400).json({ error: "Ingrese un correo electrÃ³nico vÃ¡lido." });
     }
 
-    // Validación de formato de teléfono
+    // ValidaciÃ³n de formato de telÃ©fono
     const telRegex = /^\d{10,13}$/;
     if (telefono && !telRegex.test(telefono)) {
-      return res.status(400).json({ error: "El número debe contener solo dígitos (10 a 13 números)." });
+      return res.status(400).json({ error: "El nÃºmero debe contener solo dÃ­gitos (10 a 13 nÃºmeros)." });
     }
 
-    // Validar unicidad de IPT (si existe y está activo, no permitir duplicado)
+    // Validar unicidad de IPT (si existe y estÃ¡ activo, no permitir duplicado)
     const existingIpt = await db
       .collection("productores")
       .where("ipt", "==", String(ipt))
@@ -151,7 +152,7 @@ export const registerProductor = async (req, res) => {
       .get();
     
     if (!existingIpt.empty) {
-      return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
+      return res.status(400).json({ error: "El nÃºmero de IPT ya se encuentra registrado." });
     }
 
     // Validar unicidad de CUIL
@@ -174,7 +175,7 @@ export const registerProductor = async (req, res) => {
         .get();
       
       if (!existingEmail.empty) {
-        return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
+        return res.status(400).json({ error: "El correo electrÃ³nico ya se encuentra registrado." });
       }
     }
 
@@ -210,7 +211,7 @@ export const registerProductor = async (req, res) => {
         if (email) {
           try {
             await admin.auth().getUserByEmail(email);
-            // Si no lanza error, el email ya está en uso. No lo asignamos a este Auth Record.
+            // Si no lanza error, el email ya estÃ¡ en uso. No lo asignamos a este Auth Record.
           } catch (err) {
             if (err.code === 'auth/user-not-found') {
               authData.email = email;
@@ -223,7 +224,7 @@ export const registerProductor = async (req, res) => {
       }
     }
 
-    // Crear o actualizar el registro en la colección de 'users' para que aparezca en la lista
+    // Crear o actualizar el registro en la colecciÃ³n de 'users' para que aparezca en la lista
     await db.collection("users").doc(authUid).set({
       email: email || "",
       nombre: nombreCompleto,
@@ -234,7 +235,7 @@ export const registerProductor = async (req, res) => {
       updatedAt: new Date(),
     }, { merge: true });
 
-    // Asignar claims útiles para posteriores autorizaciones
+    // Asignar claims Ãºtiles para posteriores autorizaciones
     await admin.auth().setCustomUserClaims(authUid, {
       role: "productor",
       ipt: String(ipt),
@@ -244,7 +245,7 @@ export const registerProductor = async (req, res) => {
     });
 
     return res.json({
-      message: "✅ Productor registrado correctamente",
+      message: "âœ… Productor registrado correctamente",
       id: docRef.id,
       authUid,
       ...newProductor,
@@ -256,7 +257,7 @@ export const registerProductor = async (req, res) => {
 };
 
 // Login de usuario
-// Login de usuario (web panel) — recibe un Firebase ID token verificado desde el cliente
+// Login de usuario (web panel) â€” recibe un Firebase ID token verificado desde el cliente
 export const loginUser = async (req, res) => {
   try {
     const { idToken, email, password } = req.body;
@@ -277,12 +278,12 @@ export const loginUser = async (req, res) => {
         });
       } catch (error) {
         if (error?.kind === "config") {
-          logServerError("Configuración faltante para login Firebase", error);
-          return res.status(500).json({ error: "Configuración de autenticación incompleta" });
+          logServerError("ConfiguraciÃ³n faltante para login Firebase", error);
+          return res.status(500).json({ error: "ConfiguraciÃ³n de autenticaciÃ³n incompleta" });
         }
 
         if (error?.kind === "auth") {
-          return res.status(error.status || 401).json({ error: error.message || "Credenciales inválidas" });
+          return res.status(error.status || 401).json({ error: error.message || "Credenciales invÃ¡lidas" });
         }
 
         throw error;
@@ -294,7 +295,7 @@ export const loginUser = async (req, res) => {
     try {
       decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
     } catch {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ error: "Credenciales invÃ¡lidas" });
     }
 
     const { uid, email: firebaseEmail } = decodedToken;
@@ -324,12 +325,12 @@ export const loginUser = async (req, res) => {
       }
     }
 
-    // 3. Los productores usan la app móvil — no el panel web
+    // 3. Los productores usan la app mÃ³vil â€” no el panel web
     if (String(role).toLowerCase() === "productor") {
-      return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
+      return res.status(403).json({ error: "Los productores deben usar la aplicaciÃ³n mÃ³vil" });
     }
 
-    // 4. Actualizar último acceso
+    // 4. Actualizar Ãºltimo acceso
     await db.collection("users").doc(resolvedUid).set({
       email: emailNormalized,
       role,
@@ -340,7 +341,7 @@ export const loginUser = async (req, res) => {
     res.json({ token: webToken, role });
   } catch (error) {
     logServerError("Error al hacer login", error);
-    res.status(500).json({ error: "No se pudo iniciar sesión" });
+    res.status(500).json({ error: "No se pudo iniciar sesiÃ³n" });
   }
 };
 
@@ -374,7 +375,7 @@ export const loginProductor = async (req, res) => {
       ok = hash && data.passwordHash && hash === data.passwordHash;
     }
     if (!ok) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ error: "Credenciales invÃ¡lidas" });
     }
     const uid = `prod_${String(ipt)}`;
     
@@ -426,8 +427,8 @@ export const loginProductor = async (req, res) => {
 
     return res.json({ token, requiereCambioContrasena: requiereCambio });
   } catch (error) {
-    logServerError("Error al iniciar sesión de productor", error);
-    return res.status(500).json({ error: "No se pudo iniciar sesión" });
+    logServerError("Error al iniciar sesiÃ³n de productor", error);
+    return res.status(500).json({ error: "No se pudo iniciar sesiÃ³n" });
   }
 };
 
@@ -438,7 +439,7 @@ export const cambiarPasswordProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
     if (String(newPassword).length < 6) {
-      return res.status(400).json({ error: "Contraseña demasiado débil" });
+      return res.status(400).json({ error: "ContraseÃ±a demasiado dÃ©bil" });
     }
     const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
     if (snap.empty) {
@@ -456,7 +457,7 @@ export const cambiarPasswordProductor = async (req, res) => {
       ok = hash && data.passwordHash && hash === data.passwordHash;
     }
     if (!ok) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ error: "Credenciales invÃ¡lidas" });
     }
     const salt = String(data.ipt);
     const newHash = hashPassword(String(newPassword), salt);
@@ -490,57 +491,81 @@ export const cambiarPasswordProductor = async (req, res) => {
         updatedAt: new Date(),
       }, { merge: true });
     } catch (e) {
-      logServerError("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseña", e);
+      logServerError("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseÃ±a", e);
     }
     try {
       await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
     } catch (e) {
-      logServerError("No se pudo registrar ingresoProductor luego de cambio de contraseña", e);
+      logServerError("No se pudo registrar ingresoProductor luego de cambio de contraseÃ±a", e);
     }
-    return res.json({ message: "Contraseña actualizada", token });
+    return res.json({ message: "ContraseÃ±a actualizada", token });
   } catch (error) {
-    logServerError("Error al cambiar contraseña de productor", error);
-    return res.status(500).json({ error: "No se pudo actualizar la contraseña" });
+    logServerError("Error al cambiar contraseÃ±a de productor", error);
+    return res.status(500).json({ error: "No se pudo actualizar la contraseÃ±a" });
   }
 };
-
-// Generar enlace de reseteo de contraseña (usuarios web)
 export const resetPasswordLink = async (req, res) => {
   try {
     const { email } = req.body;
     const emailNormalized = normalizeEmail(email);
 
     if (!isValidEmail(emailNormalized)) {
-      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+      return res.status(400).json({ error: "Ingrese un correo electrÃ³nico vÃ¡lido." });
     }
 
-    const continueUrl = String(process.env.WEB_PASSWORD_RESET_CONTINUE_URL || process.env.FRONTEND_URL || "").trim();
-    const actionCodeSettings = continueUrl ? { url: continueUrl, handleCodeInApp: false } : undefined;
+    const continueUrl = String(
+      process.env.WEB_PASSWORD_RESET_CONTINUE_URL ||
+      process.env.FRONTEND_URL ||
+      ""
+    ).trim();
+    const actionCodeSettings = continueUrl
+      ? { url: continueUrl, handleCodeInApp: false }
+      : undefined;
 
+    // 1. Generar el link seguro de Firebase
+    let resetLink;
     try {
       if (actionCodeSettings) {
         try {
-          await admin.auth().generatePasswordResetLink(emailNormalized, actionCodeSettings);
-        } catch (error) {
-          const code = String(error?.code || "");
+          resetLink = await admin.auth().generatePasswordResetLink(emailNormalized, actionCodeSettings);
+        } catch (linkError) {
+          const code = String(linkError?.code || "");
           if (code === "auth/invalid-continue-uri" || code === "auth/unauthorized-continue-uri") {
-            await admin.auth().generatePasswordResetLink(emailNormalized);
+            resetLink = await admin.auth().generatePasswordResetLink(emailNormalized);
           } else {
-            throw error;
+            throw linkError;
           }
         }
       } else {
-        await admin.auth().generatePasswordResetLink(emailNormalized);
+        resetLink = await admin.auth().generatePasswordResetLink(emailNormalized);
       }
-    } catch (error) {
-      const code = String(error?.code || "");
-      if (code !== "auth/user-not-found") {
-        throw error;
+    } catch (linkError) {
+      const code = String(linkError?.code || "");
+      if (code === "auth/user-not-found") {
+        // No revelar si el email existe o no
+        return res.json({
+          message: "Si el correo estÃ¡ registrado, se enviarÃ¡ un enlace para restablecer la contraseÃ±a.",
+        });
       }
+      throw linkError;
     }
 
+    // 2. Buscar el nombre del usuario para personalizar el email
+    let nombre = null;
+    try {
+      const snap = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
+      if (!snap.empty) {
+        nombre = snap.docs[0].data().nombre || null;
+      }
+    } catch {
+      // noop â€” el nombre es opcional
+    }
+
+    // 3. Enviar email HTML personalizado
+    await sendResetPasswordEmail({ to: emailNormalized, resetLink, nombre });
+
     return res.json({
-      message: "Si el correo está registrado, se enviará un enlace para restablecer la contraseña.",
+      message: "Si el correo estÃ¡ registrado, se enviarÃ¡ un enlace para restablecer la contraseÃ±a.",
     });
   } catch (error) {
     logServerError("Error generando reset link", error);

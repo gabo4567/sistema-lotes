@@ -1,15 +1,12 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import api from "../api/axios";
 import { notify } from "../utils/alerts";
-import { getFirebaseApp } from "../utils/firebaseClient";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const FIREBASE_RESET_ERRORS = {
-  "auth/invalid-email": "Ingrese un correo electrónico válido.",
-  "auth/network-request-failed": "No se pudo conectar. Verifique su conexión a internet.",
-  "auth/too-many-requests": "Demasiados intentos. Intente nuevamente en unos minutos.",
+const BACKEND_RESET_ERRORS = {
+  429: "Demasiados intentos. Intente nuevamente en unos minutos.",
 };
 
 const ResetPassword = () => {
@@ -18,7 +15,6 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-  const auth = getAuth(getFirebaseApp());
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -37,19 +33,18 @@ const ResetPassword = () => {
 
     setLoading(true);
     try {
-      const continueUrl = String(import.meta.env.VITE_PASSWORD_RESET_CONTINUE_URL || window.location.origin + "/login").trim();
-      const actionCodeSettings = {
-        url: continueUrl,
-        handleCodeInApp: false,
-      };
-
-      await sendPasswordResetEmail(auth, emailNormalized, actionCodeSettings);
-
-      const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+      const response = await api.post("/auth/reset-password-link", { email: emailNormalized });
+      const message = response?.data?.message || "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
       setSuccess(message);
       await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
     } catch (err) {
-      const message = FIREBASE_RESET_ERRORS[err?.code] || "No se pudo procesar la recuperación de contraseña.";
+      if (err?.response?.status === 429) {
+        const msg = BACKEND_RESET_ERRORS[429];
+        setError(msg);
+        await notify({ title: "No se pudo enviar el correo", text: msg, icon: "error" });
+        return;
+      }
+      const message = err?.response?.data?.error || "No se pudo procesar la recuperación de contraseña.";
       setError(message);
       await notify({ title: "No se pudo enviar el correo", text: message, icon: "error" });
     } finally { setLoading(false); }
