@@ -1,6 +1,6 @@
 // src/screens/EditarUbicacionScreen.js
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -21,25 +21,33 @@ export default function EditarUbicacionScreen({ route, navigation }) {
   const [region, setRegion] = useState(null);
   const [marker, setMarker] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
   const current = productor?.ubicaciones?.[tipo];
 
+  const requestLocationAccess = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setLocationPermissionDenied(true);
+      setRegion(null);
+      return;
+    }
+    setLocationPermissionDenied(false);
+
+    let initial = null;
+    if (current?.lat != null && current?.lng != null) {
+      initial = { latitude: current.lat, longitude: current.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+      setMarker({ latitude: current.lat, longitude: current.lng });
+    } else {
+      const loc = await Location.getCurrentPositionAsync({});
+      initial = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 };
+    }
+    setRegion(initial);
+  };
+
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permisos', 'Se necesita permiso de ubicación');
-        return;
-      }
-      let initial = null;
-      if (current?.lat != null && current?.lng != null) {
-        initial = { latitude: current.lat, longitude: current.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-        setMarker({ latitude: current.lat, longitude: current.lng });
-      } else {
-        const loc = await Location.getCurrentPositionAsync({});
-        initial = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 };
-      }
-      setRegion(initial);
+      await requestLocationAccess();
     })();
   }, []);
 
@@ -96,6 +104,28 @@ export default function EditarUbicacionScreen({ route, navigation }) {
             <Marker draggable coordinate={marker} onDragEnd={({ nativeEvent }) => setMarker(nativeEvent.coordinate)} />
           )}
         </MapView>
+      ) : locationPermissionDenied ? (
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
+          <Text style={styles.info}>Para editar ubicaciones debes habilitar el permiso de ubicación.</Text>
+          <View style={styles.row}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+              <Text style={styles.btnText}>Reintentar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, styles.primary]}
+              onPress={async () => {
+                try {
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert('No disponible', 'No se pudo abrir configuración del sistema');
+                }
+              }}
+            >
+              <Text style={styles.btnText}>Abrir configuración</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         <Text style={styles.info}>Cargando mapa…</Text>
       )}
@@ -104,9 +134,6 @@ export default function EditarUbicacionScreen({ route, navigation }) {
         <View style={styles.row}>
           <TouchableOpacity style={[styles.btn, styles.primary]} onPress={save} disabled={saving || !marker}>
             <Text style={styles.btnText}>{saving ? 'Guardando…' : 'Guardar'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => navigation.goBack()}>
-            <Text style={styles.btnText}>Cancelar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, { backgroundColor: '#c0392b' }]}
@@ -123,6 +150,9 @@ export default function EditarUbicacionScreen({ route, navigation }) {
           >
             <Text style={styles.btnText}>Eliminar</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => navigation.goBack()}>
+            <Text style={styles.btnText}>Cancelar</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -133,6 +163,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', padding: 12 },
   title: { fontSize: 20, textAlign: 'center', marginBottom: 8, color: '#1e8449', fontWeight: 'bold' },
   map: { flex: 1 },
+  permissionCard: { padding: 16, borderRadius: 12, backgroundColor: '#fff3f3', borderWidth: 1, borderColor: '#f3cccc', marginBottom: 12 },
+  permissionTitle: { fontSize: 16, textAlign: 'center', marginBottom: 8, color: '#8b1e2d', fontWeight: '700' },
   panel: { backgroundColor: '#ffffff', padding: 12, borderRadius: 12, marginTop: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   btn: { backgroundColor: '#1e8449', padding: 10, borderRadius: 8, flexGrow: 1, alignItems: 'center', marginHorizontal: 4 },

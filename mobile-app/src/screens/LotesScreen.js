@@ -1,8 +1,24 @@
 // src/screens/LotesScreen.js
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Alert,
+  TextInput,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Linking,
+  BackHandler,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
 import { API_URL } from "../utils/constants";
@@ -12,6 +28,8 @@ import { authFetch, getCurrentAuthContext } from "../api/api";
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+  const [requestingLocation, setRequestingLocation] = useState(false);
   const [mode, setMode] = useState("aereo");
   const [points, setPoints] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -21,10 +39,14 @@ export default function LotesScreen() {
   const [observacionesProductor, setObservacionesProductor] = useState("");
   const [creating, setCreating] = useState(false);
   const [createStep, setCreateStep] = useState("polygon");
+  const [polygonConfirmed, setPolygonConfirmed] = useState(false);
   const [viewingList, setViewingList] = useState(false);
+  const [viewMode, setViewMode] = useState("normal");
+  const [viewingDetailFromList, setViewingDetailFromList] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editNombre, setEditNombre] = useState("");
   const [editObservaciones, setEditObservaciones] = useState("");
+
   const mapRef = useRef(null);
   const insets = useSafeAreaInsets();
   const { isWalking, route, startWalking, stopWalking, resetRoute, addManualPoint, undoLastPoint, currentLocation } = useWalkingGPS();
@@ -42,22 +64,75 @@ export default function LotesScreen() {
   }, [isWalking, stopWalking]);
 
   useEffect(() => {
-    (async () => {
+    if (createStep === "polygon") {
+      setPolygonConfirmed(false);
+    }
+  }, [points, mode, createStep]);
+
+  // Intercept Android hardware back button to step backward through the creation flow
+  useFocusEffect(
+    useCallback(() => {
+      const onBack = () => {
+        if (createStep === "form") {
+          // form → polygon step
+          setCreateStep("polygon");
+          return true;
+        }
+        if (viewingDetailFromList) {
+          closeDetailFromList();
+          return true;
+        }
+        if (creating) {
+          // polygon step → cancel creation
+          cancelCreate();
+          return true;
+        }
+        if (viewMode === "listOnly" || viewMode === "mapOnly") {
+          setViewMode("normal");
+          setSelected(null);
+          setViewingList(false);
+          return true;
+        }
+        if (viewingList) {
+          setViewingList(false);
+          return true;
+        }
+        if (selected) {
+          setSelected(null);
+          setPoints([]);
+          setPolygonConfirmed(false);
+          return true;
+        }
+        // nothing active → let react-navigation handle (navigate back to Home)
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+      return () => sub.remove();
+    }, [createStep, creating, viewingList, selected, viewingDetailFromList, viewMode])
+  );
+
+  const requestLocationAccess = useCallback(async () => {
+    try {
+      setRequestingLocation(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setErrorMsg("Se necesita permiso de ubicación.");
+        setLocationPermissionDenied(true);
+        setLocation(null);
         return;
       }
 
       const loc = await Location.getCurrentPositionAsync({});
+      setLocationPermissionDenied(false);
       setLocation({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
-      loadList();
-    })();
+    } finally {
+      setRequestingLocation(false);
+    }
   }, []);
 
   const loadList = async () => {
@@ -78,22 +153,100 @@ export default function LotesScreen() {
     }
   };
 
+  useEffect(() => {
+    loadList();
+    requestLocationAccess();
+  }, [requestLocationAccess]);
+
+  // ── Geometry helpers for self-intersection detection ──────────────────
+  const cross2D = (o, a, b) =>
+    (a.latitude - o.latitude) * (b.longitude - o.longitude) -
+    (a.longitude - o.longitude) * (b.latitude - o.latitude);
+
+  const onSegLL = (p, q, r) =>
+    Math.min(p.latitude, r.latitude) <= q.latitude &&
+    q.latitude <= Math.max(p.latitude, r.latitude) &&
+    Math.min(p.longitude, r.longitude) <= q.longitude &&
+    q.longitude <= Math.max(p.longitude, r.longitude);
+
+  const edgesIntersect = (p1, p2, p3, p4) => {
+    const eps = 1e-10;
+    const d1 = cross2D(p3, p4, p1), d2 = cross2D(p3, p4, p2);
+    const d3 = cross2D(p1, p2, p3), d4 = cross2D(p1, p2, p4);
+    if (((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+        ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))) return true;
+    if (Math.abs(d1) < eps && onSegLL(p3, p4, p1)) return true;
+    if (Math.abs(d2) < eps && onSegLL(p3, p4, p2)) return true;
+    if (Math.abs(d3) < eps && onSegLL(p1, p2, p3)) return true;
+    if (Math.abs(d4) < eps && onSegLL(p1, p2, p4)) return true;
+    return false;
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
   const onMapPress = (e) => {
     if (!creating || createStep !== "polygon" || mode !== "aereo") return;
     const { coordinate } = e.nativeEvent;
-    setPoints((prev) => [...prev, { latitude: coordinate.latitude, longitude: coordinate.longitude }]);
-  };
+    const newPt = { latitude: coordinate.latitude, longitude: coordinate.longitude };
 
-  useEffect(() => {
-    // El modo GPS ahora se maneja mediante useWalkingGPS en lugar de este watcher local.
-  }, [mode, creating, createStep]);
+    if (points.length >= 4) {
+      Alert.alert(
+        "Máximo 4 puntos",
+        "Un lote puede tener 3 puntos (triángulo) o 4 puntos (cuadrilátero). Usá 'Limpiar' para empezar de nuevo."
+      );
+      return;
+    }
+
+    // When adding the 4th point, verify the resulting quadrilateral is simple (no crossing edges)
+    if (points.length === 3) {
+      const [P0, P1, P2] = points;
+      const P3 = newPt;
+      // New edge P2→P3 must not cross P0→P1
+      // Closing edge P3→P0 must not cross P1→P2
+      if (edgesIntersect(P2, P3, P0, P1) || edgesIntersect(P3, P0, P1, P2)) {
+        Alert.alert(
+          "Punto inválido",
+          "El punto elegido crearía un polígono con aristas cruzadas (forma de mariposa). Elegí un punto que quede dentro o fuera del triángulo actual."
+        );
+        return;
+      }
+    }
+
+    setPoints((prev) => [...prev, newPt]);
+  };
 
   const clearPolygon = () => {
     setPoints([]);
+    setPolygonConfirmed(false);
     if (mode === "gps") resetRoute();
   };
 
+  const goToMapView = () => {
+    setViewMode("mapOnly");
+    setCreating(false);
+    setSelected(null);
+    setViewingList(false);
+    setViewingDetailFromList(false);
+  };
+
+  const goToListView = () => {
+    setViewMode("listOnly");
+    setCreating(false);
+    setSelected(null);
+    setViewingList(false);
+    setViewingDetailFromList(false);
+  };
+
+  const closeDetailFromList = () => {
+    setViewingDetailFromList(false);
+    setSelected(null);
+    setViewMode("listOnly");
+  };
+
   const startCreate = () => {
+    if (!location) {
+      Alert.alert("Ubicación requerida", "Necesitas habilitar la ubicación para crear o editar polígonos de lotes.");
+      return;
+    }
     setCreating(true);
     setSelected(null);
     setPoints([]);
@@ -101,7 +254,10 @@ export default function LotesScreen() {
     setObservacionesProductor("");
     setMode("aereo");
     setCreateStep("polygon");
+    setPolygonConfirmed(false);
     setViewingList(false);
+    setViewMode("normal");
+    setViewingDetailFromList(false);
   };
 
   const cancelCreate = () => {
@@ -110,9 +266,14 @@ export default function LotesScreen() {
     setNombre("");
     setObservacionesProductor("");
     setCreateStep("polygon");
+    setPolygonConfirmed(false);
   };
 
   const toFormStep = () => {
+    if (!polygonConfirmed) {
+      Alert.alert("Confirmación requerida", "Debes confirmar el polígono antes de continuar.");
+      return;
+    }
     setCreateStep("form");
   };
 
@@ -123,87 +284,94 @@ export default function LotesScreen() {
   const degreesToRadians = (deg) => (deg * Math.PI) / 180;
   const computeAreaHa = (pts) => {
     if (!Array.isArray(pts) || pts.length < 3) return 0;
-    
-    // 1. Limpiar puntos: asegurar que sean números y filtrar duplicados consecutivos
+
     const cleanPts = pts
-      .map(p => ({
+      .map((p) => ({
         lat: Number(p.latitude || p.lat || 0),
-        lng: Number(p.longitude || p.lng || 0)
+        lng: Number(p.longitude || p.lng || 0),
       }))
       .filter((p, i, arr) => {
         if (i === 0) return true;
-        // Ignorar si es idéntico al anterior para evitar división por cero o errores de precisión
-        return p.lat !== arr[i-1].lat || p.lng !== arr[i-1].lng;
+        return p.lat !== arr[i - 1].lat || p.lng !== arr[i - 1].lng;
       });
 
     if (cleanPts.length < 3) return 0;
 
-    const R = 6378137; // Radio medio de la Tierra en metros
+    const R = 6378137;
     const lat0 = cleanPts[0].lat;
     const lon0 = cleanPts[0].lng;
     const cosLat0 = Math.cos(degreesToRadians(lat0));
 
-    // 2. Proyección plana local preservando precisión (restando el primer punto)
     const projected = cleanPts.map((p) => {
       const x = degreesToRadians(p.lng - lon0) * R * cosLat0;
       const y = degreesToRadians(p.lat - lat0) * R;
       return { x, y };
     });
 
-    // 3. Fórmula de Shoelace para el área del polígono proyectado
     let area = 0;
     for (let i = 0; i < projected.length; i++) {
       const j = (i + 1) % projected.length;
       area += projected[i].x * projected[j].y;
       area -= projected[j].x * projected[i].y;
     }
-    
-    area = Math.abs(area) / 2; // Área en metros cuadrados (m²)
-    return area / 10000; // Convertir a hectáreas (ha)
+
+    area = Math.abs(area) / 2;
+    return area / 10000;
   };
 
   const currentAreaHa = computeAreaHa(points);
 
   const savePolygon = async () => {
     if (points.length < 3) {
-      alert("Polígono insuficiente");
+      Alert.alert("Polígono incompleto", "Necesitas al menos 3 puntos para formar un polígono válido.");
       return;
     }
     if (currentAreaHa <= 0) {
-      alert("Superficie inválida");
+      Alert.alert("Superficie inválida", "La superficie del polígono debe ser mayor a 0 hectáreas. Revisa los puntos e intenta nuevamente.");
       return;
     }
+
     setSaving(true);
     try {
       const { ipt } = await getCurrentAuthContext();
       const poligono = points.map((p) => ({ lat: p.latitude, lng: p.longitude }));
       const metodoMarcado = mode === "gps" ? "GPS" : "aereo";
       let resp;
+
       if (selected && selected.estado !== "Validado") {
         resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            poligono, 
-            metodoMarcado, 
-            superficie: Number(currentAreaHa.toFixed(4)) 
+          body: JSON.stringify({
+            poligono,
+            metodoMarcado,
+            superficie: Number(currentAreaHa.toFixed(4)),
           }),
         });
       } else {
         if (!nombre || nombre.trim().length < 3) {
           throw new Error("Nombre del lote inválido (mínimo 3 caracteres)");
         }
-        const body = { ipt, poligono, metodoMarcado, nombre: nombre.trim(), observacionesProductor: observacionesProductor?.slice(0,500) || "", superficie: Number(currentAreaHa.toFixed(4)) };
+        const body = {
+          ipt,
+          poligono,
+          metodoMarcado,
+          nombre: nombre.trim(),
+          observacionesProductor: observacionesProductor?.slice(0, 500) || "",
+          superficie: Number(currentAreaHa.toFixed(4)),
+        };
         resp = await authFetch(`${API_URL}/lotes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       }
+
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));
         throw new Error(j?.error || "No se pudo guardar el lote");
       }
+
       clearPolygon();
       setSelected(null);
       setNombre("");
@@ -211,19 +379,30 @@ export default function LotesScreen() {
       setCreating(false);
       setCreateStep("polygon");
       loadList();
-      alert("Lote guardado");
+      Alert.alert(
+        "¡Éxito!",
+        "Tu lote ha sido guardado correctamente. Ahora está disponible en tu lista de lotes.",
+        [{ text: "Aceptar", onPress: () => {} }]
+      );
     } catch (e) {
-      alert(e.message || "Error al guardar");
+      Alert.alert(
+        "Error al guardar",
+        e.message || "No se pudo guardar el lote. Por favor, intenta nuevamente.",
+        [{ text: "Aceptar", onPress: () => {} }]
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const selectItem = (item) => {
+  const selectItem = (item, fromList = false) => {
     setSelected(item);
     setCreating(false);
     setCreateStep("polygon");
     setViewingList(false);
+    if (fromList) {
+      setViewingDetailFromList(true);
+    }
     const pts = (item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }));
     setPoints(pts);
     if (pts.length > 0 && mapRef.current?.fitToCoordinates) {
@@ -240,32 +419,55 @@ export default function LotesScreen() {
       Alert.alert("No permitido", "No se puede eliminar un lote validado");
       return;
     }
-    Alert.alert(
-      "Eliminar lote",
-      "¿Estás seguro de que deseas eliminar este lote?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
-              if (!resp.ok) {
-                const j = await resp.json().catch(() => ({}));
-                throw new Error(j?.error || "No se pudo eliminar el lote");
-              }
-              setSelected(null);
-              clearPolygon();
-              loadList();
-              Alert.alert("Eliminado", "Lote eliminado correctamente");
-            } catch (e) {
-              Alert.alert("Error", e.message || "No se pudo eliminar");
+
+    Alert.alert("Eliminar lote", "¿Estás seguro de que deseas eliminar este lote?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, { method: "DELETE" });
+            if (!resp.ok) {
+              const j = await resp.json().catch(() => ({}));
+              throw new Error(j?.error || "No se pudo eliminar el lote");
             }
+            if (viewingDetailFromList) {
+              closeDetailFromList();
+            } else {
+              setSelected(null);
+            }
+            clearPolygon();
+            loadList();
+            Alert.alert(
+              "Lote eliminado",
+              "El lote ha sido eliminado correctamente de tu lista.",
+              [{ text: "Aceptar", onPress: () => {} }]
+            );
+          } catch (e) {
+            Alert.alert(
+              "Error al eliminar",
+              e.message || "No se pudo eliminar el lote. Por favor, intenta nuevamente.",
+              [{ text: "Aceptar", onPress: () => {} }]
+            );
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
+  };
+
+  const getPolygonRegion = (pts) => {
+    if (!pts || pts.length === 0) return location;
+    const lats = pts.map((p) => p.latitude);
+    const lngs = pts.map((p) => p.longitude);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(maxLat - minLat, 0.003) * 1.8,
+      longitudeDelta: Math.max(maxLng - minLng, 0.003) * 1.8,
+    };
   };
 
   return (
@@ -276,20 +478,36 @@ export default function LotesScreen() {
 
       <View style={styles.topBar}>
         <View style={styles.cardBar}>
-          <TouchableOpacity style={[styles.btn, styles.primary]} onPress={startCreate}>
-            <Text style={styles.btnText}>Nuevo Lote</Text>
+          <TouchableOpacity
+            style={[styles.tabBtn, styles.tabBtnNuevo, creating && styles.tabBtnActive]}
+            onPress={startCreate}
+          >
+            <Text style={[styles.tabBtnText, creating && styles.tabBtnTextActive]}>Nuevo Lote</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => { setViewingList(true); setCreating(false); setSelected(null); }}>
-            <Text style={styles.btnText}>Ver lista de lotes</Text>
+          <TouchableOpacity
+            style={[styles.tabBtn, styles.tabBtnMapa, viewMode === "mapOnly" && !creating && styles.tabBtnActive]}
+            onPress={goToMapView}
+          >
+            <Text style={[styles.tabBtnText, viewMode === "mapOnly" && !creating && styles.tabBtnTextActive]}>Mapa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, styles.tabBtnLotes, viewMode === "listOnly" && !creating && styles.tabBtnActive]}
+            onPress={goToListView}
+          >
+            <Text style={[styles.tabBtnText, viewMode === "listOnly" && !creating && styles.tabBtnTextActive]}>Lotes</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {location ? (
-        <MapView ref={mapRef} style={[styles.map, { marginBottom: Math.max(insets.bottom, 16) }]} initialRegion={location} onPress={onMapPress}>
+      {viewMode !== "listOnly" && !(creating && createStep === "form") && (location ? (
+        <MapView
+          ref={mapRef}
+          style={[styles.map, viewMode === "mapOnly" ? styles.mapFullscreen : creating ? styles.mapCreating : null, { marginBottom: 4 }]}
+          initialRegion={location}
+          onPress={onMapPress}
+        >
           <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }} title="Mi ubicación" />
-          
-          {/* Marcador de posición actual del GPS mientras camina */}
+
           {isWalking && currentLocation && (
             <Marker coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}>
               <View style={styles.currentPosMarker}>
@@ -312,135 +530,243 @@ export default function LotesScreen() {
             </>
           )}
         </MapView>
+      ) : locationPermissionDenied ? (
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
+          <Text style={styles.permissionText}>
+            Para usar el mapa de lotes necesitamos acceso a tu ubicación. Puedes seguir viendo la lista de lotes y volver a habilitar el permiso cuando quieras.
+          </Text>
+          <View style={styles.permissionActions}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+              <Text style={styles.btnText}>Reintentar permiso</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, styles.primary]}
+              onPress={async () => {
+                try {
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert("No disponible", "No se pudo abrir configuración del sistema.");
+                }
+              }}
+            >
+              <Text style={styles.btnText}>Abrir configuración</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingLocation}>Cargando ubicación...</Text>
+          <Text style={styles.loadingLocation}>{requestingLocation ? "Cargando ubicación..." : "Cargando ubicación..."}</Text>
           <ActivityIndicator size="large" color="#1e8449" style={{ marginTop: 8 }} />
         </View>
-      )}
+      ))}
 
       {creating && createStep === "polygon" && (
-        <View style={[styles.grid, { marginBottom: Math.max(insets.bottom, 24) }]}>
-          {!isWalking ? (
-            <>
-              <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
-                <Text style={styles.btnText}>Dibujo aéreo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
-                <Text style={styles.btnText}>GPS caminando</Text>
-              </TouchableOpacity>
-              {mode === "gps" && (
-                <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#2ecc71" }]} onPress={startWalking}>
-                  <Text style={styles.btnText}>▶ Iniciar recorrido</Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.grid, { marginBottom: 6 }]}>
+            {!isWalking ? (
+              <>
+                <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
+                  <Text style={styles.btnText}>Dibujo aéreo</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
-                <Text style={styles.btnText}>Limpiar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
-                <Text style={styles.btnText}>Cancelar</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.gpsControls}>
-              <View style={styles.gpsStatusHeader}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.gpsStatusText}>Grabando recorrido: {points.length} puntos</Text>
-              </View>
-              
-              <View style={styles.gpsActionRow}>
-                <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#3498db" }]} onPress={addManualPoint}>
-                  <Text style={styles.btnText}>📍 Punto manual</Text>
+                <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
+                  <Text style={styles.btnText}>GPS caminando</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#f39c12" }]} onPress={undoLastPoint} disabled={points.length === 0}>
-                  <Text style={styles.btnText}>↩ Deshacer</Text>
+                {mode === "gps" && (
+                  <TouchableOpacity
+                    style={[styles.gridBtn, { backgroundColor: "#2ecc71" }]}
+                    onPress={async () => {
+                      try {
+                        await startWalking();
+                      } catch (error) {
+                        Alert.alert("Permiso requerido", error?.message || "No se pudo iniciar el modo GPS.");
+                      }
+                    }}
+                  >
+                    <Text style={styles.btnText}>▶ Iniciar recorrido</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
+                  <Text style={styles.btnText}>Limpiar</Text>
                 </TouchableOpacity>
-              </View>
+                <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
+                  <Text style={styles.btnText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.gpsControls}>
+                <View style={styles.gpsStatusHeader}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.gpsStatusText}>Grabando recorrido: {points.length} puntos</Text>
+                </View>
 
-              <TouchableOpacity style={[styles.gpsFinishBtn, { backgroundColor: "#c0392b" }]} onPress={() => {
-                if (points.length < 3) {
-                  Alert.alert("Aviso", "Necesitas al menos 3 puntos para finalizar el recorrido.");
-                } else {
-                  stopWalking();
-                }
-              }}>
-                <Text style={styles.btnText}>Finalizar y cerrar polígono</Text>
-              </TouchableOpacity>
+                <View style={styles.gpsActionRow}>
+                  <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#3498db" }]} onPress={addManualPoint}>
+                    <Text style={styles.btnText}>📍 Punto manual</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#f39c12" }]} onPress={undoLastPoint} disabled={points.length === 0}>
+                    <Text style={styles.btnText}>↩ Deshacer</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.gpsFinishBtn, { backgroundColor: "#c0392b" }]}
+                  onPress={() => {
+                    if (points.length < 3) {
+                      Alert.alert("Aviso", "Necesitas al menos 3 puntos para finalizar el recorrido.");
+                    } else {
+                      stopWalking();
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>Finalizar y cerrar polígono</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.formInfo, { marginBottom: 4 }]}>
+            <Text style={[styles.itemText, { textAlign: "center" }]}>
+              {points.length < 3
+                ? "Dibujá al menos 3 puntos para formar el polígono"
+                : polygonConfirmed
+                ? "Polígono confirmado. Ya puedes continuar"
+                : "Revisá el polígono y confirma para continuar"}
+            </Text>
+          </View>
+
+          {points.length >= 3 && (
+            <View style={[styles.infoPanel, { marginBottom: 6 }]}>
+              <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
+              <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity
+                  style={[styles.btn, polygonConfirmed ? styles.secondary : styles.primary]}
+                  onPress={() => setPolygonConfirmed(true)}
+                  disabled={currentAreaHa <= 0}
+                >
+                  <Text style={styles.btnText}>{polygonConfirmed ? "Polígono confirmado" : "Confirmar polígono"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.primary]} onPress={toFormStep} disabled={currentAreaHa <= 0 || !polygonConfirmed}>
+                  <Text style={styles.btnText}>Continuar</Text>
+                </TouchableOpacity>
+              </View>
+              {!polygonConfirmed ? (
+                <Text style={styles.confirmHint}>Primero confirma el polígono para pasar a la siguiente fase.</Text>
+              ) : (
+                <Text style={styles.confirmHint}>Si agregas o editas puntos, se pedirá confirmar nuevamente.</Text>
+              )}
             </View>
           )}
-        </View>
-      )}
-
-      {creating && createStep === "polygon" && (
-        <View style={[styles.formInfo, { marginBottom: Math.max(insets.bottom, 12) }]}>
-          <Text style={[styles.itemText, { textAlign: 'center' }]}>Dibujá el polígono para continuar</Text>
-        </View>
-      )}
-
-      {creating && createStep === "polygon" && points.length >= 3 && (
-        <View style={[styles.infoPanel, { marginBottom: Math.max(insets.bottom, 16) }]}>
-          <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
-          <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
-          <TouchableOpacity style={[styles.btn, styles.primary]} onPress={toFormStep} disabled={currentAreaHa <= 0}>
-            <Text style={styles.btnText}>Continuar</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       )}
 
       {creating && createStep === "form" && (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Math.max(insets.top, 24)}>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.form, { paddingBottom: Math.max(insets.bottom, 24), marginTop: 4 }]}>
-            <Text style={styles.formTitle}>Datos del lote</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nombre del lote *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Lote Norte"
-                value={nombre}
-                onChangeText={setNombre}
-              />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior="padding"
+          keyboardVerticalOffset={Math.max(insets.top + 16, 40)}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 32) }}
+          >
+            {/* Non-interactive polygon preview */}
+            <View pointerEvents="none">
+              <MapView
+                style={styles.mapThumbnail}
+                region={getPolygonRegion(points)}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
+                {points.map((p, i) => (
+                  <Marker key={`t-${i}`} coordinate={p} />
+                ))}
+                {points.length >= 3 && (
+                  <Polygon
+                    coordinates={points}
+                    strokeColor="#1e8449"
+                    fillColor="rgba(46, 204, 113, 0.2)"
+                    strokeWidth={2}
+                  />
+                )}
+              </MapView>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Observaciones del productor (opcional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Notas propias"
-                value={observacionesProductor}
-                onChangeText={setObservacionesProductor}
-                multiline
-                numberOfLines={4}
-                maxLength={500}
-              />
-            </View>
-            <View style={styles.formInfo}>
-              <Text style={styles.itemText}>Superficie (ha): {currentAreaHa.toFixed(2)}</Text>
-              <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
-              <Text style={styles.itemText}>Estado: Pendiente</Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <TouchableOpacity style={[styles.btn, styles.primary]} onPress={savePolygon} disabled={saving}>
-                <Text style={styles.btnText}>{saving ? "Guardando..." : "Guardar lote"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={toPolygonStep}>
-                <Text style={styles.btnText}>Volver</Text>
-              </TouchableOpacity>
+
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>Datos del lote</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Nombre del lote *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: Lote Norte"
+                  value={nombre}
+                  onChangeText={setNombre}
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Observaciones del productor (opcional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Notas propias"
+                  value={observacionesProductor}
+                  onChangeText={setObservacionesProductor}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+              </View>
+
+              <View style={[styles.formInfo, { backgroundColor: "#f0faf4", borderRadius: 8, marginBottom: 14 }]}>
+                <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
+                <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
+                <Text style={styles.itemText}>Estado: Pendiente</Text>
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <TouchableOpacity style={[styles.btn, styles.primary, { flex: 1 }]} onPress={savePolygon} disabled={saving}>
+                  <Text style={[styles.btnText, { textAlign: "center" }]}>{saving ? "Guardando..." : "Guardar lote"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={toPolygonStep}>
+                  <Text style={styles.btnText}>Volver</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
 
-      {!creating && selected && (
+      {!creating && selected && !viewingDetailFromList && viewMode !== "listOnly" && (
         <View style={[styles.details, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <Text style={styles.formTitle}>Detalle del lote</Text>
           <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
           <Text style={styles.itemText}>Estado: {selected.estado}</Text>
-          <Text style={styles.itemText}>Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono||[]).map(pt=>({latitude:pt.lat,longitude:pt.lng}))).toFixed(2)} ha</Text>
+          <Text style={styles.itemText}>
+            Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
+          </Text>
           <Text style={styles.itemText}>Método: {selected.metodoMarcado}</Text>
           <Text style={styles.itemText}>Observaciones (prod): {selected.observacionesProductor || "-"}</Text>
           <Text style={styles.itemText}>Observaciones (técnico): {selected.observacionesTecnico || "-"}</Text>
           {selected.estado !== "Validado" && (
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              <TouchableOpacity style={[styles.btn, styles.primary]} onPress={() => { setEditNombre(selected.nombre || ""); setEditObservaciones(selected.observacionesProductor || ""); setEditModalVisible(true); }}>
+              <TouchableOpacity
+                style={[styles.btn, styles.primary]}
+                onPress={() => {
+                  setEditNombre(selected.nombre || "");
+                  setEditObservaciones(selected.observacionesProductor || "");
+                  setEditModalVisible(true);
+                }}
+              >
                 <Text style={styles.btnText}>Editar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btn, { backgroundColor: "#c0392b" }]} onPress={deleteSelected}>
@@ -451,7 +777,109 @@ export default function LotesScreen() {
         </View>
       )}
 
-      {viewingList && (
+      {viewMode === "listOnly" && !viewingDetailFromList && (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+        >
+          <View style={{ padding: 8 }}>
+            <Text style={{ fontWeight: "bold", marginBottom: 6, fontSize: 16, color: "#1e8449" }}>Lista de lotes</Text>
+            <FlatList
+              data={list}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <View style={[styles.item, selected?.id === item.id ? styles.itemSelected : null]}>
+                  <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
+                  <Text style={styles.itemText}>Estado: {item.estado}</Text>
+                  <Text style={styles.itemText}>
+                    Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
+                  </Text>
+                  <Text style={styles.itemText}>Método: {item.metodoMarcado}</Text>
+                  <Text style={styles.itemText}>Observaciones (prod): {item.observacionesProductor || "-"}</Text>
+                  <Text style={styles.itemText}>Observaciones (técnico): {item.observacionesTecnico || "-"}</Text>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                    <TouchableOpacity style={[styles.btn, styles.primary]} onPress={() => selectItem(item, true)}>
+                      <Text style={styles.btnText}>Ver detalle</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        </ScrollView>
+      )}
+
+      {viewingDetailFromList && selected && (
+        <View style={{ flex: 1 }}>
+          <MapView
+            ref={mapRef}
+            style={styles.detailMap}
+            region={getPolygonRegion(points)}
+          >
+            {points.map((p, i) => (
+              <Marker key={`d-${i}`} coordinate={p} />
+            ))}
+            {points.length >= 3 && (
+              <Polygon
+                coordinates={points}
+                strokeColor="#1e8449"
+                fillColor="rgba(46, 204, 113, 0.2)"
+                strokeWidth={2}
+              />
+            )}
+          </MapView>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+          >
+            <View style={styles.detailsCard}>
+              <Text style={styles.formTitle}>Detalle del lote</Text>
+              <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
+              <Text style={styles.itemText}>Estado: {selected.estado}</Text>
+              <Text style={styles.itemText}>
+                Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
+              </Text>
+              <Text style={styles.itemText}>Método: {selected.metodoMarcado}</Text>
+              <Text style={styles.itemText}>Observaciones (prod): {selected.observacionesProductor || "-"}</Text>
+              <Text style={styles.itemText}>Observaciones (técnico): {selected.observacionesTecnico || "-"}</Text>
+
+              {selected.estado !== "Validado" && (
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.primary]}
+                    onPress={() => {
+                      setEditNombre(selected.nombre || "");
+                      setEditObservaciones(selected.observacionesProductor || "");
+                      setEditModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.btnText}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btn, { backgroundColor: "#c0392b" }]} onPress={deleteSelected}>
+                    <Text style={styles.btnText}>Eliminar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.btn, styles.secondary, styles.backButton]}
+                onPress={closeDetailFromList}
+              >
+                <Text style={styles.btnText}>Volver</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      {viewMode !== "mapOnly" && viewMode !== "listOnly" && viewingList && !viewingDetailFromList && (
         <View style={{ padding: 8, paddingBottom: Math.max(insets.bottom, 24) }}>
           <Text style={{ fontWeight: "bold", marginBottom: 6 }}>Lista de lotes</Text>
           <FlatList
@@ -466,7 +894,9 @@ export default function LotesScreen() {
               <View style={[styles.item, selected?.id === item.id ? styles.itemSelected : null]}>
                 <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
                 <Text style={styles.itemText}>Estado: {item.estado}</Text>
-                <Text style={styles.itemText}>Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono||[]).map(pt=>({latitude:pt.lat,longitude:pt.lng}))).toFixed(2)} ha</Text>
+                <Text style={styles.itemText}>
+                  Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
+                </Text>
                 <Text style={styles.itemText}>Método: {item.metodoMarcado}</Text>
                 <Text style={styles.itemText}>Observaciones (prod): {item.observacionesProductor || "-"}</Text>
                 <Text style={styles.itemText}>Observaciones (técnico): {item.observacionesTecnico || "-"}</Text>
@@ -505,7 +935,7 @@ export default function LotesScreen() {
                     const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ nombre: editNombre.trim(), observacionesProductor: editObservaciones?.slice(0,500) || "" }),
+                      body: JSON.stringify({ nombre: editNombre.trim(), observacionesProductor: editObservaciones?.slice(0, 500) || "" }),
                     });
                     if (!resp.ok) throw new Error("No se pudo actualizar");
                     setEditModalVisible(false);
@@ -534,14 +964,20 @@ export default function LotesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
-  map: { flex: 1 },
+  map: { flex: 1, minHeight: 280 },
+  mapCreating: { flex: 0, height: 280 },
+  mapFullscreen: { flex: 1 },
+  mapThumbnail: { height: 190, width: "100%" },
+  formCard: { padding: 14, backgroundColor: "#ffffff" },
   row: { flexDirection: "row", justifyContent: "space-around", padding: 8 },
   topBar: { paddingHorizontal: 8, paddingTop: 4 },
-  cardBar: { flexDirection: "row", gap: 12, backgroundColor: "#ffffff", padding: 10, borderRadius: 10, elevation: 3 },
+  cardBar: { flexDirection: "row", gap: 8, backgroundColor: "#ffffff", padding: 8, borderRadius: 10, elevation: 3, justifyContent: "space-between" },
   form: { padding: 8, backgroundColor: "#ffffff" },
   formTitle: { fontWeight: "bold", marginBottom: 6 },
-  formInfo: { padding: 8 },
-  infoPanel: { padding: 8, backgroundColor: "#ffffff", marginHorizontal: 8, borderRadius: 8, marginTop: 8 },
+  formInfo: { padding: 6, alignItems: "center" },
+  infoPanel: { padding: 8, backgroundColor: "#ffffff", marginHorizontal: 8, borderRadius: 8, marginTop: 4 },
+  confirmActions: { flexDirection: "row", gap: 10, marginTop: 8 },
+  confirmHint: { marginTop: 6, color: "#6b7280", fontSize: 12 },
   inputGroup: { marginBottom: 8 },
   label: { color: "#34495e", marginBottom: 4 },
   input: { backgroundColor: "#f7f7f7", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 8 },
@@ -551,40 +987,53 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: "#2ecc71" },
   secondary: { backgroundColor: "#3498db" },
   btnText: { color: "#fff" },
+  tabBtn: { flex: 1, alignItems: "center", paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8, borderWidth: 2.5, borderColor: "transparent", opacity: 0.55 },
+  tabBtnNuevo: { backgroundColor: "#27ae60" },
+  tabBtnMapa: { backgroundColor: "#2980b9" },
+  tabBtnLotes: { backgroundColor: "#2980b9" },
+  tabBtnActive: { borderColor: "#fff", elevation: 6, shadowColor: "#000", shadowOpacity: 0.22, shadowOffset: { width: 0, height: 3 }, shadowRadius: 5, opacity: 1 },
+  tabBtnText: { color: "#fff", fontSize: 13, fontWeight: "500" },
+  tabBtnTextActive: { fontWeight: "800" },
   item: { padding: 8, backgroundColor: "#ffffff", borderRadius: 8, marginBottom: 6 },
   itemSelected: { borderWidth: 2, borderColor: "#2ecc71" },
   itemText: { color: "#34495e" },
   details: { padding: 8, backgroundColor: "#ffffff" },
+  detailMap: { height: 220 },
+  detailsCard: { padding: 14, backgroundColor: "#ffffff" },
+  backButton: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 18 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   modalContent: { width: "90%", backgroundColor: "#fff", borderRadius: 12, padding: 12 },
   loadingContainer: { justifyContent: "center", alignItems: "center", paddingVertical: 40 },
   loadingLocation: { color: "#1e8449", marginTop: 0, textAlign: "center" },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  gridBtn: { width: '45%', margin: 6, justifyContent: 'center', alignItems: 'center', padding: 10, borderRadius: 8, backgroundColor: '#1e8449' },
-  gpsControls: { width: '95%', padding: 12, backgroundColor: '#fff', borderRadius: 12, elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
-  gpsStatusHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, justifyContent: 'center' },
-  gpsStatusText: { fontSize: 16, fontWeight: 'bold', color: '#2c3e50' },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#e74c3c', marginRight: 8 },
-  gpsActionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 10 },
-  gpsActionBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  gpsFinishBtn: { width: '100%', padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  currentPosMarker: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(52, 152, 219, 0.2)', alignItems: 'center', justifyContent: 'center' },
-  currentPosDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#3498db', borderWeight: 2, borderColor: '#fff' },
-  formInfo: { padding: 8, alignItems: 'center' },
+  permissionCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff3f3", borderWidth: 1, borderColor: "#f3cccc" },
+  permissionTitle: { color: "#8b1e2d", fontWeight: "700", marginBottom: 6, textAlign: "center" },
+  permissionText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
+  permissionActions: { flexDirection: "row", gap: 10, justifyContent: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
+  gridBtn: { width: "46%", margin: 4, justifyContent: "center", alignItems: "center", padding: 9, borderRadius: 8, backgroundColor: "#1e8449" },
+  gpsControls: { width: "95%", padding: 12, backgroundColor: "#fff", borderRadius: 12, elevation: 5, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  gpsStatusHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12, justifyContent: "center" },
+  gpsStatusText: { fontSize: 16, fontWeight: "bold", color: "#2c3e50" },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#e74c3c", marginRight: 8 },
+  gpsActionRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12, gap: 10 },
+  gpsActionBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  gpsFinishBtn: { width: "100%", padding: 14, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  currentPosMarker: { width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(52, 152, 219, 0.2)", alignItems: "center", justifyContent: "center" },
+  currentPosDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#3498db", borderWeight: 2, borderColor: "#fff" },
   emptyContainer: {
     padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8f9fa',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
     marginTop: 20,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
   },
   emptyText: {
-    color: '#7f8c8d',
+    color: "#7f8c8d",
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

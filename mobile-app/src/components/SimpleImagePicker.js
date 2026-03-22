@@ -28,7 +28,16 @@ const SimpleImagePicker = ({ onImageCaptured, existingImageUrl = null }) => {
     try {
       console.log('📸 Abriendo selector de galería...');
       
-      // No solicitar permisos, usar el método directo
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso de galería requerido',
+          'Para adjuntar fotos de tu galería, el sistema necesita acceso a tus imágenes. Por favor habilitá el permiso desde la configuración de tu dispositivo.',
+          [{ text: 'Entendido', style: 'default' }]
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -56,6 +65,16 @@ const SimpleImagePicker = ({ onImageCaptured, existingImageUrl = null }) => {
     try {
       console.log('📷 Abriendo cámara...');
       
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso de cámara requerido',
+          'Para tomar fotos de evidencia, el sistema necesita acceso a tu cámara. Por favor habilitá el permiso desde la configuración de tu dispositivo.',
+          [{ text: 'Entendido', style: 'default' }]
+        );
+        return;
+      }
+
       // Usar el image picker para cámara también
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
