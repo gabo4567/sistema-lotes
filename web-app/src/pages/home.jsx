@@ -11,13 +11,13 @@ const Home = () => {
   };
   const options = [
     { type: "link", to: "/home", label: "Home", className: "menu-btn menu-btn--home" },
-    { type: "link", to: "/lotes", label: "Lotes", className: "menu-btn" },
     { type: "link", to: "/turnos", label: "Turnos", className: "menu-btn" },
-    { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
-    { type: "link", to: "/productores", label: "Productores", className: "menu-btn" },
-    { type: "link", to: "/mediciones", label: "Mediciones", className: "menu-btn" },
-    { type: "link", to: "/informes", label: "Informes", className: "menu-btn" },
+    { type: "link", to: "/lotes", label: "Lotes", className: "menu-btn" },
     { type: "link", to: "/users", label: "Usuarios", className: "menu-btn" },
+    { type: "link", to: "/productores", label: "Productores", className: "menu-btn" },
+    { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
+    { type: "link", to: "/informes", label: "Informes", className: "menu-btn" },
+    { type: "link", to: "/mediciones", label: "Mediciones", className: "menu-btn" },
     { type: "button", onClick: handleLogout, label: "Cerrar Sesión", className: "menu-btn menu-btn--danger" },
   ];
 
@@ -25,7 +25,7 @@ const Home = () => {
     <div className="home-container">
       <div className="home-hero">
         <h1 className="home-title">Sistema de Gestión Agrícola - IPT</h1>
-        <p className="home-subtitle">Administración de lotes, turnos y productores</p>
+        <p className="home-subtitle">Administración de turnos, lotes y productores</p>
       </div>
 
       <div className="menu-grid">
