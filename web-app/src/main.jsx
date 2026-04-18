@@ -25,8 +25,6 @@ import Forbidden from "./pages/forbidden.jsx";
 import ProductoresList from "./pages/productoresList.jsx";
 import ProductorForm from "./pages/productorForm.jsx";
 import ProductorDetail from "./pages/productorDetail.jsx";
-import MedicionesList from "./pages/medicionesList.jsx";
-import MedicionesForm from "./pages/medicionesForm.jsx";
 import Informes from "./pages/informes.jsx";
 import UsersList from "./pages/usersList.jsx";
 import Layout from "./components/Layout.jsx";
@@ -120,16 +118,6 @@ const router = createBrowserRouter([
       { path: "/productores/:id/editar", element: (
         <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
           <ProductorForm />
-        </ProtectedRoute>
-      ) },
-      { path: "/mediciones", element: (
-        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
-          <MedicionesList />
-        </ProtectedRoute>
-      ) },
-      { path: "/mediciones/nueva", element: (
-        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
-          <MedicionesForm />
         </ProtectedRoute>
       ) },
       { path: "/informes", element: (

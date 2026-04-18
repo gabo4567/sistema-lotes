@@ -8,7 +8,7 @@ Aplicación web diseñada para la **gestión administrativa**, el **control de t
 ## 🎯 Descripción general
 
 La **Aplicación Web** está orientada al personal administrativo del Instituto Provincial del Tabaco.
-Permite administrar los productores, registrar lotes y mediciones, asignar turnos y controlar la entrega de insumos, con un entorno moderno, intuitivo y conectado al backend Node.js y Firebase.
+Permite administrar los productores, registrar lotes, asignar turnos y controlar la entrega de insumos, con un entorno moderno, intuitivo y conectado al backend Node.js y Firebase.
 
 ---
 

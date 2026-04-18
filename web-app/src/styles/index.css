@@ -490,16 +490,6 @@ body {
 .turno-label{ font-weight: 600; margin-right: 6px; }
 .turno-actions{ margin-top: 6px; }
 
-/* Mediciones estiladas */
-.mediciones-list{ max-width: 1100px; margin: 0 auto; }
-.filters-row{ display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-.input-inst{ padding: 8px 10px; border-radius: 8px; border: 1px solid var(--inst-border); background: #fff; }
-.med-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.med-card{ background: #fff; border: 1px solid var(--inst-border); border-radius: 12px; padding: 14px; box-shadow: 0 8px 18px rgba(46,125,50,0.06); display: flex; flex-direction: column; gap: 8px; }
-.med-header{ display: flex; justify-content: space-between; align-items: center; }
-.med-date{ font-weight: 700; color: var(--inst-green-dark); }
-.med-item{ color: var(--inst-text); }
-.med-label{ font-weight: 600; margin-right: 6px; }
 .map-card{ background:#fff; border:1px solid var(--inst-border); border-radius:12px; padding:12px; box-shadow:0 8px 18px rgba(46,125,50,0.06); margin:12px 0; }
 .map-container{ width:100%; height:360px; border-radius:12px; }
 .map-fallback .map-hint{ margin-bottom:8px; color:#7f8c8d; font-size:14px; }

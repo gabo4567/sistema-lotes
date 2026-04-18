@@ -17,7 +17,6 @@ const Home = () => {
     { type: "link", to: "/productores", label: "Productores", className: "menu-btn" },
     { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
     { type: "link", to: "/informes", label: "Informes", className: "menu-btn" },
-    { type: "link", to: "/mediciones", label: "Mediciones", className: "menu-btn" },
     { type: "button", onClick: handleLogout, label: "Cerrar Sesión", className: "menu-btn menu-btn--danger" },
   ];
 

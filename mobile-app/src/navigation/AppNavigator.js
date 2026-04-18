@@ -9,9 +9,6 @@ import LotesScreen from "../screens/LotesScreen";
 import TurnosScreen from "../screens/TurnosScreen";
 import PerfilScreen from "../screens/PerfilScreen";
 import ChangePasswordScreen from "../screens/ChangePasswordScreen";
-import MedicionesScreen from "../screens/MedicionesScreen";
-import CrearMedicionScreen from "../screens/CrearMedicionScreen";
-import EditMedicionScreen from "../screens/EditMedicionScreen";
 import MisUbicacionesScreen from "../screens/MisUbicacionesScreen";
 import EditarUbicacionScreen from "../screens/EditarUbicacionScreen";
 import { AuthContext } from "../context/AuthContext";
@@ -35,9 +32,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Lotes" component={LotesScreen} />
             <Stack.Screen name="Turnos" component={TurnosScreen} />
-            <Stack.Screen name="Mediciones" component={MedicionesScreen} />
-            <Stack.Screen name="CrearMedicion" component={CrearMedicionScreen} />
-            <Stack.Screen name="EditMedicion" component={EditMedicionScreen} />
             <Stack.Screen name="MisUbicaciones" component={MisUbicacionesScreen} />
             <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
             <Stack.Screen name="Perfil" component={PerfilScreen} />

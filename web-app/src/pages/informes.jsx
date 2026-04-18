@@ -12,7 +12,6 @@ const Informes = () => {
   const [message, setMessage] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
-  const [medFiltro, setMedFiltro] = useState('todas');
   const [mapView, setMapView] = useState(null);
   const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -57,19 +56,17 @@ const Informes = () => {
 
     let content = '';
     if (tipo === 'resumen' && data && typeof data === 'object') {
-      content += `<section><h2>Resumen</h2>${tbl(['Usuarios','Productores activos','Lotes activos','Turnos activos','Mediciones'], [[data.totalUsuarios, data.totalProductoresActivos, data.totalLotesActivos, data.totalTurnosActivos, data.totalMedicionesRegistradas]])}<div class="small">Última actualización: ${formatValue(data.ultimaActualizacion)}</div></section>`;
+      content += `<section><h2>Resumen</h2>${tbl(['Usuarios','Productores activos','Lotes activos','Turnos activos'], [[data.totalUsuarios, data.totalProductoresActivos, data.totalLotesActivos, data.totalTurnosActivos]])}<div class="small">Última actualización: ${formatValue(data.ultimaActualizacion)}</div></section>`;
       const usuarios = Array.isArray(data.usuarios)? data.usuarios: [];
       content += `<section><h3>Usuarios del sistema</h3>${tbl(['Nombre','Email','Rol','IPT'], usuarios.map(u=>[u.nombre, u.email, u.role, u.ipt||'-']))}</section>`;
       const act = Array.isArray(data.actividadMovil)? data.actividadMovil: [];
-      content += `<section><h3>Actividad móvil</h3>${tbl(['IPT','Productor','Ingresos','Mediciones','Nuevos lotes','Modificaciones','Turnos'], act.map(a=>[a.productorIpt, a.productorNombre, a.ingresosApp, a.medicionesRegistradas, a.lotesCreados, a.lotesModificados, a.turnosSolicitados]))}</section>`;
+      content += `<section><h3>Actividad móvil</h3>${tbl(['IPT','Productor','Ingresos','Nuevos lotes','Modificaciones','Turnos'], act.map(a=>[a.productorIpt, a.productorNombre, a.ingresosApp, a.lotesCreados, a.lotesModificados, a.turnosSolicitados]))}</section>`;
       const lotes = Array.isArray(data.lotesConDueno)? data.lotesConDueno: [];
       content += `<section><h3>Lotes con dueño</h3>${tbl(['Lote','IPT','Productor'], lotes.map(l=>[l.nombre, l.ipt, l.productorNombre]))}</section>`;
       const disp = Array.isArray(data.insumosDisponibles)? data.insumosDisponibles: [];
       content += `<section><h3>Insumos disponibles</h3>${tbl(['Tipo','Cantidad','Unidad'], disp.map(i=>[i.nombre, i.cantidadDisponible, i.unidad]))}</section>`;
       const det = Array.isArray(data.insumosAsignadosDetalle)? data.insumosAsignadosDetalle: [];
       content += `<section><h3>Insumos asignados</h3>${tbl(['Tipo','Asignado','IPT','Productor'], det.map(r=>[r.tipo, r.cantidadAsignada, r.productorIpt, r.productorNombre]))}</section>`;
-      const meds = Array.isArray(data.medicionesResumen?.lista)? data.medicionesResumen.lista: [];
-      content += `<section><h3>Mediciones</h3>${tbl(['Tipo','Lote','Fecha','Valor','Unidad','IPT','Productor'], meds.map(r=>[r.tipo, r.lote, r.fecha, r.valorMedicion, r.unidadMedida, r.productorIpt, r.productorNombre]))}</section>`;
       const trs = Array.isArray(data.turnosLista)? data.turnosLista: [];
       content += `<section><h3>Turnos de productores</h3>${tbl(['IPT','Productor','Fecha','Estado','Tipo','Motivo'], trs.map(t=>[t.productorIpt, t.productorNombre, t.fecha, t.estado, t.tipo, t.motivo]))}</section>`;
     } else if (tipo === 'productores' && Array.isArray(data)) {
@@ -209,7 +206,6 @@ const Informes = () => {
       { k: 'totalProductoresActivos', label: 'Productores activos' },
       { k: 'totalLotesActivos', label: 'Lotes activos' },
       { k: 'totalTurnosActivos', label: 'Turnos activos' },
-      { k: 'totalMedicionesRegistradas', label: 'Mediciones' },
     ];
     return (
       <div className="result-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
@@ -254,7 +250,6 @@ const Informes = () => {
                   <th style={{ textAlign:'center', width:'12%' }}>IPT</th>
                   <th style={{ textAlign:'left', width:'28%' }}>Productor</th>
                   <th style={{ textAlign:'center', width:'12%' }}>Ingresos a la app</th>
-                  <th style={{ textAlign:'center', width:'12%' }}>Mediciones</th>
                   <th style={{ textAlign:'center', width:'12%' }}>Nuevos lotes</th>
                   <th style={{ textAlign:'center', width:'12%' }}>Modificaciones de lotes</th>
                   <th style={{ textAlign:'center', width:'12%' }}>Turnos solicitados</th>
@@ -266,13 +261,12 @@ const Informes = () => {
                     <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.productorIpt)}</td>
                     <td style={{ textAlign:'left', width:'28%', whiteSpace:'normal' }}>{formatValue(a.productorNombre)}</td>
                     <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.ingresosApp)}</td>
-                    <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.medicionesRegistradas)}</td>
                     <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.lotesCreados)}</td>
                     <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.lotesModificados)}</td>
                     <td style={{ textAlign:'center', width:'12%' }}>{formatValue(a.turnosSolicitados)}</td>
                   </tr>
                 ))}
-                {(!d.actividadMovil || d.actividadMovil.length===0) && (<tr><td colSpan={7} style={{ padding:8, textAlign:'center' }}>Sin datos</td></tr>)}
+                {(!d.actividadMovil || d.actividadMovil.length===0) && (<tr><td colSpan={6} style={{ padding:8, textAlign:'center' }}>Sin datos</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -372,48 +366,6 @@ const Informes = () => {
                 {(!d.insumosAsignadosDetalle || d.insumosAsignadosDetalle.length===0) && (<tr><td colSpan={4} style={{ padding:8 }}>Sin datos</td></tr>)}
               </tbody>
             </table>
-          </div>
-        ))}
-
-        {card('Mediciones en el sistema', (
-          <div>
-            <div style={{ marginBottom: 8 }}>
-              <select className="select-inst" value={medFiltro} onChange={e=>setMedFiltro(e.target.value)}>
-                <option value="todas">Todas</option>
-                {Object.keys(d.medicionesResumen?.porTipo || {}).filter(k=> k && String(k).trim().length>0).map(k=> (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ overflowX:'auto' }}>
-              <table className="table-inst" style={{ width:'100%', tableLayout:'fixed', minWidth: 980 }}>
-                <thead>
-                  <tr style={{ background:'#f0fdf4' }}>
-                    <th style={{ width:'14%', textAlign:'center' }}>Tipo</th>
-                    <th style={{ width:'16%', textAlign:'center' }}>Lote</th>
-                    <th style={{ width:'14%', textAlign:'center' }}>Fecha</th>
-                    <th style={{ width:'12%', textAlign:'center' }}>Valor</th>
-                    <th style={{ width:'10%', textAlign:'center' }}>Unidad</th>
-                    <th style={{ width:'10%', textAlign:'center' }}>IPT</th>
-                    <th style={{ width:'24%', textAlign:'center' }}>Productor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(Array.isArray(d.medicionesResumen?.lista)? d.medicionesResumen.lista : []).filter(r=> medFiltro==='todas' ? true : (String(r.tipo)===medFiltro)).map(r => (
-                    <tr key={r.id}>
-                      <td style={{ width:'14%', textAlign:'center' }}>{formatValue(r.tipo)}</td>
-                      <td style={{ width:'16%', textAlign:'center' }}>{formatValue(r.lote)}</td>
-                      <td style={{ width:'14%', textAlign:'center' }}>{formatValue(r.fecha)}</td>
-                      <td style={{ width:'12%', textAlign:'center' }}>{formatValue(r.valorMedicion)}</td>
-                      <td style={{ width:'10%', textAlign:'center' }}>{formatValue(r.unidadMedida)}</td>
-                      <td style={{ width:'10%', textAlign:'center' }}>{formatValue(r.productorIpt)}</td>
-                      <td style={{ width:'24%', textAlign:'center', whiteSpace:'normal' }}>{formatValue(r.productorNombre)}</td>
-                    </tr>
-                  ))}
-                  {(!d.medicionesResumen?.lista || d.medicionesResumen.lista.length===0) && (<tr><td colSpan={7} style={{ padding:8, textAlign:'center' }}>Sin datos</td></tr>)}
-                </tbody>
-              </table>
-            </div>
           </div>
         ))}
       </div>
