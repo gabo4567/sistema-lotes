@@ -75,9 +75,9 @@ const ResetPassword = () => {
     setLoading(true);
     try {
       const response = await api.post("/auth/reset-password-link", { email: emailNormalized });
-      const message = response?.data?.message || "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+      const message = response?.data?.message || "Si el correo electrónico está registrado, recibirás un enlace para restablecer tu contraseña en breve.";
       setSuccess(message);
-      await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
+      await notify({ title: "Enlace de recuperación enviado", text: message, icon: "success" });
     } catch (err) {
       if (err?.response?.status === 429) {
         const msg = buildRateLimitMessage(err?.response?.data);
@@ -102,9 +102,9 @@ const ResetPassword = () => {
             await sendPasswordResetEmail(auth, emailNormalized);
           }
 
-          const message = "Si el correo está registrado, enviamos un enlace para restablecer la contraseña.";
+          const message = "Si el correo electrónico está registrado, recibirás un enlace para restablecer tu contraseña en breve.";
           setSuccess(message);
-          await notify({ title: "Correo de recuperación enviado", text: message, icon: "success" });
+          await notify({ title: "Enlace de recuperación enviado", text: message, icon: "success" });
           return;
         } catch (finalFallbackError) {
           const mappedFirebase = mapFirebaseResetError(finalFallbackError || firebaseFallbackError);
@@ -169,7 +169,7 @@ const ResetPassword = () => {
 
         {success && (
           <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-            <div style={{ fontSize: "13px", color: "#166534", marginBottom: "4px", fontWeight: "600" }}>✅ Solicitud registrada:</div>
+            <div style={{ fontSize: "13px", color: "#166534", marginBottom: "4px", fontWeight: "600" }}>✅ Correo enviado correctamente</div>
             <div style={{ color: '#15803d', wordBreak: "break-word", fontSize: "13px" }}>{success}</div>
           </div>
         )}

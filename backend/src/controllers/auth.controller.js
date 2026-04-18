@@ -557,7 +557,7 @@ export const resetPasswordLink = async (req, res) => {
       if (code === "auth/user-not-found") {
         // No revelar si el email existe o no
         return res.json({
-          message: "Si el correo estÃ¡ registrado, se enviarÃ¡ un enlace para restablecer la contraseÃ±a.",
+          message: "Si el correo electrónico está registrado, recibirás un enlace para restablecer tu contraseña en breve.",
         });
       }
       throw linkError;
@@ -593,7 +593,7 @@ export const resetPasswordLink = async (req, res) => {
     }
 
     return res.json({
-      message: "Si el correo estÃ¡ registrado, se enviarÃ¡ un enlace para restablecer la contraseÃ±a.",
+      message: "Si el correo electrónico está registrado, recibirás un enlace para restablecer tu contraseña en breve.",
     });
   } catch (error) {
     logServerError("Error generando reset link", error);
