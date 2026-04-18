@@ -10,13 +10,12 @@ export const obtenerResumenGeneral = async (req, res) => {
     const { fechaInicio, fechaFin } = req.query;
     const start = fechaInicio ? new Date(`${fechaInicio}T00:00:00.000Z`) : null;
     const end = fechaFin ? new Date(`${fechaFin}T23:59:59.999Z`) : null;
-    const [usuariosSnap, productoresSnap, lotesSnap, ordenesSnap, turnosSnap, medicionesSnap, insumosSnap, asignSnap, ingresosSnap] = await Promise.all([
+    const [usuariosSnap, productoresSnap, lotesSnap, ordenesSnap, turnosSnap, insumosSnap, asignSnap, ingresosSnap] = await Promise.all([
       db.collection("users").get(),
       db.collection("productores").where("activo", "==", true).get(),
       db.collection("lotes").where("activo", "==", true).get(),
       db.collection("ordenes").where("activo", "==", true).get(),
       db.collection("turnos").where("activo", "==", true).get(),
-      db.collection("mediciones").get(),
       db.collection("insumos").get(),
       db.collection("productorInsumos").get(),
       db.collection("ingresosProductor").get(),
@@ -32,7 +31,7 @@ export const obtenerResumenGeneral = async (req, res) => {
 
     const totalLotesActivos = lotesSnap.docs.filter(doc => inRange(doc.data().fechaCreacion || doc.data().createdAt)).length;
     const totalTurnosActivos = turnosSnap.docs.filter(doc => inRange(doc.data().fechaTurno || doc.data().fecha || doc.data().creadoEn)).length;
-    const totalMedicionesRegistradas = medicionesSnap.docs.filter(doc => inRange(doc.data().fecha || doc.data().createdAt)).length;
+    const totalMedicionesRegistradas = 0;
 
     // Usuarios detallados (nombre, email, role, ipt si corresponde)
     const usuariosRaw = usuariosSnap.docs.map(d => {
@@ -185,18 +184,6 @@ export const obtenerResumenGeneral = async (req, res) => {
       if (ipt && createdOk) ensureAct(ipt, nombre).lotesCreados++;
       if (ipt && updatedOk) ensureAct(ipt, nombre).lotesModificados++;
     });
-    medicionesSnap.docs.forEach(m=>{
-      const md = m.data();
-      if (!inRange(md.fecha || md.createdAt)) return;
-      const prodField = String(md.productor || '').trim();
-      let ipt = '';
-      if (/^\d+$/.test(prodField)) ipt = prodField; else {
-        const p = prodByName.get(prodField.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-        ipt = p ? p.ipt : '';
-      }
-      const nombre = ipt ? (prodByIpt.get(ipt)?.nombre || '') : '';
-      if (ipt) ensureAct(ipt, nombre).medicionesRegistradas++;
-    });
     turnosSnap.docs.forEach(tdoc=>{
       const t = tdoc.data();
       const fechaT = t.fechaTurno || t.fecha || t.creadoEn;
@@ -241,71 +228,7 @@ export const obtenerResumenGeneral = async (req, res) => {
     // Ocultar registro específico solicitado: IPT 123456, productor Juan Gabriel Pared, fecha 11/12/2025, 21:00
     turnosLista = turnosLista.filter(r => !(String(r.productorIpt) === '123456' && String(r.productorNombre).trim() === 'Juan Gabriel Pared' && String(r.fecha) === '11/12/2025, 21:00'));
 
-    // Mediciones resumen por tipo y recientes
-    const conteoTipos = {};
-    const medicionesLista = medicionesSnap.docs.map(m => ({ id: m.id, ...m.data() }))
-      .filter(md => inRange(md.fecha || md.createdAt))
-      .map(md => {
-        const tipo = String(md.tipo || md.tipoMedicion || "").trim();
-        if (!tipo) return null;
-        conteoTipos[tipo] = (conteoTipos[tipo] || 0) + 1;
-        let productorIpt = '';
-        let productorNombre = '';
-        const prodField = String(md.productor || '').trim();
-        if (/^\d+$/.test(prodField)) {
-          const p = prodByIpt.get(prodField);
-          productorIpt = prodField;
-          productorNombre = p ? p.nombre : '';
-        } else if (prodField) {
-          const p = prodByName.get(prodField.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-          productorIpt = p ? p.ipt : '';
-          productorNombre = p ? p.nombre : prodField;
-        }
-        const loteVal = md.lote || md.loteId || "";
-        const loteStr = String(loteVal);
-        const looksRandomId = /^[A-Za-z0-9]{16,}$/.test(loteStr);
-        const f = md.fecha || md.createdAt;
-        let fechaOut = '';
-        try {
-          let dt;
-          if (f && typeof f === 'object' && (f._seconds || f.seconds)) {
-            const secs = f._seconds ?? f.seconds;
-            dt = new Date(secs * 1000);
-          } else {
-            dt = new Date(f);
-          }
-          const pad = (n)=> String(n).padStart(2,'0');
-          const dd = pad(dt.getDate());
-          const mm = pad(dt.getMonth()+1);
-          const yyyy = dt.getFullYear();
-          const hh = pad(dt.getHours());
-          const min = pad(dt.getMinutes());
-          fechaOut = `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
-        } catch { fechaOut = String(f||''); }
-        if (looksRandomId) return null;
-        const unidadMap = { 'temperatura': '°C', 'ph': 'pH', 'humedad': '%' };
-        const unidadMedida = unidadMap[norm(tipo)] || '';
-        return {
-          id: md.id,
-          tipo,
-          lote: loteStr,
-          fecha: fechaOut,
-          productorIpt,
-          productorNombre,
-          valorMedicion: md.valorNumerico ?? null,
-          unidadMedida,
-        };
-      })
-      .filter(Boolean);
-    const medicionesFiltradas = medicionesLista.filter(r => {
-      const tipo = String(r.tipo || '').toLowerCase();
-      const lote = String(r.lote || '');
-      const val = Number(r.valorMedicion || 0);
-      if (tipo.includes('temperatura') && lote === 'Lote 12' && val >= 500) return false;
-      if (tipo.includes('ph') && lote === 'Lote de Tabaco 1') return false;
-      return true;
-    });
-    const medicionesResumen = { porTipo: conteoTipos, lista: medicionesFiltradas };
+    const medicionesResumen = { porTipo: {}, lista: [] };
 
     const pad = (n) => String(n).padStart(2, '0');
     const now = new Date();
@@ -513,33 +436,6 @@ export const obtenerTurnosPorEstado = async (req, res) => {
   } catch (error) {
     logServerError("Error al obtener turnos por estado", error);
     sendInternalError(res, "Error al obtener turnos por estado");
-  }
-};
-
-// 🌱 Mediciones promedio por lote
-export const obtenerMedicionesPorLote = async (req, res) => {
-  try {
-    const medicionesSnap = await db.collection("mediciones").get();
-    const datosPorLote = {};
-
-    medicionesSnap.forEach((doc) => {
-      const { loteId, tipoMedicion, valor } = doc.data();
-      if (!datosPorLote[loteId]) datosPorLote[loteId] = { totalMediciones: 0, sumaValores: 0 };
-
-      datosPorLote[loteId].totalMediciones++;
-      datosPorLote[loteId].sumaValores += valor || 0;
-    });
-
-    const resultado = Object.entries(datosPorLote).map(([loteId, data]) => ({
-      loteId,
-      promedioValor: data.totalMediciones ? data.sumaValores / data.totalMediciones : 0,
-      totalMediciones: data.totalMediciones,
-    }));
-
-    res.json(resultado);
-  } catch (error) {
-    logServerError("Error al obtener mediciones por lote", error);
-    sendInternalError(res, "Error al obtener mediciones por lote");
   }
 };
 

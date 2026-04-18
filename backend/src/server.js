@@ -13,7 +13,6 @@ import authRoutes from "./routes/auth.routes.js";
 import lotesRoutes from "./routes/lotes.routes.js";
 import productoresRoutes from "./routes/productores.routes.js";
 import ordenesRoutes from "./routes/ordenes.routes.js";
-import medicionesRoutes from "./routes/mediciones.routes.js";
 import insumosRoutes from "./routes/insumos.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
@@ -46,6 +45,8 @@ app.set("trust proxy", 1);
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
   "http://localhost:4173",
   "http://127.0.0.1:4173",
 ];
@@ -114,7 +115,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/lotes", requireFirebaseAuth, lotesRoutes);
 app.use("/api/productores", requireFirebaseAuth, productoresRoutes);
 app.use("/api/ordenes", requireFirebaseAuth, ordenesRoutes);
-app.use("/api/mediciones", requireFirebaseAuth, medicionesRoutes);
 app.use("/api/insumos", requireFirebaseAuth, insumosRoutes);
 
 // Primero registramos el endpoint público de disponibilidad CON RUTA COMPLETA

@@ -1,5 +1,11 @@
 // src/utils/firebase.js
 import admin from "firebase-admin";
+import dotenv from "dotenv";
+
+// Cargar variables de entorno en desarrollo
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: ".env" });
+}
 
 // 🔐 Leer credenciales desde variable de entorno (Render)
 const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;

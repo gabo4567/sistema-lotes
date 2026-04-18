@@ -27,10 +27,9 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.subtitle}>{displayName}</Text>
 
       <View style={styles.actions}>
-        <ButtonPrimary title="Ver mis lotes" onPress={() => navigation.navigate("Lotes")} />
-        <ButtonPrimary title="Mis mediciones" onPress={() => navigation.navigate("Mediciones")} />
-        <ButtonPrimary title="Mis ubicaciones" onPress={() => navigation.navigate("MisUbicaciones")} />
         <ButtonPrimary title="Mis turnos" onPress={() => navigation.navigate("Turnos")} />
+        <ButtonPrimary title="Ver mis lotes" onPress={() => navigation.navigate("Lotes")} />
+        <ButtonPrimary title="Mis ubicaciones" onPress={() => navigation.navigate("MisUbicaciones")} />
         <ButtonPrimary title="Perfil" onPress={() => navigation.navigate("Perfil")} />
       </View>
 
