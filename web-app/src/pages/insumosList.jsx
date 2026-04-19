@@ -381,7 +381,7 @@ const InsumosList = () => {
               <div>
                 <h3 style={{ marginTop:0 }}>Agregar insumo</h3>
                 <select className="select-inst" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })}>
-                  {['Arada','Almácibo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
+                  {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
@@ -403,7 +403,7 @@ const InsumosList = () => {
               <div>
                 <h3 style={{ marginTop:0 }}>Modificar insumo</h3>
                 <select className="select-inst" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })}>
-                  {['Arada','Almácibo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
+                  {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />

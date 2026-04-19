@@ -1,6 +1,6 @@
 import { db } from "../utils/firebase.js";
 
-const NOMBRES_PERMITIDOS = ["Arada", "Almácibo", "Transplante", "Cosecha", "Almacibo"];
+const NOMBRES_PERMITIDOS = ["Arada", "Almácigo", "Transplante", "Cosecha", "Almácigo"];
 
 export const crearInsumo = async (req, res) => {
   try {
@@ -10,7 +10,7 @@ export const crearInsumo = async (req, res) => {
     }
     // Normalizar nombre: mapear variantes sin acento a la forma canónica
     let nom = String(nombre);
-    if (nom === "Almacibo") nom = "Almácibo";
+    if (nom === "Almacibo") nom = "Almácigo";
 
     const cant = Number(cantidadDisponible ?? 0);
     if (!isFinite(cant) || cant < 0) return res.status(400).json({ error: "Cantidad disponible inválida" });

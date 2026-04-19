@@ -5,6 +5,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Activity
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
+import { offlineTurnosOperations } from "../utils/offlineOperations";
+import { useOffline } from "../hooks/useOffline";
 
 export default function TurnosScreen() {
   const [fechaInput, setFechaInput] = useState("");
@@ -22,6 +24,7 @@ export default function TurnosScreen() {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [turnoEditando, setTurnoEditando] = useState(null);
   const insets = useSafeAreaInsets();
+  const { isOnline } = useOffline();
 
   const loadList = async () => {
     try {
@@ -291,6 +294,12 @@ export default function TurnosScreen() {
     const fecha = new Date(fechaIso);
     const diaSemana = fecha.getDay();
     if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
+
+    if (!isOnline) {
+      setDisp(true);
+      setSuccess("Sin conexión: no se puede verificar disponibilidad. Podés solicitar el turno y se enviará automáticamente cuando vuelva internet (puede ser rechazado si no hay cupo/disponibilidad).");
+      return;
+    }
     
     try {
       const tokenResult = await auth.currentUser?.getIdTokenResult();
@@ -381,43 +390,37 @@ export default function TurnosScreen() {
       };
       
       console.log("📝 Body preparado:", body);
-      console.log("🔑 Token de autenticación:", idToken.substring(0, 20) + "...");
-      console.log("🌐 URL del endpoint:", `${API_URL}/turnos`);
-      
-      console.log("📤 Enviando request...");
-      const resp = await fetch(`${API_URL}/turnos`, { 
-        method: "POST", 
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`
-        }, 
-        body: JSON.stringify(body) 
-      });
-      
-      console.log("📡 Respuesta recibida - Status:", resp.status);
-      console.log("📡 Respuesta recibida - StatusText:", resp.statusText);
-      console.log("📡 Respuesta recibida - Headers:", resp.headers);
-      
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        console.log("❌ Error en respuesta:", resp.status, errorText);
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { message: errorText };
-        }
-        throw new Error(errorData?.message || `Error ${resp.status}: ${resp.statusText}`);
+
+      const result = await offlineTurnosOperations.createTurno(body);
+      const wasOffline = Boolean(result?._isOffline);
+
+      if (wasOffline) {
+        const nuevo = {
+          id: result.id,
+          activo: true,
+          creadoEn: new Date().toISOString(),
+          estado: "pendiente",
+          fecha: `${fechaIso}T12:00:00.000Z`,
+          fechaTurno: `${fechaIso}T12:00:00.000Z`,
+          productorId: auth.currentUser?.uid,
+          tipoTurno: tipoNormalizado,
+          motivo: body.motivo || "",
+          _isOffline: true,
+        };
+        setList((prev) => [nuevo, ...(Array.isArray(prev) ? prev : [])]);
+        setSuccess("Turno guardado offline. Se sincronizará cuando recuperes la conexión a internet.");
+      } else {
+        const serverMsg = result?.message || "Turno solicitado exitosamente";
+        setSuccess(serverMsg);
       }
-      
-      const responseData = await resp.json();
-      console.log("✅ Turno creado exitosamente:", responseData);
-      setSuccess(responseData.message || "Turno solicitado exitosamente");
+
       setFechaInput("");
       setTipo("");
       setDisp(null);
       setMotivo("");
-      await loadList();
+      if (isOnline && !wasOffline) {
+        await loadList();
+      }
       setView('list');
     } catch (e) { 
       console.error("❌ Error solicitando turno:", e);
@@ -609,7 +612,12 @@ export default function TurnosScreen() {
                 <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
                   <View style={styles.turnoHeader}>
                     <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
-                    <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
+                    <View style={styles.turnoHeaderRight}>
+                      <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
+                      {item._isOffline ? (
+                        <Text style={styles.turnoSyncBadge}>Pendiente de sincronización</Text>
+                      ) : null}
+                    </View>
                   </View>
                   <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
                   <Text style={styles.turnoMotivo}>Motivo: {item.motivo || 'No especificado'}</Text>
@@ -663,7 +671,7 @@ export default function TurnosScreen() {
           {success ? <Text style={styles.success}>{success}</Text> : null}
           <View style={[styles.row, { marginBottom: Math.max(insets.bottom, 24) }]}>
             <TouchableOpacity style={styles.btn} onPress={checkDisponibilidad}><Text style={styles.btnText}>Ver disponibilidad</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.btn} onPress={solicitarTurno} disabled={loading || disp !== true}><Text style={styles.btnText}>{loading ? "Solicitando..." : "Solicitar"}</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.btn} onPress={solicitarTurno} disabled={loading || (isOnline && disp !== true)}><Text style={styles.btnText}>{loading ? "Solicitando..." : "Solicitar"}</Text></TouchableOpacity>
           </View>
           {disp !== null && <Text style={{ marginTop: 8 }}>Disponibilidad: {disp ? "Sí" : "No"}</Text>}
         </View>
@@ -738,8 +746,10 @@ const styles = StyleSheet.create({
   // Estilos para tarjetas de turnos
   turnoCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, elevation: 2, marginBottom: 12 },
   turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  turnoHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   turnoFecha: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },
   turnoEstado: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, color: '#fff', overflow: 'hidden', fontSize: 12 },
+  turnoSyncBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#fef3c7', color: '#92400e', overflow: 'hidden', fontSize: 11, fontWeight: '700' },
   turnoTipo: { fontSize: 14, color: '#34495e', marginBottom: 4 },
   turnoMotivo: { fontSize: 13, color: '#7f8c8d', fontStyle: 'italic' },
   // Estilos para botones de acción

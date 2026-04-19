@@ -1,4 +1,4 @@
-﻿// src/controllers/auth.controller.js
+﻿﻿﻿﻿// src/controllers/auth.controller.js
 import { db, admin } from "../utils/firebase.js";
 import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";
@@ -11,9 +11,9 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
 
 const FIREBASE_SIGN_IN_ERRORS = {
-  INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales invÃ¡lidas" },
-  INVALID_PASSWORD: { status: 401, message: "Credenciales invÃ¡lidas" },
-  EMAIL_NOT_FOUND: { status: 401, message: "Credenciales invÃ¡lidas" },
+  INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales inválidas" },
+  INVALID_PASSWORD: { status: 401, message: "Credenciales inválidas" },
+  EMAIL_NOT_FOUND: { status: 401, message: "Credenciales inválidas" },
   USER_DISABLED: { status: 403, message: "La cuenta ha sido deshabilitada" },
   TOO_MANY_ATTEMPTS_TRY_LATER: { status: 429, message: "Demasiados intentos. Intente nuevamente en unos minutos." },
 };
@@ -65,11 +65,11 @@ export const registerUser = async (req, res) => {
     const emailNormalized = normalizeEmail(email);
 
     if (!isValidEmail(emailNormalized)) {
-      return res.status(400).json({ error: "Ingrese un correo electrÃ³nico vÃ¡lido." });
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
     }
 
     if (!password || String(password).length < 6) {
-      return res.status(400).json({ error: "La contraseÃ±a debe tener al menos 6 caracteres." });
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
     }
 
     const domain = process.env.WEB_EMAIL_DOMAIN;
@@ -77,7 +77,7 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ error: "Email no pertenece al dominio institucional" });
     }
 
-    // Evitar correos duplicados en Firestore (ademÃ¡s de la restricciÃ³n de Firebase Auth)
+    // Evitar correos duplicados en Firestore (además de la restricción de Firebase Auth)
     const existingUsers = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
     if (!existingUsers.empty) {
       return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
@@ -89,7 +89,7 @@ export const registerUser = async (req, res) => {
       displayName: nombre,
     });
 
-    const allowed = ["Administrador", "Tecnico", "TÃ©cnico", "Supervisor"];
+    const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
     const finalRole = allowed.includes(role) ? role : "Tecnico";
     await db.collection("users").doc(userRecord.uid).set({
       email: emailNormalized,
@@ -132,19 +132,19 @@ export const registerProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
-    // ValidaciÃ³n de formato de email
+    // Validación de formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email && !emailRegex.test(email)) {
-      return res.status(400).json({ error: "Ingrese un correo electrÃ³nico vÃ¡lido." });
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
     }
 
-    // ValidaciÃ³n de formato de telÃ©fono
+    // Validación de formato de teléfono
     const telRegex = /^\d{10,13}$/;
     if (telefono && !telRegex.test(telefono)) {
-      return res.status(400).json({ error: "El nÃºmero debe contener solo dÃ­gitos (10 a 13 nÃºmeros)." });
+      return res.status(400).json({ error: "El número debe contener solo dígitos (10 a 13 números)." });
     }
 
-    // Validar unicidad de IPT (si existe y estÃ¡ activo, no permitir duplicado)
+    // Validar unicidad de IPT (si existe y está activo, no permitir duplicado)
     const existingIpt = await db
       .collection("productores")
       .where("ipt", "==", String(ipt))
@@ -152,7 +152,7 @@ export const registerProductor = async (req, res) => {
       .get();
     
     if (!existingIpt.empty) {
-      return res.status(400).json({ error: "El nÃºmero de IPT ya se encuentra registrado." });
+      return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
     }
 
     // Validar unicidad de CUIL
@@ -211,7 +211,7 @@ export const registerProductor = async (req, res) => {
         if (email) {
           try {
             await admin.auth().getUserByEmail(email);
-            // Si no lanza error, el email ya estÃ¡ en uso. No lo asignamos a este Auth Record.
+            // Si no lanza error, el email ya está en uso. No lo asignamos a este Auth Record.
           } catch (err) {
             if (err.code === 'auth/user-not-found') {
               authData.email = email;
@@ -224,7 +224,7 @@ export const registerProductor = async (req, res) => {
       }
     }
 
-    // Crear o actualizar el registro en la colecciÃ³n de 'users' para que aparezca en la lista
+    // Crear o actualizar el registro en la colección de 'users' para que aparezca en la lista
     await db.collection("users").doc(authUid).set({
       email: email || "",
       nombre: nombreCompleto,
@@ -235,7 +235,7 @@ export const registerProductor = async (req, res) => {
       updatedAt: new Date(),
     }, { merge: true });
 
-    // Asignar claims Ãºtiles para posteriores autorizaciones
+    // Asignar claims útiles para posteriores autorizaciones
     await admin.auth().setCustomUserClaims(authUid, {
       role: "productor",
       ipt: String(ipt),
@@ -278,12 +278,12 @@ export const loginUser = async (req, res) => {
         });
       } catch (error) {
         if (error?.kind === "config") {
-          logServerError("ConfiguraciÃ³n faltante para login Firebase", error);
-          return res.status(500).json({ error: "ConfiguraciÃ³n de autenticaciÃ³n incompleta" });
+          logServerError("Configuración faltante para login Firebase", error);
+          return res.status(500).json({ error: "Configuración de autenticación incompleta" });
         }
 
         if (error?.kind === "auth") {
-          return res.status(error.status || 401).json({ error: error.message || "Credenciales invÃ¡lidas" });
+          return res.status(error.status || 401).json({ error: error.message || "Credenciales inválidas" });
         }
 
         throw error;
@@ -325,12 +325,12 @@ export const loginUser = async (req, res) => {
       }
     }
 
-    // 3. Los productores usan la app mÃ³vil â€” no el panel web
+    // 3. Los productores usan la app móvil — no el panel web
     if (String(role).toLowerCase() === "productor") {
-      return res.status(403).json({ error: "Los productores deben usar la aplicaciÃ³n mÃ³vil" });
+      return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
     }
 
-    // 4. Actualizar Ãºltimo acceso
+    // 4. Actualizar último acceso
     await db.collection("users").doc(resolvedUid).set({
       email: emailNormalized,
       role,
@@ -341,7 +341,7 @@ export const loginUser = async (req, res) => {
     res.json({ token: webToken, role });
   } catch (error) {
     logServerError("Error al hacer login", error);
-    res.status(500).json({ error: "No se pudo iniciar sesiÃ³n" });
+    res.status(500).json({ error: "No se pudo iniciar sesión" });
   }
 };
 
@@ -427,8 +427,8 @@ export const loginProductor = async (req, res) => {
 
     return res.json({ token, requiereCambioContrasena: requiereCambio });
   } catch (error) {
-    logServerError("Error al iniciar sesiÃ³n de productor", error);
-    return res.status(500).json({ error: "No se pudo iniciar sesiÃ³n" });
+    logServerError("Error al iniciar sesión de productor", error);
+    return res.status(500).json({ error: "No se pudo iniciar sesión" });
   }
 };
 
@@ -439,7 +439,7 @@ export const cambiarPasswordProductor = async (req, res) => {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
     if (String(newPassword).length < 6) {
-      return res.status(400).json({ error: "ContraseÃ±a demasiado dÃ©bil" });
+      return res.status(400).json({ error: "Contraseña demasiado débil" });
     }
     const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
     if (snap.empty) {

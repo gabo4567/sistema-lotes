@@ -4,8 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { auth } from '../services/firebase';
-import { API_URL } from '../utils/constants';
+import { offlineUbicacionesOperations } from '../utils/offlineOperations';
 
 const LABELS = {
   entradaDomicilio: 'Entrada del domicilio',
@@ -62,17 +61,17 @@ export default function EditarUbicacionScreen({ route, navigation }) {
     if (!validateCoord(marker)) { Alert.alert('Error', 'Coordenadas inválidas'); return; }
     setSaving(true);
     try {
-      const idToken = await auth.currentUser?.getIdToken();
       const updated = {
         ...(productor?.ubicaciones || {}),
         [tipo]: { lat: marker.latitude, lng: marker.longitude, activo: true, updatedAt: new Date().toISOString() },
       };
-      const resp = await fetch(`${API_URL}/productores/${productor.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-        body: JSON.stringify({ ubicaciones: updated }),
-      });
-      if (!resp.ok) throw new Error('No se pudo guardar');
-      Alert.alert('OK', 'Ubicación guardada', [{ text: 'Volver', onPress: () => navigation.goBack() }]);
+      const result = await offlineUbicacionesOperations.updateUbicacion({ productorId: productor.id, ubicaciones: updated });
+      const wasOffline = Boolean(result?._isOffline);
+      Alert.alert(
+        wasOffline ? 'Guardado offline' : 'OK',
+        wasOffline ? 'Ubicación guardada. Se sincronizará cuando recuperes la conexión.' : 'Ubicación guardada',
+        [{ text: 'Volver', onPress: () => navigation.goBack() }]
+      );
     } catch (e) {
       Alert.alert('Error', e.message || 'No se pudo guardar');
     } finally { setSaving(false); }
@@ -81,17 +80,17 @@ export default function EditarUbicacionScreen({ route, navigation }) {
   const softDelete = async () => {
     if (!current) { Alert.alert('Info', 'No hay ubicación para eliminar'); return; }
     try {
-      const idToken = await auth.currentUser?.getIdToken();
       const updated = {
         ...(productor?.ubicaciones || {}),
         [tipo]: { ...(productor?.ubicaciones?.[tipo] || {}), activo: false, updatedAt: new Date().toISOString() },
       };
-      const resp = await fetch(`${API_URL}/productores/${productor.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-        body: JSON.stringify({ ubicaciones: updated }),
-      });
-      if (!resp.ok) throw new Error('No se pudo eliminar');
-      Alert.alert('OK', 'Ubicación desactivada', [{ text: 'Volver', onPress: () => navigation.goBack() }]);
+      const result = await offlineUbicacionesOperations.updateUbicacion({ productorId: productor.id, ubicaciones: updated });
+      const wasOffline = Boolean(result?._isOffline);
+      Alert.alert(
+        wasOffline ? 'Guardado offline' : 'OK',
+        wasOffline ? 'Ubicación desactivada. Se sincronizará cuando recuperes la conexión.' : 'Ubicación desactivada',
+        [{ text: 'Volver', onPress: () => navigation.goBack() }]
+      );
     } catch (e) { Alert.alert('Error', e.message || 'No se pudo eliminar'); }
   };
 

@@ -13,6 +13,7 @@ import MisUbicacionesScreen from "../screens/MisUbicacionesScreen";
 import EditarUbicacionScreen from "../screens/EditarUbicacionScreen";
 import { AuthContext } from "../context/AuthContext";
 import { View, ActivityIndicator, Text } from "react-native";
+import OfflineIndicator from "../components/OfflineIndicator";
 
 const Stack = createNativeStackNavigator();
 
@@ -28,14 +29,17 @@ export default function AppNavigator() {
         </View>
       ) : (
         user ? (
-          <Stack.Navigator key="auth" screenOptions={{ headerShown: false }} initialRouteName="Home">
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Lotes" component={LotesScreen} />
-            <Stack.Screen name="Turnos" component={TurnosScreen} />
-            <Stack.Screen name="MisUbicaciones" component={MisUbicacionesScreen} />
-            <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
-            <Stack.Screen name="Perfil" component={PerfilScreen} />
-          </Stack.Navigator>
+          <View style={{ flex: 1 }}>
+            <OfflineIndicator />
+            <Stack.Navigator key="auth" screenOptions={{ headerShown: false }} initialRouteName="Home">
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Lotes" component={LotesScreen} />
+              <Stack.Screen name="Turnos" component={TurnosScreen} />
+              <Stack.Screen name="MisUbicaciones" component={MisUbicacionesScreen} />
+              <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
+              <Stack.Screen name="Perfil" component={PerfilScreen} />
+            </Stack.Navigator>
+          </View>
         ) : (
           <Stack.Navigator key="guest" screenOptions={{ headerShown: false }} initialRouteName="Login">
             <Stack.Screen name="Login" component={LoginScreen} />

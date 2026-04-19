@@ -24,6 +24,8 @@ import * as Location from "expo-location";
 import { API_URL } from "../utils/constants";
 import { useWalkingGPS } from "../hooks/useWalkingGPS";
 import { authFetch, getCurrentAuthContext } from "../api/api";
+import { offlineLotesOperations } from "../utils/offlineOperations";
+import { useOffline } from "../hooks/useOffline";
 
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
@@ -50,6 +52,7 @@ export default function LotesScreen() {
   const mapRef = useRef(null);
   const insets = useSafeAreaInsets();
   const { isWalking, route, startWalking, stopWalking, resetRoute, addManualPoint, undoLastPoint, currentLocation } = useWalkingGPS();
+  const { isOnline, addToQueue } = useOffline();
 
   useEffect(() => {
     if (mode === "gps" && route.length > 0) {
@@ -336,19 +339,21 @@ export default function LotesScreen() {
       const { ipt } = await getCurrentAuthContext();
       const poligono = points.map((p) => ({ lat: p.latitude, lng: p.longitude }));
       const metodoMarcado = mode === "gps" ? "GPS" : "aereo";
-      let resp;
+
+      let result;
+      let successMessage = "";
+      let wasOffline = false;
 
       if (selected && selected.estado !== "Validado") {
-        resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            poligono,
-            metodoMarcado,
-            superficie: Number(currentAreaHa.toFixed(4)),
-          }),
+        // Actualizar lote existente
+        result = await offlineLotesOperations.updateLote(selected.id, {
+          poligono,
+          metodoMarcado,
+          superficie: Number(currentAreaHa.toFixed(4)),
         });
+        successMessage = "Tu lote ha sido actualizado correctamente.";
       } else {
+        // Crear nuevo lote
         if (!nombre || nombre.trim().length < 3) {
           throw new Error("Nombre del lote inválido (mínimo 3 caracteres)");
         }
@@ -360,30 +365,36 @@ export default function LotesScreen() {
           observacionesProductor: observacionesProductor?.slice(0, 500) || "",
           superficie: Number(currentAreaHa.toFixed(4)),
         };
-        resp = await authFetch(`${API_URL}/lotes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+
+        result = await offlineLotesOperations.createLote(body);
+        successMessage = "Tu lote ha sido guardado correctamente.";
+        wasOffline = result._isOffline;
       }
 
-      if (!resp.ok) {
-        const j = await resp.json().catch(() => ({}));
-        throw new Error(j?.error || "No se pudo guardar el lote");
-      }
-
+      // Limpiar formulario
       clearPolygon();
       setSelected(null);
       setNombre("");
       setObservacionesProductor("");
       setCreating(false);
       setCreateStep("polygon");
-      loadList();
+
+      // Recargar lista si estamos online
+      if (isOnline && !wasOffline) {
+        loadList();
+      }
+
+      // Mostrar mensaje de éxito
+      const finalMessage = wasOffline
+        ? `${successMessage} Se sincronizará cuando recuperes la conexión a internet.`
+        : successMessage;
+
       Alert.alert(
-        "¡Éxito!",
-        "Tu lote ha sido guardado correctamente. Ahora está disponible en tu lista de lotes.",
+        wasOffline ? "Guardado offline" : "¡Éxito!",
+        finalMessage,
         [{ text: "Aceptar", onPress: () => {} }]
       );
+
     } catch (e) {
       Alert.alert(
         "Error al guardar",
