@@ -27,7 +27,7 @@ const LoteForm = () => {
   };
 
   return (
-    <div className="lotes-form">
+    <div className="lotes-form page-container">
       <form onSubmit={handleSubmit} className="max-w-md bg-white p-4 rounded shadow">
         <h2 className="text-xl mb-4 font-semibold">Crear Lote</h2>
         {message ? <div className="text-green-700 mb-2">{message}</div> : null}

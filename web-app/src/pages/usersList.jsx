@@ -40,7 +40,7 @@ const UsersList = () => {
         return Array.from(map.values()).filter(u => !(norm(u?.nombre)==='gabriel' && norm(u?.email)==='gabriel@example.com'));
       };
       setItems(dedup());
-    } catch (e) {
+    } catch {
       setError("No se pudieron cargar usuarios");
     } finally { setLoading(false); }
   };
@@ -112,7 +112,7 @@ const UsersList = () => {
           await notify({ title: 'La contraseña ya está establecida a su CUIL', icon: 'info' });
           return;
         }
-      } catch {}
+      } catch { null }
       const ok = await confirmDialog({ title: "¿Estás seguro?", text: `¿Restablecer la contraseña del productor ${u?.nombre || u?.email || uid} a su CUIL?`, icon: "warning", confirmButtonText: "Restablecer", cancelButtonText: "Cancelar" });
       if (!ok) return;
       try {
@@ -173,7 +173,7 @@ const UsersList = () => {
   };
 
   return (
-    <div className="users-list" style={{ width: '100%' }}>
+    <div className="users-list page-container" style={{ width: '100%' }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 className="users-title">Usuarios</h2>
       {loading ? (

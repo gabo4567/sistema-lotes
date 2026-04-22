@@ -1,12 +1,10 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import { getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import HomeButton from "../components/HomeButton";
-import { AuthContext } from "../contexts/AuthContext";
 import { confirmDialog, notify } from "../utils/alerts";
 
 const ProductoresList = () => {
-  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +18,7 @@ const ProductoresList = () => {
     try {
       const { data } = await getProductores();
       setItems(data || []);
-    } catch (e) {
+    } catch {
       setError("No se pudo cargar productores");
     } finally {
       setLoading(false);
@@ -65,7 +63,7 @@ const ProductoresList = () => {
   if (error) return <div style={{ padding: 24, color: "#c0392b" }}>{error}</div>;
 
   return (
-    <div className="section-card prod-list">
+    <div className="section-card prod-list page-container">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 className="users-title">Productores</h2>
       {loading ? (

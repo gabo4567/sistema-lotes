@@ -4,6 +4,28 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_URL } from "../utils/constants";
 import { authFetch, getCurrentAuthContext } from "../api/api";
 
+const UBIC_TYPES = [
+  { key: "entradaDomicilio", label: "Entrada domicilio" },
+  { key: "domicilioCasa", label: "Domicilio (Casa)" },
+  { key: "entradaCampo", label: "Entrada campo" },
+  { key: "centroCampo", label: "Centro campo" },
+];
+
+const normalizeCampos = (productor) => {
+  const rawCampos = Array.isArray(productor?.campos) ? productor.campos : [];
+  if (rawCampos.length > 0) {
+    const campos = rawCampos
+      .map((c, i) => ({
+        id: c?.id ? String(c.id) : `campo_${i + 1}`,
+        nombre: (c?.nombre ? String(c.nombre) : "").trim() || `Campo ${i + 1}`,
+        ubicaciones: c?.ubicaciones && typeof c.ubicaciones === "object" ? c.ubicaciones : {},
+      }))
+      .filter((c) => c.id);
+    return campos.length > 0 ? campos : [{ id: "principal", nombre: "Campo principal", ubicaciones: productor?.ubicaciones || {} }];
+  }
+  return [{ id: "principal", nombre: "Campo principal", ubicaciones: productor?.ubicaciones || {} }];
+};
+
 export default function PerfilScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +72,28 @@ export default function PerfilScreen() {
     );
   }
 
+  const campos = normalizeCampos(data);
+
+  const renderUbicaciones = (ubicaciones) => (
+    <View style={styles.ubicacionesContainer}>
+      {UBIC_TYPES.map(({ key, label }, idx) => {
+        const item = ubicaciones?.[key];
+        const hasCoords = item?.lat != null && item?.lng != null;
+        return (
+          <View key={key}>
+            <View style={styles.ubicacionItem}>
+              <Text style={styles.ubicacionLabel}>{label}</Text>
+              <Text style={styles.ubicacionCoords}>
+                {hasCoords ? `Lat: ${Number(item.lat).toFixed(6)}  Lng: ${Number(item.lng).toFixed(6)}` : "-"}
+              </Text>
+            </View>
+            {idx < UBIC_TYPES.length - 1 ? <View style={styles.separator} /> : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}>
@@ -66,38 +110,16 @@ export default function PerfilScreen() {
           <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
           
           <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
-          
-          <View style={styles.ubicacionesContainer}>
-            <View style={styles.ubicacionItem}>
-              <Text style={styles.ubicacionLabel}>Entrada domicilio</Text>
-              <Text style={styles.ubicacionCoords}>
-                {data?.ubicaciones?.entradaDomicilio?.lat != null ? `Lat: ${data.ubicaciones.entradaDomicilio.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaDomicilio.lng.toFixed(6)}` : '-'}
-              </Text>
-            </View>
-            <View style={styles.separator} />
-            
-            <View style={styles.ubicacionItem}>
-              <Text style={styles.ubicacionLabel}>Domicilio (Casa)</Text>
-              <Text style={styles.ubicacionCoords}>
-                {data?.ubicaciones?.domicilioCasa?.lat != null ? `Lat: ${data.ubicaciones.domicilioCasa.lat.toFixed(6)}  Lng: ${data.ubicaciones.domicilioCasa.lng.toFixed(6)}` : '-'}
-              </Text>
-            </View>
-            <View style={styles.separator} />
-            
-            <View style={styles.ubicacionItem}>
-              <Text style={styles.ubicacionLabel}>Entrada campo</Text>
-              <Text style={styles.ubicacionCoords}>
-                {data?.ubicaciones?.entradaCampo?.lat != null ? `Lat: ${data.ubicaciones.entradaCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.entradaCampo.lng.toFixed(6)}` : '-'}
-              </Text>
-            </View>
-            <View style={styles.separator} />
-            
-            <View style={styles.ubicacionItem}>
-              <Text style={styles.ubicacionLabel}>Centro campo</Text>
-              <Text style={styles.ubicacionCoords}>
-                {data?.ubicaciones?.centroCampo?.lat != null ? `Lat: ${data.ubicaciones.centroCampo.lat.toFixed(6)}  Lng: ${data.ubicaciones.centroCampo.lng.toFixed(6)}` : '-'}
-              </Text>
-            </View>
+
+          <View style={styles.camposContainer}>
+            {campos.map((c, idx) => (
+              <View key={c.id} style={[styles.campoBlock, idx > 0 ? styles.campoBlockSpacing : null]}>
+                <View style={styles.campoHeader}>
+                  <Text style={styles.campoTitle}>{c.nombre}</Text>
+                </View>
+                {renderUbicaciones(c.ubicaciones)}
+              </View>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -108,11 +130,16 @@ export default function PerfilScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#fff" },
   title: { fontSize: 22, fontWeight: "bold", color: "#1e8449", marginBottom: 20, textAlign: "center" },
-  card: { backgroundColor: "#ffffff", borderRadius: 12, padding: 16, elevation: 2, marginTop: 10 },
+  card: { backgroundColor: "#ffffff", borderRadius: 16, padding: 18, marginTop: 10, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)", shadowColor: "#0f172a", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   item: { fontSize: 16, marginBottom: 6, color: "#34495e" },
   section: { marginTop: 10, fontWeight: "bold" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   error: { color: "#c0392b" },
+  camposContainer: { marginTop: 12 },
+  campoBlock: {},
+  campoBlockSpacing: { marginTop: 14 },
+  campoHeader: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#ecfdf5", borderRadius: 10, borderWidth: 1, borderColor: "#d1fae5" },
+  campoTitle: { color: "#1e8449", fontWeight: "800", textAlign: "center" },
   ubicacionesContainer: { marginTop: 12, backgroundColor: "#f8f9fa", borderRadius: 8, padding: 12 },
   ubicacionItem: { alignItems: "center", paddingVertical: 8 },
   ubicacionLabel: { fontSize: 14, fontWeight: "600", color: "#1e8449", marginBottom: 4 },

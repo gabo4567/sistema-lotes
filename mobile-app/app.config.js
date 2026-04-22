@@ -45,7 +45,8 @@ export default {
           photosPermission:
             "El sistema de lotes necesita acceso a tu galería para adjuntar fotos como evidencia de las mediciones."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
 
     ios: {

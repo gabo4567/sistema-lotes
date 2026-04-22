@@ -156,7 +156,9 @@ export const offlineUbicacionesOperations = {
       if (offlineManager.isOnline) {
         const productorId = ubicacionData?.productorId || ubicacionData?.id || ubicacionData?.productor?.id;
         const ubicaciones = ubicacionData?.ubicaciones;
-        if (!productorId || !ubicaciones) {
+        const campos = ubicacionData?.campos;
+        const campoActivoId = ubicacionData?.campoActivoId;
+        if (!productorId || (!ubicaciones && !campos && !campoActivoId)) {
           throw new Error('Datos de ubicación incompletos');
         }
 
@@ -166,7 +168,7 @@ export const offlineUbicacionesOperations = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${await offlineManager.getAuthToken()}`
           },
-          body: JSON.stringify({ ubicaciones })
+          body: JSON.stringify({ ubicaciones, campos, campoActivoId })
         });
 
         if (response.ok) {

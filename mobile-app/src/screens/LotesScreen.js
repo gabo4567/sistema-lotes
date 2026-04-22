@@ -166,23 +166,63 @@ export default function LotesScreen() {
     (a.latitude - o.latitude) * (b.longitude - o.longitude) -
     (a.longitude - o.longitude) * (b.latitude - o.latitude);
 
-  const onSegLL = (p, q, r) =>
-    Math.min(p.latitude, r.latitude) <= q.latitude &&
-    q.latitude <= Math.max(p.latitude, r.latitude) &&
-    Math.min(p.longitude, r.longitude) <= q.longitude &&
-    q.longitude <= Math.max(p.longitude, r.longitude);
+  const nearlyEqual = (a, b, eps) => Math.abs(a - b) <= eps;
 
-  const edgesIntersect = (p1, p2, p3, p4) => {
-    const eps = 1e-10;
-    const d1 = cross2D(p3, p4, p1), d2 = cross2D(p3, p4, p2);
-    const d3 = cross2D(p1, p2, p3), d4 = cross2D(p1, p2, p4);
-    if (((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
-        ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))) return true;
-    if (Math.abs(d1) < eps && onSegLL(p3, p4, p1)) return true;
-    if (Math.abs(d2) < eps && onSegLL(p3, p4, p2)) return true;
-    if (Math.abs(d3) < eps && onSegLL(p1, p2, p3)) return true;
-    if (Math.abs(d4) < eps && onSegLL(p1, p2, p4)) return true;
+  const samePointLL = (p, q, eps) =>
+    nearlyEqual(p.latitude, q.latitude, eps) && nearlyEqual(p.longitude, q.longitude, eps);
+
+  const onSegLL = (p, q, r, eps) =>
+    Math.min(p.latitude, r.latitude) - eps <= q.latitude &&
+    q.latitude <= Math.max(p.latitude, r.latitude) + eps &&
+    Math.min(p.longitude, r.longitude) - eps <= q.longitude &&
+    q.longitude <= Math.max(p.longitude, r.longitude) + eps;
+
+  const segmentsIntersect = (p1, p2, p3, p4, eps) => {
+    const d1 = cross2D(p1, p2, p3);
+    const d2 = cross2D(p1, p2, p4);
+    const d3 = cross2D(p3, p4, p1);
+    const d4 = cross2D(p3, p4, p2);
+
+    const s1 = d1 > eps ? 1 : d1 < -eps ? -1 : 0;
+    const s2 = d2 > eps ? 1 : d2 < -eps ? -1 : 0;
+    const s3 = d3 > eps ? 1 : d3 < -eps ? -1 : 0;
+    const s4 = d4 > eps ? 1 : d4 < -eps ? -1 : 0;
+
+    if (s1 !== 0 && s2 !== 0 && s3 !== 0 && s4 !== 0) {
+      return s1 !== s2 && s3 !== s4;
+    }
+
+    if (s1 === 0 && onSegLL(p1, p3, p2, eps)) return true;
+    if (s2 === 0 && onSegLL(p1, p4, p2, eps)) return true;
+    if (s3 === 0 && onSegLL(p3, p1, p4, eps)) return true;
+    if (s4 === 0 && onSegLL(p3, p2, p4, eps)) return true;
     return false;
+  };
+
+  const isValidNewPoint = (points, newPoint) => {
+    const eps = 1e-10;
+    if (points.some((p) => samePointLL(p, newPoint, eps))) return false;
+
+    const allPoints = [...points, newPoint];
+    const n = allPoints.length;
+    if (n < 4) return true;
+
+    const edges = allPoints.map((p, i) => [p, allPoints[(i + 1) % n]]);
+    const newEdges = [edges[n - 2], edges[n - 1]];
+
+    for (const [a1, a2] of newEdges) {
+      for (let i = 0; i < edges.length; i++) {
+        const [b1, b2] = edges[i];
+
+        if ((a1 === b1 && a2 === b2) || (a1 === b2 && a2 === b1)) continue;
+        if (samePointLL(a1, b1, eps) || samePointLL(a1, b2, eps) || samePointLL(a2, b1, eps) || samePointLL(a2, b2, eps)) {
+          continue;
+        }
+
+        if (segmentsIntersect(a1, a2, b1, b2, eps)) return false;
+      }
+    }
+    return true;
   };
   // ────────────────────────────────────────────────────────────────────────
 
@@ -191,24 +231,21 @@ export default function LotesScreen() {
     const { coordinate } = e.nativeEvent;
     const newPt = { latitude: coordinate.latitude, longitude: coordinate.longitude };
 
-    if (points.length >= 4) {
+    const eps = 1e-10;
+    if (points.some((p) => samePointLL(p, newPt, eps))) {
       Alert.alert(
-        "Máximo 4 puntos",
-        "Un lote puede tener 3 puntos (triángulo) o 4 puntos (cuadrilátero). Usá 'Limpiar' para empezar de nuevo."
+        "Punto inválido",
+        "El punto elegido coincide con un vértice existente. Elija un punto diferente."
       );
       return;
     }
 
-    // When adding the 4th point, verify the resulting quadrilateral is simple (no crossing edges)
-    if (points.length === 3) {
-      const [P0, P1, P2] = points;
-      const P3 = newPt;
-      // New edge P2→P3 must not cross P0→P1
-      // Closing edge P3→P0 must not cross P1→P2
-      if (edgesIntersect(P2, P3, P0, P1) || edgesIntersect(P3, P0, P1, P2)) {
+    // When adding a new point after the third, verify no crossing edges
+    if (points.length >= 3) {
+      if (!isValidNewPoint(points, newPt)) {
         Alert.alert(
           "Punto inválido",
-          "El punto elegido crearía un polígono con aristas cruzadas (forma de mariposa). Elegí un punto que quede dentro o fuera del triángulo actual."
+          "El punto elegido crearía un polígono con aristas cruzadas. Elija un punto diferente."
         );
         return;
       }
@@ -481,6 +518,9 @@ export default function LotesScreen() {
     };
   };
 
+  const isMapaTabActive = !creating && viewMode !== "listOnly";
+  const isLotesTabActive = !creating && viewMode === "listOnly";
+
   return (
     <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Mis Lotes</Text>
@@ -496,16 +536,16 @@ export default function LotesScreen() {
             <Text style={[styles.tabBtnText, creating && styles.tabBtnTextActive]}>Nuevo Lote</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tabBtn, styles.tabBtnMapa, viewMode === "mapOnly" && !creating && styles.tabBtnActive]}
+            style={[styles.tabBtn, styles.tabBtnMapa, isMapaTabActive && styles.tabBtnActive]}
             onPress={goToMapView}
           >
-            <Text style={[styles.tabBtnText, viewMode === "mapOnly" && !creating && styles.tabBtnTextActive]}>Mapa</Text>
+            <Text style={[styles.tabBtnText, isMapaTabActive && styles.tabBtnTextActive]}>Mapa</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tabBtn, styles.tabBtnLotes, viewMode === "listOnly" && !creating && styles.tabBtnActive]}
+            style={[styles.tabBtn, styles.tabBtnLotes, isLotesTabActive && styles.tabBtnActive]}
             onPress={goToListView}
           >
-            <Text style={[styles.tabBtnText, viewMode === "listOnly" && !creating && styles.tabBtnTextActive]}>Lotes</Text>
+            <Text style={[styles.tabBtnText, isLotesTabActive && styles.tabBtnTextActive]}>Lotes</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1005,7 +1045,7 @@ const styles = StyleSheet.create({
   tabBtnActive: { borderColor: "#fff", elevation: 6, shadowColor: "#000", shadowOpacity: 0.22, shadowOffset: { width: 0, height: 3 }, shadowRadius: 5, opacity: 1 },
   tabBtnText: { color: "#fff", fontSize: 13, fontWeight: "500" },
   tabBtnTextActive: { fontWeight: "800" },
-  item: { padding: 8, backgroundColor: "#ffffff", borderRadius: 8, marginBottom: 6 },
+  item: { backgroundColor: "#ffffff", borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)", shadowColor: "#0f172a", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   itemSelected: { borderWidth: 2, borderColor: "#2ecc71" },
   itemText: { color: "#34495e" },
   details: { padding: 8, backgroundColor: "#ffffff" },

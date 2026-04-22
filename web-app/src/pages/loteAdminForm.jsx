@@ -157,7 +157,7 @@ const LoteAdminForm = () => {
   };
 
   return (
-      <div className="section-card prod-form">
+      <div className="section-card prod-form page-container">
       <h2 className="users-title">{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
       <form onSubmit={onSubmit} className="form-grid">
         <input className="input-inst" placeholder="Nombre del lote" value={form.nombre} onChange={e=>onChange('nombre', e.target.value)} />

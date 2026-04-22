@@ -119,7 +119,7 @@ const LotesList = () => {
 
   return (
     
-    <div>
+    <div className="page-container">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h2 style={{ margin: 0 }}>Gestión de Lotes</h2>

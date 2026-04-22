@@ -1,18 +1,21 @@
 // mobile-app/src/screens/TurnosScreen.js
 
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView, Modal, Platform } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
 import { offlineTurnosOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function TurnosScreen() {
   const [fechaInput, setFechaInput] = useState("");
   const [tipo, setTipo] = useState("");
   const [mostrarTipos, setMostrarTipos] = useState(false);
   const tipoOptions = ["Insumo", "Renovación de Carnet", "Otro"];
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [iosPickerDate, setIosPickerDate] = useState(new Date());
   const [disp, setDisp] = useState(null);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -279,6 +282,38 @@ export default function TurnosScreen() {
     return result;
   };
 
+  const minSelectableDate = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const parseInputToDate = (raw) => {
+    const s = String(raw || "").trim();
+    const m = s.match(/^([0-3][0-9])[-/]([0-1][0-9])[-/](\d{4})$/);
+    if (!m) return null;
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    const yyyy = Number(m[3]);
+    const d = new Date(yyyy, mm - 1, dd, 12, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatDDMMYYYYSlash = (d) => {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const openDatePicker = () => {
+    const minDate = minSelectableDate();
+    const current = parseInputToDate(fechaInput);
+    const base = current && current >= minDate ? current : minDate;
+    if (Platform.OS === "ios") setIosPickerDate(base);
+    setShowDatePicker(true);
+  };
+
   const checkDisponibilidad = async () => {
     setError("");
     setSuccess("");
@@ -381,12 +416,78 @@ export default function TurnosScreen() {
         tipoNormalizado = 'otro';
         console.log("⚠️ No detectado, usando: otro");
       }
+
+      const motivoTrim = String(motivo || '').trim();
+      if (tipoNormalizado === 'otro' && !motivoTrim) {
+        setError('Si el tipo es "Otro", el motivo es obligatorio.');
+        return;
+      }
+
+      const productorId = tokenResult?.claims?.productorId || auth.currentUser?.uid;
+      const requestedKey = `${fechaIso} 12:00`;
+      const isEstadoBloqueante = (estadoRaw) => {
+        const st = String(estadoRaw || '').toLowerCase();
+        return st !== 'cancelado' && st !== 'completado' && st !== 'vencido';
+      };
+      const toKeyFromAnyDate = (rawDate) => {
+        if (!rawDate) return null;
+        let d = null;
+        if (rawDate instanceof Date) {
+          d = rawDate;
+        } else if (rawDate && typeof rawDate === 'object' && rawDate._seconds) {
+          d = new Date(rawDate._seconds * 1000);
+        } else if (typeof rawDate === 'string') {
+          const s = rawDate.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            d = new Date(`${s}T12:00:00.000Z`);
+          } else {
+            d = new Date(s);
+          }
+        }
+        if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        const mm = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+      };
+
+      let turnosParaValidar = Array.isArray(list) ? list : [];
+      if (isOnline && productorId && idToken) {
+        try {
+          const respTurnos = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=true`, {
+            headers: { "Authorization": `Bearer ${idToken}` }
+          });
+          const jTurnos = await respTurnos.json();
+          if (Array.isArray(jTurnos)) {
+            turnosParaValidar = [...turnosParaValidar, ...jTurnos];
+          }
+        } catch (e) {
+          console.error("❌ Error cargando turnos para validación:", e);
+        }
+      }
+
+      const hayDuplicado = turnosParaValidar.some(t => {
+        if (!t) return false;
+        if (t.activo === false) return false;
+        if (!isEstadoBloqueante(t.estado)) return false;
+        const tipoExistente = String(t.tipoTurno || '').toLowerCase() === 'otra' ? 'otro' : String(t.tipoTurno || '').toLowerCase();
+        if (tipoExistente !== tipoNormalizado) return false;
+        const key = toKeyFromAnyDate(t.fechaTurno || t.fecha);
+        return key === requestedKey;
+      });
+
+      if (hayDuplicado) {
+        setError("Ya tenés un turno del mismo tipo para esa fecha y hora. Elegí otra fecha/hora o solicitá un tipo diferente.");
+        return;
+      }
       
       const body = { 
         ipt, 
         fechaSolicitada: fechaIso, 
         tipoTurno: tipoNormalizado,
-        motivo: motivo || ""  // ✅ Agregamos motivo (puede estar vacío)
+        motivo: motivoTrim
       };
       
       console.log("📝 Body preparado:", body);
@@ -552,16 +653,81 @@ export default function TurnosScreen() {
     setView("list");
   };
 
+  const isSolicitarTabActive = view === "form";
+  const isVerMisTurnosTabActive = view !== "form";
+
+  const renderFechaPicker = () => (
+    <>
+      <TouchableOpacity style={[styles.input, { justifyContent: "center" }]} onPress={openDatePicker}>
+        <Text style={{ color: fechaInput ? "#2c3e50" : "#95a5a6" }}>{fechaInput || "Fecha (DD/MM/AAAA)"}</Text>
+      </TouchableOpacity>
+      {showDatePicker && Platform.OS === "android" ? (
+        <DateTimePicker
+          value={parseInputToDate(fechaInput) || minSelectableDate()}
+          mode="date"
+          display="calendar"
+          minimumDate={minSelectableDate()}
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (event?.type === "set" && selectedDate) {
+              setFechaInput(formatDDMMYYYYSlash(selectedDate));
+            }
+          }}
+        />
+      ) : null}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showDatePicker && Platform.OS === "ios"}
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.dateModalBackdrop}>
+          <View style={styles.dateModalCard}>
+            <DateTimePicker
+              value={iosPickerDate}
+              mode="date"
+              display="inline"
+              minimumDate={minSelectableDate()}
+              onChange={(_, selectedDate) => {
+                if (selectedDate) setIosPickerDate(selectedDate);
+              }}
+            />
+            <View style={styles.dateModalActions}>
+              <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.btnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.primary]}
+                onPress={() => {
+                  setFechaInput(formatDDMMYYYYSlash(iosPickerDate));
+                  setShowDatePicker(false);
+                }}
+              >
+                <Text style={styles.btnText}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Turnos</Text>
       <View style={styles.topBar}>
         <View style={styles.cardBar}>
-          <TouchableOpacity style={[styles.btn, styles.primary]} onPress={() => setView('form')}>
-            <Text style={styles.btnText}>Solicitar Turno</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.primary, isSolicitarTabActive ? styles.topTabActive : styles.topTabInactive]}
+            onPress={() => setView("form")}
+          >
+            <Text style={[styles.btnText, styles.topTabText, isSolicitarTabActive && styles.topTabTextActive]}>Solicitar Turno</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => setView('list')}>
-            <Text style={styles.btnText}>Ver Mis Turnos</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.secondary, isVerMisTurnosTabActive ? styles.topTabActive : styles.topTabInactive]}
+            onPress={() => setView("list")}
+          >
+            <Text style={[styles.btnText, styles.topTabText, isVerMisTurnosTabActive && styles.topTabTextActive]}>Ver Mis Turnos</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -643,7 +809,7 @@ export default function TurnosScreen() {
 
       {view === 'form' && (
         <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <TextInput style={styles.input} placeholder="Fecha (DD-MM-YYYY)" value={fechaInput} onChangeText={setFechaInput} />
+          {renderFechaPicker()}
           <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setMostrarTipos(!mostrarTipos)}>
             <Text style={{ color: tipo ? '#2c3e50' : '#95a5a6' }}>{tipo || 'Tipo de turno'}</Text>
           </TouchableOpacity>
@@ -680,7 +846,7 @@ export default function TurnosScreen() {
       {view === 'edit' && (
         <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <Text style={styles.title}>Editar Turno</Text>
-          <TextInput style={styles.input} placeholder="Fecha (DD-MM-YYYY)" value={fechaInput} onChangeText={setFechaInput} />
+          {renderFechaPicker()}
           <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setMostrarTipos(!mostrarTipos)}>
             <Text style={{ color: tipo ? '#2c3e50' : '#95a5a6' }}>{tipo || 'Tipo de turno'}</Text>
           </TouchableOpacity>
@@ -739,12 +905,19 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: "#2ecc71" },
   secondary: { backgroundColor: "#3498db" },
   btnText: { color: "#fff" },
+  topTabText: { fontSize: 15, fontWeight: "700" },
+  topTabInactive: { opacity: 1, borderWidth: 2.5, borderColor: "transparent" },
+  topTabActive: { opacity: 1, borderWidth: 2.5, borderColor: "#fff", elevation: 6, shadowColor: "#000", shadowOpacity: 0.22, shadowOffset: { width: 0, height: 3 }, shadowRadius: 5 },
+  topTabTextActive: { fontWeight: "800" },
+  dateModalBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "flex-end" },
+  dateModalCard: { backgroundColor: "#ffffff", padding: 12, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  dateModalActions: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingTop: 10 },
   error: { color: "#c0392b", textAlign: "center", marginBottom: 8 },
   success: { color: "#27ae60", textAlign: "center", marginBottom: 8 },
   item: { padding: 8, backgroundColor: "#ffffff", borderRadius: 8, marginBottom: 6 },
   itemText: { color: "#34495e" },
   // Estilos para tarjetas de turnos
-  turnoCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, elevation: 2, marginBottom: 12 },
+  turnoCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(15,23,42,0.10)', shadowColor: '#0f172a', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   turnoHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   turnoFecha: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },

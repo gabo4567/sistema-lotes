@@ -1,6 +1,6 @@
 import React, { useContext } from "react";
 import { Navigate, Outlet } from "react-router-dom";
-import { AuthContext } from "../contexts/AuthContext";
+import { AuthContext } from "../contexts/AuthContextBase.js";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, authReady } = useContext(AuthContext);
@@ -17,5 +17,5 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/403" replace />;
   }
 
-  return children;
-  }
+  return children || <Outlet />;
+}

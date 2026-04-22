@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { resumenGeneral, productoresActivos, insumosResumen, turnosEficiencia, exportarPdf, exportarExcel } from "../services/informes.service";
+import { resumenGeneral, productoresActivos, insumosResumen, turnosEficiencia } from "../services/informes.service";
 import HomeButton from "../components/HomeButton";
 import { confirmDialog } from "../utils/alerts";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
@@ -387,7 +387,7 @@ const Informes = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 8 }}>
               <div>{badge(`Lotes: ${formatValue(p.totalLotes ?? 0)}`, 'info')}</div>
               <div>{badge(`Turnos: ${formatValue(p.totalTurnos ?? 0)}`, 'info')}</div>
-              <div>{badge(`Ubicaciones: ${Array.isArray(p.ubicaciones)? p.ubicaciones.length : 0} de 4`, 'info')}</div>
+              <div>{badge(`Ubicaciones: ${Array.isArray(p.ubicaciones) ? p.ubicaciones.length : 0} de ${Number.isFinite(p.totalCampos) && p.totalCampos > 0 ? p.totalCampos * 4 : 4}`, 'info')}</div>
             </div>
             {p.domicilio && <div style={{ marginBottom: 6 }}><span className="result-label">Domicilio:</span> {formatValue(p.domicilio)}</div>}
             {p.ingreso && <div style={{ marginBottom: 6 }}><span className="result-label">Ingreso:</span> {formatValue(p.ingreso)}</div>}
@@ -396,16 +396,35 @@ const Informes = () => {
             {(p.ubicaciones && Array.isArray(p.ubicaciones) && p.ubicaciones.length > 0) && (
               card('Ubicaciones', (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                  {p.ubicaciones.map((u, idx) => (
-                    <div key={idx} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 8 }}>
-                      <div style={{ color:'#14532d', fontWeight:600 }}>{u.nombre || 'Ubicación'}</div>
-                      {typeof u.lat === 'number' && typeof u.lng === 'number' ? (
-                        <button className="btn" style={{ minHeight:32 }} onClick={()=>setMapView({ lat: u.lat, lng: u.lng, title: u.nombre })}>Ver mapa</button>
-                      ) : (
-                        <span style={{ color:'#7f8c8d' }}>Sin coordenadas</span>
-                      )}
-                    </div>
-                  ))}
+                  {(() => {
+                    const items = Array.isArray(p.ubicaciones) ? p.ubicaciones : [];
+                    const groups = new Map();
+                    for (const u of items) {
+                      const gid = u?.campoId != null ? String(u.campoId) : 'principal';
+                      const gname = (u?.campoNombre ? String(u.campoNombre) : 'Campo principal').trim() || 'Campo principal';
+                      if (!groups.has(gid)) groups.set(gid, { id: gid, nombre: gname, items: [] });
+                      groups.get(gid).items.push(u);
+                    }
+                    const ordered = Array.from(groups.values());
+
+                    return ordered.map((g, gi) => (
+                      <div key={g.id} style={{ display:'grid', gridTemplateColumns:'1fr', gap: 8, marginTop: gi === 0 ? 0 : 20 }}>
+                        <div style={{ padding: '6px 8px', borderRadius: 8, background: '#ecfdf5', border: '1px dashed #86efac' }}>
+                          <div style={{ color:'#14532d', fontWeight: 800 }}>{g.nombre}</div>
+                        </div>
+                        {g.items.map((u, idx) => (
+                          <div key={`${g.id}_${idx}`} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 8 }}>
+                            <div style={{ color:'#14532d', fontWeight:600 }}>{u.nombre || 'Ubicación'}</div>
+                            {typeof u.lat === 'number' && typeof u.lng === 'number' ? (
+                              <button className="btn" style={{ minHeight:32 }} onClick={()=>setMapView({ lat: u.lat, lng: u.lng, title: u.nombre })}>Ver mapa</button>
+                            ) : (
+                              <span style={{ color:'#7f8c8d' }}>Sin coordenadas</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
               ))
             )}
@@ -581,7 +600,7 @@ const Informes = () => {
   };
 
   return (
-    <div className="section-card informes">
+    <div className="section-card informes page-container">
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 className="users-title">Informes</h2>
       <div className="inf-controls">

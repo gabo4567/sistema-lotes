@@ -352,17 +352,47 @@ export const obtenerProductoresActivos = async (req, res) => {
       productor.lotes = lotes;
       productor.turnos = turnos;
 
-      const uobj = productor.ubicaciones || {};
       const asCoord = (x)=> (x && typeof x === 'object' && typeof x.lat === 'number' && typeof x.lng === 'number') ? x : null;
+      const defaultCampoId = productor?.campoActivoId ? String(productor.campoActivoId) : 'principal';
+      const rawCampos = Array.isArray(productor?.campos) ? productor.campos : [];
+      const campos = rawCampos.length > 0
+        ? rawCampos.map((c, i) => ({
+            id: c?.id ? String(c.id) : `campo_${i + 1}`,
+            nombre: (c?.nombre ? String(c.nombre) : '').trim() || `Campo ${i + 1}`,
+            ubicaciones: (c?.ubicaciones && typeof c.ubicaciones === 'object') ? c.ubicaciones : {},
+          }))
+        : [{ id: defaultCampoId, nombre: 'Campo principal', ubicaciones: (productor?.ubicaciones && typeof productor.ubicaciones === 'object') ? productor.ubicaciones : {} }];
+
+      productor.totalCampos = campos.length;
+
       const ubicaciones = [];
-      const ed = asCoord(uobj.entradaDomicilio || productor.domicilioIngresoCoord);
-      const dc = asCoord(uobj.domicilioCasa);
-      const ec = asCoord(uobj.entradaCampo);
-      const cc = asCoord(uobj.centroCampo);
-      if (ed) ubicaciones.push({ nombre: 'Entrada del domicilio', lat: ed.lat, lng: ed.lng });
-      if (dc) ubicaciones.push({ nombre: 'Domicilio / casa', lat: dc.lat, lng: dc.lng });
-      if (ec) ubicaciones.push({ nombre: 'Entrada del campo', lat: ec.lat, lng: ec.lng });
-      if (cc) ubicaciones.push({ nombre: 'Centro del campo', lat: cc.lat, lng: cc.lng });
+      const typeOrder = [
+        { key: 'entradaDomicilio', label: 'Entrada del domicilio' },
+        { key: 'domicilioCasa', label: 'Domicilio / casa' },
+        { key: 'entradaCampo', label: 'Entrada del campo' },
+        { key: 'centroCampo', label: 'Centro del campo' },
+      ];
+
+      const multiCampo = campos.length > 1;
+      const useLegacyFallback = !multiCampo && rawCampos.length === 0;
+
+      for (const campo of campos) {
+        const uobj = campo?.ubicaciones && typeof campo.ubicaciones === 'object' ? campo.ubicaciones : {};
+        for (const t of typeOrder) {
+          const coord = asCoord(uobj[t.key]) || (useLegacyFallback && t.key === 'entradaDomicilio' ? asCoord(productor.domicilioIngresoCoord) : null);
+          if (coord) {
+            ubicaciones.push({
+              campoId: campo.id,
+              campoNombre: campo.nombre,
+              tipo: t.key,
+              nombre: multiCampo ? `${campo.nombre} · ${t.label}` : t.label,
+              lat: coord.lat,
+              lng: coord.lng,
+            });
+          }
+        }
+      }
+
       productor.ubicaciones = ubicaciones;
 
       productores.push(productor);

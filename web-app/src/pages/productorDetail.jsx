@@ -17,13 +17,13 @@ const ProductorDetail = () => {
         const { data: h } = await getHistorialIngresos(data.ipt);
         setHist(typeof h === 'object' && h !== null && 'historialIngresos' in h ? h.historialIngresos : h);
       }
-    } catch (e) {
+    } catch {
       setError("No se pudo cargar productor");
     }
   })() }, [id]);
 
   return (
-    <div className="section-card prod-detail">
+    <div className="section-card prod-detail page-container">
       {!prod ? (
         <div>Cargando…</div>
       ) : (

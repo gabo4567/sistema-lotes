@@ -57,7 +57,7 @@ const InsumosList = () => {
 
   useEffect(()=>{ load() },[])
 
-  useEffect(()=>{ (async()=>{ try{ const { data } = await getProductores(); setProductores(data||[]) }catch{} })() }, [])
+  useEffect(()=>{ (async()=>{ try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null } })() }, [])
 
   useEffect(()=>{ (async()=>{ if(!selectedProd) { setAsignacionesProd([]); return } ; setLoadingAsign(true); try{ const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }catch{ setAsignacionesProd([]) } finally{ setLoadingAsign(false) } })() }, [selectedProd])
 
@@ -70,7 +70,7 @@ const InsumosList = () => {
   const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible', activo: true }); setModal({ type:'add' }) }
   const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
   const openAssign = async (insumo)=>{
-    try{ const { data } = await getProductores(); setProductores(data||[]) }catch{}
+    try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null }
     setAsignar({ productorId:'', cantidadAsignada:'' })
     setModal({ type:'assign', insumo })
   }
@@ -100,7 +100,6 @@ const InsumosList = () => {
     catch(e){ await notify({ title: e?.response?.data?.error || 'Error actualizando asignación', icon: 'error' }) }
   }
 
-  const onEditAsign = (asig)=>{ setForm({ nombre: asig.nombre || 'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'' }); setModal({ type:'assign-edit', asign: asig }) }
   const onSubmitEditAsign = async ()=>{
     try{ const nueva = Number(modal.asign.cantidadAsignadaEdit || 0) ; await insumosService.updateAsignacion(modal.asign.id, { cantidadAsignada: nueva }); setModal(null); load(); if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) } }
     catch(e){ setError(e?.response?.data?.error||'Error al modificar asignación') }
@@ -117,7 +116,7 @@ const InsumosList = () => {
   const actionBtnStyle = { border:'1px solid #e2e8f0', color:'#1e293b', background:'#f8fafc', padding:'6px 10px', borderRadius:6, cursor:'pointer', fontSize:12 }
 
   return (
-    <div className="insumos-list" style={{ padding: 16 }}>
+    <div className="insumos-list page-container" style={{ padding: 16 }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
       <div style={{ color:'#166534', marginTop: 4, marginBottom: 12 }}>Insumos disponibles del IPT</div>

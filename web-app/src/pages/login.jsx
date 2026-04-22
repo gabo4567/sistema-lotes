@@ -4,7 +4,7 @@ import React, { useState, useContext, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import api from "../api/axios";
-import { AuthContext } from "../contexts/AuthContext";
+import { AuthContext } from "../contexts/AuthContextBase.js";
 import { notify } from "../utils/alerts";
 import { getFirebaseApp } from "../utils/firebaseClient";
 

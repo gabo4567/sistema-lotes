@@ -1,10 +1,10 @@
-import React, { createContext, useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import api, { setAuthFailureHandler } from "../api/axios";
 import { getFirebaseApp } from "../utils/firebaseClient";
 import { tokenStore } from "../utils/tokenStore";
 
-export const AuthContext = createContext();
+import { AuthContext } from "./AuthContextBase.js";
 
 const normalizeRole = (r) => {
   if (!r) return r;
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }) => {
         await signOut(auth);
       }
     } catch {
-      // noop
+      null;
     }
 
     if (redirect) {

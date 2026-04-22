@@ -28,7 +28,9 @@ const ProductorForm = () => {
           requiereCambioContrasena: Boolean(data.requiereCambioContrasena),
           plantasPorHa: data.plantasPorHa ?? "",
         });
-      } catch {}
+      } catch {
+        setError("No se pudo cargar productor");
+      }
     }
   })() }, [id]);
 
@@ -86,7 +88,7 @@ const ProductorForm = () => {
   };
 
   return (
-    <div className="section-card prod-form">
+    <div className="section-card prod-form page-container">
       <h2 className="users-title">{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
       <form onSubmit={onSubmit} className="form-grid">
         <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />

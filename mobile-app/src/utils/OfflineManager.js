@@ -179,7 +179,9 @@ class OfflineManager {
   async syncUpdateUbicacion(data) {
     const productorId = data?.productorId || data?.id || data?.productor?.id;
     const ubicaciones = data?.ubicaciones;
-    if (!productorId || !ubicaciones) {
+    const campos = data?.campos;
+    const campoActivoId = data?.campoActivoId;
+    if (!productorId || (!ubicaciones && !campos && !campoActivoId)) {
       throw new Error('Datos de ubicación incompletos');
     }
 
@@ -189,7 +191,7 @@ class OfflineManager {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${await this.getAuthToken()}`
       },
-      body: JSON.stringify({ ubicaciones })
+      body: JSON.stringify({ ubicaciones, campos, campoActivoId })
     });
 
     if (!response.ok) {

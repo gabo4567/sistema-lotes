@@ -13,8 +13,45 @@ const LABELS = {
   centroCampo: 'Centro del campo',
 };
 
+const buildEmptyUbicaciones = () => ({
+  entradaDomicilio: { activo: false },
+  domicilioCasa: { activo: false },
+  entradaCampo: { activo: false },
+  centroCampo: { activo: false },
+});
+
+const ensureUbicacionesShape = (ubicaciones) => {
+  const base = buildEmptyUbicaciones();
+  const src = ubicaciones && typeof ubicaciones === 'object' ? ubicaciones : {};
+  const out = { ...base };
+  for (const k of Object.keys(base)) {
+    const v = src[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = { ...base[k], ...v };
+  }
+  return out;
+};
+
+const normalizeCampos = (productor) => {
+  let campos = Array.isArray(productor?.campos) ? productor.campos : [];
+  if (!campos.length) {
+    campos = [{ id: 'principal', nombre: 'Campo principal', ubicaciones: ensureUbicacionesShape(productor?.ubicaciones) }];
+  } else {
+    campos = campos
+      .map((c, i) => ({
+        id: c?.id ? String(c.id) : `campo_${i + 1}`,
+        nombre: (c?.nombre ? String(c.nombre) : '').trim() || `Campo ${i + 1}`,
+        ubicaciones: ensureUbicacionesShape(c?.ubicaciones),
+      }))
+      .filter((c) => c.id);
+    if (!campos.length) {
+      campos = [{ id: 'principal', nombre: 'Campo principal', ubicaciones: ensureUbicacionesShape(productor?.ubicaciones) }];
+    }
+  }
+  return campos;
+};
+
 export default function EditarUbicacionScreen({ route, navigation }) {
-  const { tipo, productor } = route.params || {};
+  const { tipo, productor, campoId } = route.params || {};
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const [region, setRegion] = useState(null);
@@ -22,7 +59,14 @@ export default function EditarUbicacionScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
-  const current = productor?.ubicaciones?.[tipo];
+  const campos = normalizeCampos(productor);
+  const requestedCampoId = campoId ? String(campoId) : '';
+  const fallbackCampoId = productor?.campoActivoId ? String(productor.campoActivoId) : '';
+  const selectedCampo =
+    (requestedCampoId && campos.find((c) => c.id === requestedCampoId)) ||
+    (fallbackCampoId && campos.find((c) => c.id === fallbackCampoId)) ||
+    campos[0];
+  const current = selectedCampo?.ubicaciones?.[tipo];
 
   const requestLocationAccess = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -61,11 +105,17 @@ export default function EditarUbicacionScreen({ route, navigation }) {
     if (!validateCoord(marker)) { Alert.alert('Error', 'Coordenadas inválidas'); return; }
     setSaving(true);
     try {
-      const updated = {
-        ...(productor?.ubicaciones || {}),
+      const updatedCampoUbicaciones = {
+        ...(selectedCampo?.ubicaciones || {}),
         [tipo]: { lat: marker.latitude, lng: marker.longitude, activo: true, updatedAt: new Date().toISOString() },
       };
-      const result = await offlineUbicacionesOperations.updateUbicacion({ productorId: productor.id, ubicaciones: updated });
+      const updatedCampos = campos.map((c) => (c.id === selectedCampo?.id ? { ...c, ubicaciones: updatedCampoUbicaciones } : c));
+      const result = await offlineUbicacionesOperations.updateUbicacion({
+        productorId: productor.id,
+        campos: updatedCampos,
+        campoActivoId: selectedCampo?.id,
+        ubicaciones: updatedCampoUbicaciones,
+      });
       const wasOffline = Boolean(result?._isOffline);
       Alert.alert(
         wasOffline ? 'Guardado offline' : 'OK',
@@ -80,11 +130,17 @@ export default function EditarUbicacionScreen({ route, navigation }) {
   const softDelete = async () => {
     if (!current) { Alert.alert('Info', 'No hay ubicación para eliminar'); return; }
     try {
-      const updated = {
-        ...(productor?.ubicaciones || {}),
-        [tipo]: { ...(productor?.ubicaciones?.[tipo] || {}), activo: false, updatedAt: new Date().toISOString() },
+      const updatedCampoUbicaciones = {
+        ...(selectedCampo?.ubicaciones || {}),
+        [tipo]: { ...(selectedCampo?.ubicaciones?.[tipo] || {}), activo: false, updatedAt: new Date().toISOString() },
       };
-      const result = await offlineUbicacionesOperations.updateUbicacion({ productorId: productor.id, ubicaciones: updated });
+      const updatedCampos = campos.map((c) => (c.id === selectedCampo?.id ? { ...c, ubicaciones: updatedCampoUbicaciones } : c));
+      const result = await offlineUbicacionesOperations.updateUbicacion({
+        productorId: productor.id,
+        campos: updatedCampos,
+        campoActivoId: selectedCampo?.id,
+        ubicaciones: updatedCampoUbicaciones,
+      });
       const wasOffline = Boolean(result?._isOffline);
       Alert.alert(
         wasOffline ? 'Guardado offline' : 'OK',

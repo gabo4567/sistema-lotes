@@ -1,4 +1,4 @@
-﻿﻿﻿﻿// src/controllers/auth.controller.js
+﻿﻿﻿﻿﻿﻿﻿﻿﻿// src/controllers/auth.controller.js
 import { db, admin } from "../utils/firebase.js";
 import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";

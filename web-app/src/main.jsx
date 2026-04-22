@@ -9,7 +9,7 @@ import "./styles/index.css";
 
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider } from "./contexts/AuthContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home from "./pages/home.jsx";
@@ -33,7 +33,7 @@ import Layout from "./components/Layout.jsx";
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error) {}
+  componentDidCatch() {}
   render() {
     if (this.state.hasError) {
       return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', padding: 24 } },
