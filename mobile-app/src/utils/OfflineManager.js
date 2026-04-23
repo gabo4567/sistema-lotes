@@ -7,6 +7,7 @@ class OfflineManager {
   constructor() {
     this.isOnline = true;
     this.listeners = [];
+    this.operationListeners = [];
     this.operationQueue = [];
     this.isProcessingQueue = false;
 
@@ -46,9 +47,20 @@ class OfflineManager {
     };
   }
 
+  subscribeOperations(listener) {
+    this.operationListeners.push(listener);
+    return () => {
+      this.operationListeners = this.operationListeners.filter(l => l !== listener);
+    };
+  }
+
   // Notificar a todos los listeners
   notifyListeners() {
     this.listeners.forEach(listener => listener(this.isOnline));
+  }
+
+  notifyOperationListeners(event) {
+    this.operationListeners.forEach(listener => listener(event));
   }
 
   // Agregar operación a la queue
@@ -57,7 +69,10 @@ class OfflineManager {
       id: Date.now() + Math.random(),
       ...operation,
       timestamp: new Date().toISOString(),
-      retryCount: 0
+      retryCount: 0,
+      status: 'pending',
+      lastError: null,
+      lastAttemptAt: null
     };
 
     this.operationQueue.push(queuedOperation);
@@ -73,7 +88,13 @@ class OfflineManager {
 
   // Procesar la queue de operaciones
   async processQueue() {
-    if (this.isProcessingQueue || !this.isOnline || this.operationQueue.length === 0) {
+    if (this.isProcessingQueue || !this.isOnline) {
+      return;
+    }
+
+    await this.loadPendingOperations();
+
+    if (this.operationQueue.length === 0) {
       return;
     }
 
@@ -82,24 +103,36 @@ class OfflineManager {
     try {
       for (let i = 0; i < this.operationQueue.length; i++) {
         const operation = this.operationQueue[i];
+        if (operation?.status === 'failed') {
+          continue;
+        }
 
         try {
-          await this.executeOperation(operation);
+          const result = await this.executeOperation(operation);
           // Remover operación exitosa
           this.operationQueue.splice(i, 1);
           i--; // Ajustar índice
           await this.savePendingOperations();
+          this.notifyOperationListeners({ status: 'success', operation, result });
         } catch (error) {
           console.warn('Error ejecutando operación offline:', error);
-          operation.retryCount++;
+          operation.retryCount = (operation.retryCount || 0) + 1;
+          operation.lastAttemptAt = new Date().toISOString();
+          operation.lastError = error?.message || String(error);
 
           // Si falló muchas veces, marcar como fallida
           if (operation.retryCount >= 3) {
+            const wasFailed = operation.status === 'failed';
             operation.status = 'failed';
-            operation.error = error.message;
+            operation.error = operation.lastError;
+            if (!wasFailed) {
+              this.notifyOperationListeners({ status: 'failed', operation, error: operation.error });
+            }
           }
+          await this.savePendingOperations();
         }
       }
+      await this.savePendingOperations();
     } finally {
       this.isProcessingQueue = false;
     }
@@ -232,9 +265,13 @@ class OfflineManager {
 
   // Obtener estado actual
   getStatus() {
+    const failed = this.operationQueue.filter(op => op?.status === 'failed');
+    const pending = this.operationQueue.filter(op => op?.status !== 'failed');
     return {
       isOnline: this.isOnline,
-      pendingOperations: this.operationQueue.length,
+      pendingOperations: pending.length,
+      failedOperations: failed.length,
+      lastFailedError: failed.length > 0 ? (failed[failed.length - 1]?.error || failed[failed.length - 1]?.lastError || null) : null,
       isProcessing: this.isProcessingQueue
     };
   }
@@ -243,6 +280,33 @@ class OfflineManager {
   async clearFailedOperations() {
     this.operationQueue = this.operationQueue.filter(op => op.status !== 'failed');
     await this.savePendingOperations();
+  }
+
+  async retryFailedOperations() {
+    let changed = false;
+    this.operationQueue = this.operationQueue.map(op => {
+      if (op?.status !== 'failed') return op;
+      changed = true;
+      return {
+        ...op,
+        status: 'pending',
+        retryCount: 0,
+        lastError: null,
+        error: null,
+        lastAttemptAt: null
+      };
+    });
+    if (changed) {
+      await this.savePendingOperations();
+    }
+    if (this.isOnline) {
+      await this.processQueue();
+    }
+  }
+
+  async syncNow() {
+    if (!this.isOnline) return;
+    await this.processQueue();
   }
 }
 

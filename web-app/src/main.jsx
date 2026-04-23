@@ -19,6 +19,7 @@ import ResetPassword from "./pages/resetPassword.jsx";
 import LotesList from "./pages/lotesList.jsx";
 import LoteAdminForm from "./pages/loteAdminForm.jsx";
 import LoteDetail from "./pages/loteDetail.jsx";
+import LotesMapaGeneral from "./pages/lotesMapaGeneral.jsx";
 import TurnosList from "./pages/turnosList.jsx";
 import InsumosList from "./pages/insumosList.jsx";
 import Forbidden from "./pages/forbidden.jsx";
@@ -73,6 +74,11 @@ const router = createBrowserRouter([
       { path: "/lotes", element: (
         <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
           <LotesList />
+        </ProtectedRoute>
+      ) },
+      { path: "/lotes/mapa", element: (
+        <ProtectedRoute allowedRoles={["Administrador", "Técnico", "Supervisor"]}>
+          <LotesMapaGeneral />
         </ProtectedRoute>
       ) },
       { path: "/lotes/nuevo", element: (

@@ -61,6 +61,9 @@ export default function MisUbicacionesScreen({ navigation }) {
   const [selectedCampoId, setSelectedCampoId] = useState(null);
   const [addCampoVisible, setAddCampoVisible] = useState(false);
   const [nuevoCampoNombre, setNuevoCampoNombre] = useState('');
+  const [editCampoVisible, setEditCampoVisible] = useState(false);
+  const [editCampoId, setEditCampoId] = useState(null);
+  const [editCampoNombre, setEditCampoNombre] = useState('');
 
   const loadProductor = async () => {
     try {
@@ -138,6 +141,48 @@ export default function MisUbicacionesScreen({ navigation }) {
       await persistCampos({ campos: updatedCampos, campoActivoId: newCampo.id, ubicaciones: newCampo.ubicaciones });
     } catch (e) {
       Alert.alert('Error', e?.message || 'No se pudo crear el campo');
+    }
+  };
+
+  const openEditCampoNombre = () => {
+    if (!selectedCampo) return;
+    setEditCampoId(selectedCampo.id);
+    setEditCampoNombre(selectedCampo.nombre || '');
+    setEditCampoVisible(true);
+  };
+
+  const saveEditCampoNombre = async () => {
+    const nombre = String(editCampoNombre || '').trim();
+    if (!nombre) {
+      Alert.alert('Nombre requerido', 'Ingresá un nombre para el campo.');
+      return;
+    }
+    if (!productor) return;
+    if (!editCampoId) return;
+
+    const normalized = normalizeCampos(productor);
+    const updatedCampos = normalized.campos.map((c) => (c.id === editCampoId ? { ...c, nombre } : c));
+    const activeCampoId = selectedCampoId && updatedCampos.some((c) => c.id === selectedCampoId) ? selectedCampoId : updatedCampos[0]?.id;
+    const activeCampo = updatedCampos.find((c) => c.id === activeCampoId) || updatedCampos[0];
+
+    setEditCampoVisible(false);
+    setEditCampoId(null);
+    setEditCampoNombre('');
+    setProductor((prev) =>
+      prev
+        ? {
+            ...prev,
+            campos: updatedCampos,
+            campoActivoId: activeCampo?.id,
+            ubicaciones: activeCampo?.ubicaciones,
+          }
+        : prev
+    );
+
+    try {
+      await persistCampos({ campos: updatedCampos, campoActivoId: activeCampo?.id, ubicaciones: activeCampo?.ubicaciones });
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'No se pudo actualizar el nombre del campo');
     }
   };
 
@@ -242,14 +287,19 @@ export default function MisUbicacionesScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {selectedCampo && selectedCampo.id !== 'principal' ? (
-        <View style={styles.fieldActionsRow}>
-          <View style={styles.fieldActionsLeft}>
-            <Text style={styles.fieldActionsTitle} numberOfLines={1}>{selectedCampo.nombre}</Text>
+      {selectedCampo ? (
+        <View style={styles.fieldActionsContainer}>
+          <Text style={styles.fieldActionsTitle}>{selectedCampo.nombre}</Text>
+          <View style={styles.fieldActionsButtonsRow}>
+            <TouchableOpacity style={styles.editCampoBtn} onPress={openEditCampoNombre}>
+              <Text style={styles.editCampoBtnText}>Cambiar nombre</Text>
+            </TouchableOpacity>
+            {selectedCampo.id !== 'principal' ? (
+              <TouchableOpacity style={styles.deleteCampoBtn} onPress={confirmDeleteCampo}>
+                <Text style={styles.deleteCampoBtnText}>Eliminar campo</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
-          <TouchableOpacity style={styles.deleteCampoBtn} onPress={confirmDeleteCampo}>
-            <Text style={styles.deleteCampoBtnText}>Eliminar campo</Text>
-          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -290,6 +340,30 @@ export default function MisUbicacionesScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={editCampoVisible} transparent animationType="fade" onRequestClose={() => setEditCampoVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Cambiar nombre del campo</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nuevo nombre"
+              value={editCampoNombre}
+              onChangeText={setEditCampoNombre}
+              autoFocus
+              maxLength={60}
+            />
+            <View style={styles.modalRow}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnPrimary]} onPress={saveEditCampoNombre}>
+                <Text style={styles.modalBtnText}>Guardar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnSecondary]} onPress={() => setEditCampoVisible(false)}>
+                <Text style={styles.modalBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -304,10 +378,12 @@ const styles = StyleSheet.create({
   fieldTabAdd: { borderColor: '#3498db' },
   fieldTabText: { color: '#34495e', fontWeight: '600', maxWidth: 180 },
   fieldTabTextActive: { color: '#1e8449' },
-  fieldActionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
-  fieldActionsLeft: { flex: 1 },
+  fieldActionsContainer: { gap: 10, marginBottom: 12 },
   fieldActionsTitle: { color: '#1e8449', fontWeight: '800' },
-  deleteCampoBtn: { backgroundColor: '#c0392b', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 },
+  fieldActionsButtonsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  editCampoBtn: { backgroundColor: '#1e8449', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', flexGrow: 1, minWidth: 160 },
+  editCampoBtnText: { color: '#fff', fontWeight: '800' },
+  deleteCampoBtn: { backgroundColor: '#c0392b', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', flexGrow: 1, minWidth: 160 },
   deleteCampoBtnText: { color: '#fff', fontWeight: '800' },
   list: { gap: 12 },
   card: { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, elevation: 2 },

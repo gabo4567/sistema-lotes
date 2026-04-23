@@ -16,16 +16,21 @@ import {
   ActivityIndicator,
   Linking,
   BackHandler,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "../utils/constants";
 import { useWalkingGPS } from "../hooks/useWalkingGPS";
 import { authFetch, getCurrentAuthContext } from "../api/api";
 import { offlineLotesOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
+import { auth } from "../services/firebase";
+
+const DETAIL_MAP_HEIGHT = Math.max(240, Math.min(380, Math.round(Dimensions.get("window").height * 0.42)));
 
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
@@ -48,11 +53,13 @@ export default function LotesScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editNombre, setEditNombre] = useState("");
   const [editObservaciones, setEditObservaciones] = useState("");
+  const [showingOfflineData, setShowingOfflineData] = useState(false);
 
   const mapRef = useRef(null);
   const insets = useSafeAreaInsets();
   const { isWalking, route, startWalking, stopWalking, resetRoute, addManualPoint, undoLastPoint, currentLocation } = useWalkingGPS();
-  const { isOnline, addToQueue } = useOffline();
+  const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
+  const prevPendingOpsRef = useRef(pendingOperations);
 
   useEffect(() => {
     if (mode === "gps" && route.length > 0) {
@@ -139,7 +146,55 @@ export default function LotesScreen() {
   }, []);
 
   const loadList = async () => {
+    const uid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "unknown";
+    const cacheKey = `cache_lotes_${uid}`;
+
+    if (!isOnline) {
+      try {
+        const raw = await AsyncStorage.getItem(cacheKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const cached = Array.isArray(parsed) ? parsed : [];
+
+        let queuedCreates = [];
+        try {
+          const opsRaw = await AsyncStorage.getItem("offline_operations");
+          const ops = opsRaw ? JSON.parse(opsRaw) : [];
+          const createOps = Array.isArray(ops) ? ops.filter((op) => op?.type === "CREATE_LOTE") : [];
+          queuedCreates = createOps.map((op) => ({
+            ...(op?.data || {}),
+            id: `temp_${op.id}`,
+            estado: "Pendiente",
+            observacionesTecnico: "",
+            _isOffline: true,
+            _operationId: op.id,
+            _queuedAt: op.timestamp,
+          }));
+        } catch {}
+
+        const byId = new Map();
+        for (const item of cached) {
+          if (!item?.id) continue;
+          byId.set(String(item.id), item);
+        }
+        for (const item of queuedCreates) {
+          if (!item?.id) continue;
+          const key = String(item.id);
+          if (!byId.has(key)) byId.set(key, item);
+        }
+
+        setList(Array.from(byId.values()));
+        setErrorMsg(null);
+      } catch {
+        setList([]);
+        setErrorMsg("No se pudieron cargar los lotes guardados sin conexión");
+      } finally {
+        setShowingOfflineData(true);
+      }
+      return;
+    }
+
     try {
+      setShowingOfflineData(false);
       setErrorMsg(null);
       const { ipt } = await getCurrentAuthContext();
       if (!ipt) throw new Error("No se encontró IPT del productor");
@@ -149,7 +204,11 @@ export default function LotesScreen() {
         throw new Error(payload?.error || "No se pudieron cargar los lotes");
       }
       const j = await resp.json();
-      setList(Array.isArray(j) ? j : []);
+      const next = Array.isArray(j) ? j : [];
+      setList(next);
+      try {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
+      } catch {}
     } catch (error) {
       setList([]);
       setErrorMsg(error.message || "No se pudieron cargar los lotes");
@@ -159,97 +218,84 @@ export default function LotesScreen() {
   useEffect(() => {
     loadList();
     requestLocationAccess();
-  }, [requestLocationAccess]);
+  }, [requestLocationAccess, isOnline]);
 
-  // ── Geometry helpers for self-intersection detection ──────────────────
-  const cross2D = (o, a, b) =>
-    (a.latitude - o.latitude) * (b.longitude - o.longitude) -
-    (a.longitude - o.longitude) * (b.latitude - o.latitude);
-
-  const nearlyEqual = (a, b, eps) => Math.abs(a - b) <= eps;
-
-  const samePointLL = (p, q, eps) =>
-    nearlyEqual(p.latitude, q.latitude, eps) && nearlyEqual(p.longitude, q.longitude, eps);
-
-  const onSegLL = (p, q, r, eps) =>
-    Math.min(p.latitude, r.latitude) - eps <= q.latitude &&
-    q.latitude <= Math.max(p.latitude, r.latitude) + eps &&
-    Math.min(p.longitude, r.longitude) - eps <= q.longitude &&
-    q.longitude <= Math.max(p.longitude, r.longitude) + eps;
-
-  const segmentsIntersect = (p1, p2, p3, p4, eps) => {
-    const d1 = cross2D(p1, p2, p3);
-    const d2 = cross2D(p1, p2, p4);
-    const d3 = cross2D(p3, p4, p1);
-    const d4 = cross2D(p3, p4, p2);
-
-    const s1 = d1 > eps ? 1 : d1 < -eps ? -1 : 0;
-    const s2 = d2 > eps ? 1 : d2 < -eps ? -1 : 0;
-    const s3 = d3 > eps ? 1 : d3 < -eps ? -1 : 0;
-    const s4 = d4 > eps ? 1 : d4 < -eps ? -1 : 0;
-
-    if (s1 !== 0 && s2 !== 0 && s3 !== 0 && s4 !== 0) {
-      return s1 !== s2 && s3 !== s4;
+  useEffect(() => {
+    const prev = prevPendingOpsRef.current;
+    if (isOnline && prev > 0 && pendingOperations === 0 && !isProcessing) {
+      loadList();
     }
+    prevPendingOpsRef.current = pendingOperations;
+  }, [isOnline, isProcessing, pendingOperations]);
 
-    if (s1 === 0 && onSegLL(p1, p3, p2, eps)) return true;
-    if (s2 === 0 && onSegLL(p1, p4, p2, eps)) return true;
-    if (s3 === 0 && onSegLL(p3, p1, p4, eps)) return true;
-    if (s4 === 0 && onSegLL(p3, p2, p4, eps)) return true;
-    return false;
-  };
+  useEffect(() => {
+    const uid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "unknown";
+    const cacheKey = `cache_lotes_${uid}`;
+    const unsubscribe = subscribeOperations(async (event) => {
+      if (event?.status !== "success") return;
+      if (event?.operation?.type !== "CREATE_LOTE") return;
 
-  const isValidNewPoint = (points, newPoint) => {
-    const eps = 1e-10;
-    if (points.some((p) => samePointLL(p, newPoint, eps))) return false;
+      const tempId = `temp_${event.operation.id}`;
+      const real = event.result && typeof event.result === "object" ? { ...event.result, _isOffline: false } : null;
+      if (!real?.id) return;
 
-    const allPoints = [...points, newPoint];
-    const n = allPoints.length;
-    if (n < 4) return true;
+      setList((prev) => {
+        const prevArr = Array.isArray(prev) ? prev : [];
+        let foundTemp = false;
+        const replaced = prevArr.map((item) => {
+          if (String(item?.id) === String(tempId)) {
+            foundTemp = true;
+            return real;
+          }
+          return item;
+        });
+        const merged = foundTemp ? replaced : [real, ...replaced];
+        const seen = new Set();
+        return merged.filter((item) => {
+          const key = String(item?.id);
+          if (!key) return false;
+          if (key === String(tempId)) return false;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
 
-    const edges = allPoints.map((p, i) => [p, allPoints[(i + 1) % n]]);
-    const newEdges = [edges[n - 2], edges[n - 1]];
+      setSelected((prev) => (String(prev?.id) === String(tempId) ? real : prev));
 
-    for (const [a1, a2] of newEdges) {
-      for (let i = 0; i < edges.length; i++) {
-        const [b1, b2] = edges[i];
+      try {
+        const raw = await AsyncStorage.getItem(cacheKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const cached = Array.isArray(parsed) ? parsed : [];
+        let foundTemp = false;
+        const replaced = cached.map((item) => {
+          if (String(item?.id) === String(tempId)) {
+            foundTemp = true;
+            return real;
+          }
+          return item;
+        });
+        const merged = foundTemp ? replaced : [real, ...replaced];
+        const seen = new Set();
+        const next = merged.filter((item) => {
+          const key = String(item?.id);
+          if (!key) return false;
+          if (key === String(tempId)) return false;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
+      } catch {}
+    });
 
-        if ((a1 === b1 && a2 === b2) || (a1 === b2 && a2 === b1)) continue;
-        if (samePointLL(a1, b1, eps) || samePointLL(a1, b2, eps) || samePointLL(a2, b1, eps) || samePointLL(a2, b2, eps)) {
-          continue;
-        }
-
-        if (segmentsIntersect(a1, a2, b1, b2, eps)) return false;
-      }
-    }
-    return true;
-  };
-  // ────────────────────────────────────────────────────────────────────────
+    return unsubscribe;
+  }, [subscribeOperations]);
 
   const onMapPress = (e) => {
     if (!creating || createStep !== "polygon" || mode !== "aereo") return;
     const { coordinate } = e.nativeEvent;
     const newPt = { latitude: coordinate.latitude, longitude: coordinate.longitude };
-
-    const eps = 1e-10;
-    if (points.some((p) => samePointLL(p, newPt, eps))) {
-      Alert.alert(
-        "Punto inválido",
-        "El punto elegido coincide con un vértice existente. Elija un punto diferente."
-      );
-      return;
-    }
-
-    // When adding a new point after the third, verify no crossing edges
-    if (points.length >= 3) {
-      if (!isValidNewPoint(points, newPt)) {
-        Alert.alert(
-          "Punto inválido",
-          "El punto elegido crearía un polígono con aristas cruzadas. Elija un punto diferente."
-        );
-        return;
-      }
-    }
 
     setPoints((prev) => [...prev, newPt]);
   };
@@ -258,6 +304,25 @@ export default function LotesScreen() {
     setPoints([]);
     setPolygonConfirmed(false);
     if (mode === "gps") resetRoute();
+  };
+
+  const undoPoint = () => {
+    if (mode === "gps") {
+      undoLastPoint();
+      return;
+    }
+    setPoints((prev) => prev.slice(0, -1));
+  };
+
+  const clearPolygonAndStop = () => {
+    if (isWalking) stopWalking();
+    clearPolygon();
+  };
+
+  const cancelCreateAndStop = () => {
+    if (isWalking) stopWalking();
+    if (mode === "gps") resetRoute();
+    cancelCreate();
   };
 
   const goToMapView = () => {
@@ -525,6 +590,12 @@ export default function LotesScreen() {
     <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Mis Lotes</Text>
 
+      {showingOfflineData && (
+        <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#fff7ed", borderColor: "#fed7aa", borderWidth: 1, borderRadius: 10 }}>
+          <Text style={{ color: "#9a3412" }}>Mostrando datos sin conexión</Text>
+        </View>
+      )}
+
       {errorMsg && <Text>{errorMsg}</Text>}
 
       <View style={styles.topBar}>
@@ -621,12 +692,32 @@ export default function LotesScreen() {
           <View style={[styles.grid, { marginBottom: 6 }]}>
             {!isWalking ? (
               <>
-                <TouchableOpacity style={[styles.gridBtn, mode === "aereo" ? styles.btnActive : null]} onPress={() => setMode("aereo")}>
-                  <Text style={styles.btnText}>Dibujo aéreo</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.modeBtn,
+                    mode === "aereo" ? styles.modeBtnActive : styles.modeBtnInactive,
+                  ]}
+                  onPress={() => setMode("aereo")}
+                >
+                  <Text style={[styles.modeBtnText, mode === "aereo" ? styles.modeBtnTextActive : styles.modeBtnTextInactive]}>
+                    ✈ Dibujo aéreo
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.gridBtn, mode === "gps" ? styles.btnActive : null]} onPress={() => setMode("gps")}>
-                  <Text style={styles.btnText}>GPS caminando</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.modeBtn,
+                    mode === "gps" ? styles.modeBtnActive : styles.modeBtnInactive,
+                  ]}
+                  onPress={() => setMode("gps")}
+                >
+                  <Text style={[styles.modeBtnText, mode === "gps" ? styles.modeBtnTextActive : styles.modeBtnTextInactive]}>
+                    🛰 GPS caminando
+                  </Text>
                 </TouchableOpacity>
+                <View style={[styles.modeBadge, mode === "gps" ? styles.modeBadgeGps : styles.modeBadgeAereo]}>
+                  <View style={[styles.modeDot, mode === "gps" ? styles.modeDotGps : styles.modeDotAereo]} />
+                  <Text style={styles.modeBadgeText}>Modo actual: {mode === "gps" ? "GPS caminando" : "Dibujo aéreo"}</Text>
+                </View>
                 {mode === "gps" && (
                   <TouchableOpacity
                     style={[styles.gridBtn, { backgroundColor: "#2ecc71" }]}
@@ -641,10 +732,17 @@ export default function LotesScreen() {
                     <Text style={styles.btnText}>▶ Iniciar recorrido</Text>
                   </TouchableOpacity>
                 )}
+                <TouchableOpacity
+                  style={[styles.gridBtn, { backgroundColor: "#f39c12", opacity: points.length === 0 ? 0.6 : 1 }]}
+                  onPress={undoPoint}
+                  disabled={points.length === 0}
+                >
+                  <Text style={styles.btnText}>← Deshacer</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.gridBtn} onPress={clearPolygon}>
                   <Text style={styles.btnText}>Limpiar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreate}>
+                <TouchableOpacity style={[styles.gridBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreateAndStop}>
                   <Text style={styles.btnText}>Cancelar</Text>
                 </TouchableOpacity>
               </>
@@ -654,13 +752,26 @@ export default function LotesScreen() {
                   <View style={styles.recordingDot} />
                   <Text style={styles.gpsStatusText}>Grabando recorrido: {points.length} puntos</Text>
                 </View>
+                <View style={[styles.modeBadge, styles.modeBadgeGps]}>
+                  <View style={[styles.modeDot, styles.modeDotGps]} />
+                  <Text style={styles.modeBadgeText}>Modo actual: GPS caminando</Text>
+                </View>
 
                 <View style={styles.gpsActionRow}>
                   <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#3498db" }]} onPress={addManualPoint}>
                     <Text style={styles.btnText}>📍 Punto manual</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#f39c12" }]} onPress={undoLastPoint} disabled={points.length === 0}>
-                    <Text style={styles.btnText}>↩ Deshacer</Text>
+                    <Text style={styles.btnText}>← Deshacer</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.gpsActionRow}>
+                  <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#1e8449" }]} onPress={clearPolygonAndStop}>
+                    <Text style={styles.btnText}>Limpiar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.gpsActionBtn, { backgroundColor: "#c0392b" }]} onPress={cancelCreateAndStop}>
+                    <Text style={styles.btnText}>Cancelar</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -846,6 +957,9 @@ export default function LotesScreen() {
               }
               renderItem={({ item }) => (
                 <View style={[styles.item, selected?.id === item.id ? styles.itemSelected : null]}>
+                  {item._isOffline ? (
+                    <Text style={styles.loteSyncBadge}>Pendiente de sincronización</Text>
+                  ) : null}
                   <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
                   <Text style={styles.itemText}>Estado: {item.estado}</Text>
                   <Text style={styles.itemText}>
@@ -892,6 +1006,9 @@ export default function LotesScreen() {
           >
             <View style={styles.detailsCard}>
               <Text style={styles.formTitle}>Detalle del lote</Text>
+              {selected._isOffline ? (
+                <Text style={[styles.loteSyncBadge, { marginBottom: 8 }]}>Pendiente de sincronización</Text>
+              ) : null}
               <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
               <Text style={styles.itemText}>Estado: {selected.estado}</Text>
               <Text style={styles.itemText}>
@@ -943,6 +1060,9 @@ export default function LotesScreen() {
             }
             renderItem={({ item }) => (
               <View style={[styles.item, selected?.id === item.id ? styles.itemSelected : null]}>
+                {item._isOffline ? (
+                  <Text style={styles.loteSyncBadge}>Pendiente de sincronización</Text>
+                ) : null}
                 <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
                 <Text style={styles.itemText}>Estado: {item.estado}</Text>
                 <Text style={styles.itemText}>
@@ -1047,9 +1167,10 @@ const styles = StyleSheet.create({
   tabBtnTextActive: { fontWeight: "800" },
   item: { backgroundColor: "#ffffff", borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)", shadowColor: "#0f172a", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   itemSelected: { borderWidth: 2, borderColor: "#2ecc71" },
+  loteSyncBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: "#fef3c7", color: "#92400e", overflow: "hidden", fontSize: 11, fontWeight: "700", marginBottom: 6 },
   itemText: { color: "#34495e" },
   details: { padding: 8, backgroundColor: "#ffffff" },
-  detailMap: { height: 220 },
+  detailMap: { height: DETAIL_MAP_HEIGHT },
   detailsCard: { padding: 14, backgroundColor: "#ffffff" },
   backButton: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 18 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
@@ -1061,7 +1182,69 @@ const styles = StyleSheet.create({
   permissionText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
   permissionActions: { flexDirection: "row", gap: 10, justifyContent: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
-  gridBtn: { width: "46%", margin: 4, justifyContent: "center", alignItems: "center", padding: 9, borderRadius: 8, backgroundColor: "#1e8449" },
+  gridBtn: {
+    width: "46%",
+    margin: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#1e8449",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    elevation: 4,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  modeBtn: {
+    width: "46%",
+    margin: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  modeBtnActive: {
+    backgroundColor: "#1e8449",
+    borderColor: "#2ecc71",
+    borderWidth: 2,
+    elevation: 6,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  modeBtnInactive: {
+    backgroundColor: "#f3f4f6",
+    borderColor: "rgba(15,23,42,0.12)",
+    opacity: 0.78,
+  },
+  modeBtnText: { fontWeight: "900" },
+  modeBtnTextActive: { color: "#ffffff" },
+  modeBtnTextInactive: { color: "#6b7280" },
+  modeBadge: {
+    width: "96%",
+    marginTop: 4,
+    marginBottom: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+  },
+  modeBadgeAereo: { backgroundColor: "#f0faf4", borderColor: "rgba(30,132,73,0.18)" },
+  modeBadgeGps: { backgroundColor: "#eef6ff", borderColor: "rgba(52,152,219,0.18)" },
+  modeBadgeText: { color: "#2c3e50", fontWeight: "800" },
+  modeDot: { width: 10, height: 10, borderRadius: 5 },
+  modeDotAereo: { backgroundColor: "#2ecc71" },
+  modeDotGps: { backgroundColor: "#3498db" },
   gpsControls: { width: "95%", padding: 12, backgroundColor: "#fff", borderRadius: 12, elevation: 5, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
   gpsStatusHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12, justifyContent: "center" },
   gpsStatusText: { fontSize: 16, fontWeight: "bold", color: "#2c3e50" },

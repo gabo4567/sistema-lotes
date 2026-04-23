@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
 import Layout from "../components/Layout";
 import MapPolygon from "../components/MapPolygon";
@@ -33,7 +33,10 @@ const LoteDetail = () => {
       {error && <div className="text-red-600" style={{ marginBottom: 8 }}>{error}</div>}
       {!lote ? (<div>Cargando…</div>) : (
         <div>
-          <h2>{lote.nombre || ''}</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+            <h2 style={{ margin: 0 }}>{lote.nombre || ''}</h2>
+            <Link to="/lotes" className="btn">Volver</Link>
+          </div>
           <div>IPT: {lote.ipt}</div>
           <div>Estado: {lote.estado}</div>
           <div>Método: {lote.metodoMarcado}</div>

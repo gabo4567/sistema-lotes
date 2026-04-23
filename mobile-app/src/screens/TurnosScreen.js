@@ -8,6 +8,7 @@ import { API_URL } from "../utils/constants";
 import { offlineTurnosOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function TurnosScreen() {
   const [fechaInput, setFechaInput] = useState("");
@@ -25,20 +26,76 @@ export default function TurnosScreen() {
   const [view, setView] = useState("list");
   const [listMode, setListMode] = useState("activos"); // "activos" o "inactivos"
   const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [orden, setOrden] = useState("proximos"); // "proximos" | "lejanos"
   const [turnoEditando, setTurnoEditando] = useState(null);
   const insets = useSafeAreaInsets();
-  const { isOnline } = useOffline();
+  const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
+  const [showingOfflineData, setShowingOfflineData] = useState(false);
+  const prevPendingOpsRef = React.useRef(pendingOperations);
 
   const loadList = async () => {
     try {
       setLoading(true);
+      const currentUid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "";
+      const cacheKey = `cache_turnos_${currentUid || "unknown"}_${listMode}`;
+      if (!isOnline) {
+        try {
+          const raw = await AsyncStorage.getItem(cacheKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          const cached = Array.isArray(parsed) ? parsed : [];
+
+          let queuedCreates = [];
+          if (listMode === "activos") {
+            try {
+              const opsRaw = await AsyncStorage.getItem("offline_operations");
+              const ops = opsRaw ? JSON.parse(opsRaw) : [];
+              const createOps = Array.isArray(ops) ? ops.filter((op) => op?.type === "CREATE_TURNO") : [];
+              queuedCreates = createOps.map((op) => {
+                const fechaIso = op?.data?.fechaSolicitada;
+                const fechaTurno = fechaIso ? `${fechaIso}T12:00:00.000Z` : undefined;
+                return {
+                  id: `temp_${op.id}`,
+                  activo: true,
+                  creadoEn: op.timestamp || new Date().toISOString(),
+                  estado: "pendiente",
+                  fecha: fechaTurno,
+                  fechaTurno,
+                  productorId: currentUid || auth.currentUser?.uid,
+                  tipoTurno: op?.data?.tipoTurno,
+                  motivo: op?.data?.motivo || "",
+                  _isOffline: true,
+                  _operationId: op.id,
+                };
+              });
+            } catch {}
+          }
+
+          const byId = new Map();
+          for (const item of cached) {
+            if (!item?.id) continue;
+            byId.set(String(item.id), item);
+          }
+          for (const item of queuedCreates) {
+            if (!item?.id) continue;
+            const key = String(item.id);
+            if (!byId.has(key)) byId.set(key, item);
+          }
+
+          setList(Array.from(byId.values()));
+          setError("");
+        } catch {
+          setList([]);
+        }
+        setShowingOfflineData(true);
+        return;
+      }
+      setShowingOfflineData(false);
       const tokenResult = await auth.currentUser?.getIdTokenResult();
-      const uid = auth.currentUser?.uid;
       const idToken = await auth.currentUser?.getIdToken();
       
-      if (!uid || !idToken) return;
+      if (!currentUid || !idToken) return;
       
-      const productorId = tokenResult?.claims?.productorId || uid;
+      const productorId = tokenResult?.claims?.productorId || currentUid;
       const activo = listMode === "activos";
       
       const resp = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=${activo}`, {
@@ -47,7 +104,11 @@ export default function TurnosScreen() {
         }
       });
       const j = await resp.json();
-      setList(Array.isArray(j) ? j : []);
+      const next = Array.isArray(j) ? j : [];
+      setList(next);
+      try {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
+      } catch {}
     } catch (error) {
       console.error("❌ Error cargando turnos:", error);
       setList([]);
@@ -70,7 +131,78 @@ export default function TurnosScreen() {
 
   useEffect(() => { 
     loadList(); 
-  }, [listMode]);
+  }, [listMode, isOnline]);
+
+  useEffect(() => {
+    const prev = prevPendingOpsRef.current;
+    if (isOnline && prev > 0 && pendingOperations === 0 && !isProcessing) {
+      loadList();
+    }
+    prevPendingOpsRef.current = pendingOperations;
+  }, [isOnline, isProcessing, pendingOperations]);
+
+  useEffect(() => {
+    const currentUid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "";
+    const cacheKey = `cache_turnos_${currentUid || "unknown"}_${listMode}`;
+    const unsubscribe = subscribeOperations(async (event) => {
+      if (event?.status !== "success") return;
+      if (event?.operation?.type !== "CREATE_TURNO") return;
+      if (listMode !== "activos") return;
+
+      const tempId = `temp_${event.operation.id}`;
+      const real = event.result && typeof event.result === "object" ? { ...event.result, _isOffline: false } : null;
+      if (!real?.id) return;
+
+      setList((prev) => {
+        const prevArr = Array.isArray(prev) ? prev : [];
+        let foundTemp = false;
+        const replaced = prevArr.map((item) => {
+          if (String(item?.id) === String(tempId)) {
+            foundTemp = true;
+            return real;
+          }
+          return item;
+        });
+        const merged = foundTemp ? replaced : [real, ...replaced];
+        const seen = new Set();
+        return merged.filter((item) => {
+          const key = String(item?.id);
+          if (!key) return false;
+          if (key === String(tempId)) return false;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
+
+      try {
+        const raw = await AsyncStorage.getItem(cacheKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const cached = Array.isArray(parsed) ? parsed : [];
+        let foundTemp = false;
+        const replaced = cached.map((item) => {
+          if (String(item?.id) === String(tempId)) {
+            foundTemp = true;
+            return real;
+          }
+          return item;
+        });
+        const merged = foundTemp ? replaced : [real, ...replaced];
+        const seen = new Set();
+        const next = merged.filter((item) => {
+          const key = String(item?.id);
+          if (!key) return false;
+          if (key === String(tempId)) return false;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
+      } catch {}
+    });
+
+    return unsubscribe;
+  }, [listMode, subscribeOperations]);
 
   useEffect(() => {
     setError("");
@@ -306,6 +438,48 @@ export default function TurnosScreen() {
     return `${dd}/${mm}/${yyyy}`;
   };
 
+  const isWeekend = (d) => {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return false;
+    const day = d.getDay();
+    return day === 0 || day === 6;
+  };
+
+  const getUTCDayFromIsoDate = (isoDate) => {
+    const s = String(isoDate || "").trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+    return d.getUTCDay();
+  };
+
+  const getTurnoDateMs = (turno) => {
+    const raw = turno?.fechaTurno ?? turno?.fecha;
+    if (!raw) return null;
+    if (raw instanceof Date) {
+      const ms = raw.getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+    if (raw && typeof raw === "object" && typeof raw._seconds === "number") {
+      return raw._seconds * 1000;
+    }
+    if (typeof raw === "string") {
+      const s = raw.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const day = getUTCDayFromIsoDate(s);
+        if (day === null) return null;
+        const [yyyy, mm, dd] = s.split("-").map(Number);
+        const ms = Date.UTC(yyyy, mm - 1, dd, 12, 0, 0, 0);
+        return Number.isFinite(ms) ? ms : null;
+      }
+      const ms = Date.parse(s);
+      return Number.isFinite(ms) ? ms : null;
+    }
+    return null;
+  };
+
   const openDatePicker = () => {
     const minDate = minSelectableDate();
     const current = parseInputToDate(fechaInput);
@@ -326,8 +500,8 @@ export default function TurnosScreen() {
     if (fechaIso < todayIso) { setError("Fecha ya pasada"); setDisp(false); return; }
     
     // Validar fin de semana
-    const fecha = new Date(fechaIso);
-    const diaSemana = fecha.getDay();
+    const diaSemana = getUTCDayFromIsoDate(fechaIso);
+    if (diaSemana === null) { setError("Fecha inválida"); return; }
     if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
 
     if (!isOnline) {
@@ -392,8 +566,8 @@ export default function TurnosScreen() {
       if (fechaIso < todayIso) { setError("Fecha ya pasada"); return; }
       
       // Validar fin de semana
-      const fecha = new Date(fechaIso);
-      const diaSemana = fecha.getDay();
+      const diaSemana = getUTCDayFromIsoDate(fechaIso);
+      if (diaSemana === null) { setError("Fecha inválida"); return; }
       console.log("📆 Día de la semana:", diaSemana, "(0=domingo, 6=sábado)");
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
       
@@ -509,10 +683,13 @@ export default function TurnosScreen() {
           _isOffline: true,
         };
         setList((prev) => [nuevo, ...(Array.isArray(prev) ? prev : [])]);
-        setSuccess("Turno guardado offline. Se sincronizará cuando recuperes la conexión a internet.");
+        const msg = "Turno guardado offline. Se sincronizará cuando recuperes la conexión a internet.";
+        setSuccess(msg);
+        Alert.alert("Guardado offline", msg, [{ text: "Aceptar" }]);
       } else {
-        const serverMsg = result?.message || "Turno solicitado exitosamente";
-        setSuccess(serverMsg);
+        const msg = result?.message || "Turno solicitado exitosamente";
+        setSuccess(msg);
+        Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       }
 
       setFechaInput("");
@@ -560,8 +737,8 @@ export default function TurnosScreen() {
       const now = new Date();
       const todayIso = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
       if (fechaIso < todayIso) { setError("Fecha ya pasada"); return; }
-      const fecha = new Date(fechaIso);
-      const diaSemana = fecha.getDay();
+      const diaSemana = getUTCDayFromIsoDate(fechaIso);
+      if (diaSemana === null) { setError("Fecha inválida"); return; }
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
       const tipoNormalizado = tipo.toLowerCase().includes('insumo') ? 'insumo' :
         (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) ? 'carnet' : 'otro';
@@ -578,7 +755,9 @@ export default function TurnosScreen() {
       }
       const data = await resp.json();
       console.log("✅ Turno actualizado:", data);
-      setSuccess("Turno actualizado exitosamente");
+      const msg = data?.message || "Turno actualizado exitosamente";
+      setSuccess(msg);
+      Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       setTurnoEditando(null);
       setFechaInput("");
       setTipo("");
@@ -670,6 +849,10 @@ export default function TurnosScreen() {
           onChange={(event, selectedDate) => {
             setShowDatePicker(false);
             if (event?.type === "set" && selectedDate) {
+              if (isWeekend(selectedDate)) {
+                Alert.alert("Fecha no permitida", "No se permiten turnos en fin de semana (sábado o domingo).");
+                return;
+              }
               setFechaInput(formatDDMMYYYYSlash(selectedDate));
             }
           }}
@@ -699,6 +882,10 @@ export default function TurnosScreen() {
               <TouchableOpacity
                 style={[styles.btn, styles.primary]}
                 onPress={() => {
+                  if (isWeekend(iosPickerDate)) {
+                    Alert.alert("Fecha no permitida", "No se permiten turnos en fin de semana (sábado o domingo).");
+                    return;
+                  }
                   setFechaInput(formatDDMMYYYYSlash(iosPickerDate));
                   setShowDatePicker(false);
                 }}
@@ -715,6 +902,11 @@ export default function TurnosScreen() {
   return (
     <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
       <Text style={styles.title}>Turnos</Text>
+      {showingOfflineData && (
+        <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#fff7ed", borderColor: "#fed7aa", borderWidth: 1, borderRadius: 10 }}>
+          <Text style={{ color: "#9a3412" }}>Mostrando datos sin conexión</Text>
+        </View>
+      )}
       <View style={styles.topBar}>
         <View style={styles.cardBar}>
           <TouchableOpacity
@@ -770,8 +962,37 @@ export default function TurnosScreen() {
               </ScrollView>
             </View>
 
+            <View style={styles.filterContainer}>
+              <Text style={styles.filterLabel}>Ordenar por:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+                <TouchableOpacity
+                  style={[styles.filterBadge, orden === "proximos" && styles.filterBadgeActive]}
+                  onPress={() => setOrden("proximos")}
+                >
+                  <Text style={[styles.filterBadgeText, orden === "proximos" && styles.filterBadgeTextActive]}>
+                    Más próximos
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.filterBadge, orden === "lejanos" && styles.filterBadgeActive]}
+                  onPress={() => setOrden("lejanos")}
+                >
+                  <Text style={[styles.filterBadgeText, orden === "lejanos" && styles.filterBadgeTextActive]}>
+                    Más lejanos
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
             <FlatList 
-              data={list.filter(t => filtroEstado === "todos" || t.estado?.toLowerCase() === filtroEstado)} 
+              data={[...list.filter(t => filtroEstado === "todos" || t.estado?.toLowerCase() === filtroEstado)].sort((a, b) => {
+                const aMs = getTurnoDateMs(a);
+                const bMs = getTurnoDateMs(b);
+                if (aMs === null && bMs === null) return 0;
+                if (aMs === null) return 1;
+                if (bMs === null) return -1;
+                return orden === "lejanos" ? bMs - aMs : aMs - bMs;
+              })} 
               keyExtractor={(item) => item.id} 
               ListEmptyComponent={<Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
               renderItem={({ item }) => (

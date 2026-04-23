@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from "react";
 import { lotesService } from "../services/lotes.service";
 import { Link, useNavigate } from "react-router-dom";
 import HomeButton from "../components/HomeButton";
-import Layout from "../components/Layout";
 import LoteFilters from "../components/LoteFilters";
 
 const LotesList = () => {
@@ -123,7 +122,10 @@ const LotesList = () => {
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h2 style={{ margin: 0 }}>Gestión de Lotes</h2>
-        <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
+          <Link to="/lotes/mapa" className="btn">Mapa general</Link>
+        </div>
       </div>
 
       {loading ? (
