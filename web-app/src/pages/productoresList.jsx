@@ -85,22 +85,19 @@ const ProductoresList = () => {
         return;
       }
 
-      const pickCell = (row, keys) => {
-        const map = row && typeof row === "object" ? row : {};
-        for (const k of keys) {
-          if (Object.prototype.hasOwnProperty.call(map, k)) return map[k];
-          const found = Object.keys(map).find((kk) => String(kk).trim().toLowerCase() === String(k).trim().toLowerCase());
-          if (found) return map[found];
-        }
-        return "";
+      const getCol = (row, name) => {
+        if (!row || typeof row !== "object") return "";
+        const wanted = String(name || "").trim().toLowerCase();
+        const key = Object.keys(row).find((k) => String(k).trim().toLowerCase() === wanted);
+        return key ? row[key] : "";
       };
 
       let imported = 0;
       let duplicated = 0;
       const seen = new Set(existingIptSet);
       const rowsWithData = rows.filter((r) => {
-        const ipt = normalizeIpt(pickCell(r, ["IPT", "ipt"]));
-        const nombre = String(pickCell(r, ["nombre", "Nombre", "NOMBRE"])).trim();
+        const ipt = normalizeIpt(getCol(r, "ipt"));
+        const nombre = String(getCol(r, "nombre")).trim();
         return Boolean(ipt) || Boolean(nombre);
       });
 
@@ -110,28 +107,32 @@ const ProductoresList = () => {
       }
 
       for (const row of rowsWithData) {
-        const ipt = normalizeIpt(pickCell(row, ["IPT", "ipt"]));
-        const nombre = String(pickCell(row, ["nombre", "Nombre", "NOMBRE"])).trim();
-        if (!ipt || !nombre) continue;
+        const ipt = normalizeIpt(getCol(row, "ipt"));
+        const nombre = String(getCol(row, "nombre")).trim();
+        const cuil = String(getCol(row, "cuil")).trim();
+        if (!ipt || !nombre || !cuil) continue;
         if (seen.has(ipt)) {
           duplicated += 1;
           continue;
         }
 
-        const telefonoRaw = pickCell(row, ["telefono", "Teléfono", "Telefono", "TELÉFONO"]);
-        const telefonoDigits = String(telefonoRaw ?? "").replace(/\D/g, "");
-        const telefono = telefonoDigits.length >= 10 && telefonoDigits.length <= 13 ? telefonoDigits : null;
+        const telefonoRaw = getCol(row, "telefono");
+        const telefono = String(telefonoRaw ?? "").trim() || "";
 
-        const localidadRaw = pickCell(row, ["localidad", "Localidad", "LOCALIDAD"]);
-        const localidad = String(localidadRaw ?? "").trim() || null;
+        const localidadRaw = getCol(row, "localidad");
+        const localidad = String(localidadRaw ?? "").trim() || "";
+
+        const emailRaw = getCol(row, "email");
+        const email = String(emailRaw ?? "").trim() || "";
 
         try {
           await createProductor({
             ipt: String(ipt),
             nombreCompleto: nombre,
-            cuil: String(ipt),
-            telefono,
-            domicilioCasa: localidad,
+            cuil: String(cuil),
+            telefono: telefono || "",
+            domicilioCasa: localidad || "",
+            email: email || "",
           });
           imported += 1;
           seen.add(ipt);
