@@ -444,6 +444,87 @@ export default function TurnosScreen() {
     return day === 0 || day === 6;
   };
 
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  const toIsoFromLocalDate = (d) => {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+    const yyyy = d.getFullYear();
+    const mm = pad2(d.getMonth() + 1);
+    const dd = pad2(d.getDate());
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const AR_FIXED_HOLIDAYS_MMDD = {
+    "01-01": "Año Nuevo",
+    "03-24": "Día Nacional de la Memoria por la Verdad y la Justicia",
+    "04-02": "Día del Veterano y de los Caídos en la Guerra de Malvinas",
+    "05-01": "Día del Trabajador",
+    "05-25": "Día de la Revolución de Mayo",
+    "06-20": "Paso a la Inmortalidad del Gral. Manuel Belgrano",
+    "07-09": "Día de la Independencia",
+    "12-08": "Inmaculada Concepción de María",
+    "12-25": "Navidad",
+  };
+
+  const AR_HOLIDAYS_BY_YEAR = {
+    2025: {
+      "2025-03-03": "Carnaval",
+      "2025-03-04": "Carnaval",
+      "2025-04-18": "Viernes Santo",
+      "2025-06-16": "Paso a la Inmortalidad del Gral. Martín Miguel de Güemes",
+      "2025-08-17": "Paso a la Inmortalidad del Gral. José de San Martín",
+      "2025-10-10": "Día del Respeto a la Diversidad Cultural",
+      "2025-11-24": "Día de la Soberanía Nacional",
+    },
+    2026: {
+      "2026-02-16": "Carnaval",
+      "2026-02-17": "Carnaval",
+      "2026-04-03": "Viernes Santo",
+      "2026-06-15": "Paso a la Inmortalidad del Gral. Martín Miguel de Güemes",
+      "2026-08-17": "Paso a la Inmortalidad del Gral. José de San Martín",
+      "2026-11-23": "Día de la Soberanía Nacional",
+    },
+  };
+
+  const getArgentinaHolidayLabel = (isoDate) => {
+    const s = String(isoDate || "").trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const mmdd = `${m[2]}-${m[3]}`;
+    if (AR_FIXED_HOLIDAYS_MMDD[mmdd]) return AR_FIXED_HOLIDAYS_MMDD[mmdd];
+    const byYear = AR_HOLIDAYS_BY_YEAR[Number(m[1])];
+    return byYear?.[s] || null;
+  };
+
+  const normalizeEstado = (e) => String(e || "pendiente").toLowerCase().trim();
+
+  const formatMotivo = (motivo) => {
+    const m = String(motivo || "").trim();
+    if (!m) return "-";
+    const lower = m.toLowerCase();
+    if (lower.includes("vencido automáticamente por fecha")) return "-";
+    if (lower.includes("cancelado por el productor")) return "-";
+    if (lower.includes("cancelado por el administrador")) return "-";
+    return m;
+  };
+
+  const getCancelNotice = (t) => {
+    const m = String(t?.motivo || "").trim().toLowerCase();
+    if (m.includes("cancelado por el productor")) return "Cancelado por el productor";
+    if (m.includes("cancelado por el administrador")) return "Cancelado por el administrador";
+    const est = normalizeEstado(t?.estado);
+    if (est !== "cancelado") return null;
+    if (!m) return "Cancelado por el administrador";
+    if (m.includes("administrador")) return "Cancelado por el administrador";
+    return "Cancelado por el productor";
+  };
+
+  const getExpiredNotice = (t) => {
+    const est = getDisplayEstado(t);
+    if (est === "vencido") return "Vencido automáticamente por fecha";
+    return null;
+  };
+
   const getUTCDayFromIsoDate = (isoDate) => {
     const s = String(isoDate || "").trim();
     const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -480,6 +561,36 @@ export default function TurnosScreen() {
     return null;
   };
 
+  const getDisplayEstado = (t) => {
+    const est = normalizeEstado(t?.estado);
+    if (est === "pendiente" || est === "confirmado") {
+      const ms = getTurnoDateMs(t);
+      if (ms !== null) {
+        const dt = new Date(ms);
+        if (!Number.isNaN(dt.getTime())) {
+          const turnoDay = new Date(dt);
+          turnoDay.setHours(0, 0, 0, 0);
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+          if (turnoDay.getTime() < hoy.getTime()) return "vencido";
+        }
+      }
+    }
+    return est || "pendiente";
+  };
+
+  const isEstadoFinal = (est) => {
+    const e = normalizeEstado(est);
+    return e === "cancelado" || e === "completado" || e === "vencido";
+  };
+
+  const normalizeTipoFromLabel = (label) => {
+    const s = String(label || "").toLowerCase();
+    if (s.includes("insumo")) return "insumo";
+    if (s.includes("renovación") || s.includes("renov")) return "carnet";
+    return "otro";
+  };
+
   const openDatePicker = () => {
     const minDate = minSelectableDate();
     const current = parseInputToDate(fechaInput);
@@ -503,6 +614,12 @@ export default function TurnosScreen() {
     const diaSemana = getUTCDayFromIsoDate(fechaIso);
     if (diaSemana === null) { setError("Fecha inválida"); return; }
     if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
+    const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
+    if (feriadoLabel) {
+      setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`);
+      setDisp(false);
+      return;
+    }
 
     if (!isOnline) {
       setDisp(true);
@@ -570,6 +687,8 @@ export default function TurnosScreen() {
       if (diaSemana === null) { setError("Fecha inválida"); return; }
       console.log("📆 Día de la semana:", diaSemana, "(0=domingo, 6=sábado)");
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
+      const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
+      if (feriadoLabel) { setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`); return; }
       
       // 🔍 DEBUG: Análisis detallado del tipo
       console.log("🔍 DEBUG - Análisis de tipo:");
@@ -710,7 +829,7 @@ export default function TurnosScreen() {
 
   const editarTurno = (turno) => {
     console.log("✏️ Editando turno:", turno);
-    const st = String(turno.estado || '').toLowerCase();
+    const st = getDisplayEstado(turno);
     if (st !== 'pendiente') {
       Alert.alert('No permitido', `No puedes editar un turno ${st}.`);
       return;
@@ -740,9 +859,82 @@ export default function TurnosScreen() {
       const diaSemana = getUTCDayFromIsoDate(fechaIso);
       if (diaSemana === null) { setError("Fecha inválida"); return; }
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
-      const tipoNormalizado = tipo.toLowerCase().includes('insumo') ? 'insumo' :
-        (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) ? 'carnet' : 'otro';
-      const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivo || "" };
+      const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
+      if (feriadoLabel) { setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`); return; }
+
+      let tipoNormalizado;
+      tipoNormalizado = normalizeTipoFromLabel(tipo);
+
+      const motivoTrim = String(motivo || '').trim();
+      if (tipoNormalizado === 'otro' && !motivoTrim) {
+        setError('Si el tipo es "Otro", el motivo es obligatorio.');
+        return;
+      }
+
+      const productorId = (await auth.currentUser?.getIdTokenResult())?.claims?.productorId || auth.currentUser?.uid;
+      const requestedKey = fechaIso;
+      const isEstadoBloqueante = (estadoRaw) => {
+        const st = String(estadoRaw || '').toLowerCase();
+        return st !== 'cancelado' && st !== 'completado' && st !== 'vencido';
+      };
+      const toKeyFromAnyDate = (rawDate) => {
+        if (!rawDate) return null;
+        let d = null;
+        if (rawDate instanceof Date) {
+          d = rawDate;
+        } else if (rawDate && typeof rawDate === 'object' && rawDate._seconds) {
+          d = new Date(rawDate._seconds * 1000);
+        } else if (typeof rawDate === 'string') {
+          const s = rawDate.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            return s;
+          } else {
+            d = new Date(s);
+          }
+        }
+        if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      let turnosParaValidar = Array.isArray(list) ? list : [];
+      if (isOnline && productorId && idToken) {
+        try {
+          const respTurnos = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=true`, {
+            headers: { "Authorization": `Bearer ${idToken}` }
+          });
+          const jTurnos = await respTurnos.json();
+          if (Array.isArray(jTurnos)) {
+            turnosParaValidar = [...turnosParaValidar, ...jTurnos];
+          }
+        } catch (e) {
+          console.error("❌ Error cargando turnos para validación:", e);
+        }
+      }
+
+      const hayDuplicado = turnosParaValidar.some(t => {
+        if (!t) return false;
+        if (String(t.id || '') === String(turnoEditando.id || '')) return false;
+        if (t.activo === false) return false;
+        if (!isEstadoBloqueante(t.estado)) return false;
+        const tipoExistente = String(t.tipoTurno || '').toLowerCase() === 'otra' ? 'otro' : String(t.tipoTurno || '').toLowerCase();
+        if (tipoExistente !== tipoNormalizado) return false;
+        const key = toKeyFromAnyDate(t.fechaTurno || t.fecha);
+        return key === requestedKey;
+      });
+
+      if (hayDuplicado) {
+        if (tipoNormalizado === 'carnet') {
+          setError("Ya tenés una renovación de carnet para esa fecha y hora. Elegí otra fecha/hora.");
+        } else {
+          setError("Ya tenés un turno del mismo tipo para esa fecha y hora. Elegí otra fecha/hora o solicitá un tipo diferente.");
+        }
+        return;
+      }
+
+      const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivoTrim };
       console.log("📤 Actualizando turno:", body);
       const resp = await fetch(`${API_URL}/turnos/${turnoEditando.id}`, {
         method: "PUT",
@@ -773,8 +965,8 @@ export default function TurnosScreen() {
   };
 
   const confirmarEliminarTurno = (turno) => {
-    const st = String(turno.estado || '').toLowerCase();
-    if (st !== 'pendiente') {
+    const st = getDisplayEstado(turno);
+    if (st !== 'pendiente' && st !== 'confirmado') {
       Alert.alert('No permitido', `No puedes cancelar un turno ${st}.`);
       return;
     }
@@ -822,6 +1014,55 @@ export default function TurnosScreen() {
     }
   };
 
+  const confirmarArchivarTurno = (turno) => {
+    const st = getDisplayEstado(turno);
+    if (!isEstadoFinal(st)) {
+      Alert.alert("No permitido", "Solo se pueden archivar turnos cancelados, completados o vencidos.");
+      return;
+    }
+    if (!isOnline) {
+      Alert.alert("Sin conexión", "No se puede archivar un turno sin conexión a internet.");
+      return;
+    }
+    Alert.alert(
+      "Archivar turno",
+      `¿Querés archivar este turno del ${formatDDMMYYYY(turno.fechaTurno)}?`,
+      [
+        { text: "No", style: "cancel" },
+        { text: "Sí, archivar", style: "destructive", onPress: () => archivarTurno(turno) }
+      ]
+    );
+  };
+
+  const archivarTurno = async (turno) => {
+    setLoading(true);
+    try {
+      const st = getDisplayEstado(turno);
+      if (!isEstadoFinal(st)) throw new Error("Solo se pueden archivar turnos cancelados, completados o vencidos.");
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("No estás autenticado");
+      const resp = await fetch(`${API_URL}/turnos/${turno.id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${idToken}` }
+      });
+      if (!resp.ok) {
+        let msg = "Error al archivar turno";
+        try {
+          const errorData = await resp.json();
+          msg = errorData?.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      setSuccess("Turno archivado");
+      await loadList();
+    } catch (error) {
+      console.error("❌ Error archivando turno:", error);
+      setError(error.message || "Error al archivar turno");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const cancelarEdicion = () => {
     setTurnoEditando(null);
     setFechaInput("");
@@ -851,6 +1092,12 @@ export default function TurnosScreen() {
             if (event?.type === "set" && selectedDate) {
               if (isWeekend(selectedDate)) {
                 Alert.alert("Fecha no permitida", "No se permiten turnos en fin de semana (sábado o domingo).");
+                return;
+              }
+              const iso = toIsoFromLocalDate(selectedDate);
+              const feriadoLabel = getArgentinaHolidayLabel(iso);
+              if (feriadoLabel) {
+                Alert.alert("Fecha no permitida", `No se permiten turnos en feriados nacionales (${feriadoLabel}).`);
                 return;
               }
               setFechaInput(formatDDMMYYYYSlash(selectedDate));
@@ -884,6 +1131,12 @@ export default function TurnosScreen() {
                 onPress={() => {
                   if (isWeekend(iosPickerDate)) {
                     Alert.alert("Fecha no permitida", "No se permiten turnos en fin de semana (sábado o domingo).");
+                    return;
+                  }
+                  const iso = toIsoFromLocalDate(iosPickerDate);
+                  const feriadoLabel = getArgentinaHolidayLabel(iso);
+                  if (feriadoLabel) {
+                    Alert.alert("Fecha no permitida", `No se permiten turnos en feriados nacionales (${feriadoLabel}).`);
                     return;
                   }
                   setFechaInput(formatDDMMYYYYSlash(iosPickerDate));
@@ -939,7 +1192,7 @@ export default function TurnosScreen() {
                 style={[styles.listTab, listMode === "inactivos" && styles.listTabActive]}
                 onPress={() => setListMode("inactivos")}
               >
-                <Text style={[styles.listTabText, listMode === "inactivos" && styles.listTabTextActive]}>Inactivos</Text>
+                <Text style={[styles.listTabText, listMode === "inactivos" && styles.listTabTextActive]}>Historial</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -985,7 +1238,7 @@ export default function TurnosScreen() {
             </View>
 
             <FlatList 
-              data={[...list.filter(t => filtroEstado === "todos" || t.estado?.toLowerCase() === filtroEstado)].sort((a, b) => {
+              data={[...list.filter(t => filtroEstado === "todos" || getDisplayEstado(t) === filtroEstado)].sort((a, b) => {
                 const aMs = getTurnoDateMs(a);
                 const bMs = getTurnoDateMs(b);
                 if (aMs === null && bMs === null) return 0;
@@ -995,32 +1248,49 @@ export default function TurnosScreen() {
               })} 
               keyExtractor={(item) => item.id} 
               ListEmptyComponent={<Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
-                  <View style={styles.turnoHeader}>
-                    <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
-                    <View style={styles.turnoHeaderRight}>
-                      <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(item.estado) }]}>{item.estado}</Text>
-                      {item._isOffline ? (
-                        <Text style={styles.turnoSyncBadge}>Pendiente de sincronización</Text>
-                      ) : null}
+              renderItem={({ item }) => {
+                const displayEstado = getDisplayEstado(item);
+                return (
+                  <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
+                    <View style={styles.turnoHeader}>
+                      <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
+                      <View style={styles.turnoHeaderRight}>
+                        <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(displayEstado) }]}>{displayEstado}</Text>
+                        {item._isOffline ? (
+                          <Text style={styles.turnoSyncBadge}>Pendiente de sincronización</Text>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                  <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
-                  <Text style={styles.turnoMotivo}>Motivo: {item.motivo || 'No especificado'}</Text>
-                  
-                  {item.activo !== false && (
-                    <View style={styles.turnoActions}>
-                      <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
-                        <Text style={styles.btnActionText}>Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
-                        <Text style={styles.btnActionText}>Cancelar Turno</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              )} 
+                    <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
+                    <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
+                    {getCancelNotice(item) ? (
+                      <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
+                        <Text style={[styles.turnoNoticeText, styles.turnoNoticeCancelText]}>{getCancelNotice(item)}</Text>
+                      </View>
+                    ) : null}
+                    {getExpiredNotice(item) ? (
+                      <View style={[styles.turnoNotice, styles.turnoNoticeExpired]}>
+                        <Text style={[styles.turnoNoticeText, styles.turnoNoticeExpiredText]}>{getExpiredNotice(item)}</Text>
+                      </View>
+                    ) : null}
+                    
+                    {item.activo !== false && !isEstadoFinal(displayEstado) ? (
+                      <View style={styles.turnoActions}>
+                        {displayEstado === "pendiente" ? (
+                          <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
+                            <Text style={styles.btnActionText}>Editar</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {displayEstado === "pendiente" || displayEstado === "confirmado" ? (
+                          <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
+                            <Text style={styles.btnActionText}>Cancelar Turno</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              }} 
               contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
               showsVerticalScrollIndicator={false}
             />
@@ -1053,7 +1323,7 @@ export default function TurnosScreen() {
               ))}
             </View>
           )}
-          <TextInput style={styles.input} placeholder="Motivo (opcional)" value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
+          <TextInput style={styles.input} placeholder={normalizeTipoFromLabel(tipo) === 'otro' ? 'Motivo (obligatorio)' : 'Motivo (opcional)'} value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
           <View style={styles.row}>
@@ -1077,7 +1347,7 @@ export default function TurnosScreen() {
                 const tipoLower = tipo.toLowerCase();
                 const esInsumo = tipoLower.includes('insumo');
                 const esRenovacion = tipoLower.includes('renovación') || tipoLower.includes('renov');
-                return esInsumo ? 'insumo' : esRenovacion ? 'carnet' : 'otra';
+                return esInsumo ? 'insumo' : esRenovacion ? 'carnet' : 'otro';
               })()}
             </Text>
           ) : null}
@@ -1090,14 +1360,14 @@ export default function TurnosScreen() {
               ))}
             </View>
           )}
-          <TextInput style={styles.input} placeholder="Motivo (opcional)" value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
+          <TextInput style={styles.input} placeholder={normalizeTipoFromLabel(tipo) === 'otro' ? 'Motivo (obligatorio)' : 'Motivo (opcional)'} value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
           <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={cancelarEdicion}>
               <Text style={styles.btnText}>Cancelar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.btn} onPress={guardarEdicion} disabled={loading}>
+            <TouchableOpacity style={styles.btn} onPress={guardarEdicion} disabled={loading || (normalizeTipoFromLabel(tipo) === 'otro' && !String(motivo || '').trim())}>
               <Text style={styles.btnText}>{loading ? "Guardando..." : "Guardar cambios"}</Text>
             </TouchableOpacity>
           </View>
@@ -1146,11 +1416,19 @@ const styles = StyleSheet.create({
   turnoSyncBadge: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#fef3c7', color: '#92400e', overflow: 'hidden', fontSize: 11, fontWeight: '700', flexShrink: 1, maxWidth: 200, textAlign: 'center' },
   turnoTipo: { fontSize: 14, color: '#34495e', marginBottom: 4 },
   turnoMotivo: { fontSize: 13, color: '#7f8c8d', fontStyle: 'italic' },
+  turnoNotice: { marginTop: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
+  turnoNoticeText: { fontSize: 13, fontWeight: '700' },
+  turnoNoticeCancel: { backgroundColor: '#fef3c7', borderColor: '#fde68a' },
+  turnoNoticeCancelText: { color: '#92400e' },
+  turnoNoticeExpired: { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' },
+  turnoNoticeExpiredText: { color: '#334155' },
   // Estilos para botones de acción
   turnoActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 8 },
   btnEditar: { backgroundColor: '#3498db', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   btnEliminar: { backgroundColor: '#e74c3c', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  btnArchivar: { backgroundColor: 'transparent', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9ca3af' },
   btnActionText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  btnArchivarText: { color: '#374151', fontSize: 12, fontWeight: '600' },
   // Estilos nuevos para filtros y tabs
   listTabs: { flexDirection: 'row', backgroundColor: '#f1f2f6', borderRadius: 8, padding: 4, marginBottom: 12 },
   listTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },

@@ -7,6 +7,92 @@ const console = process.env.DEBUG_TURNOS === "true"
   ? globalThis.console
   : { ...globalThis.console, log: () => {} };
 
+const toTurnoTimestamp = (input) => {
+  if (!input) return null;
+  if (typeof input === "object" && input?._seconds !== undefined) return input;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : Timestamp.fromDate(input);
+
+  const raw = String(input).trim();
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0));
+    return isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+  }
+
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+};
+
+const normalizeEstado = (e) => String(e || "pendiente").toLowerCase().trim();
+
+const normalizeTipoTurno = (t) => {
+  const s = String(t || "").toLowerCase().trim();
+  if (!s) return s;
+  if (s === "otra") return "otro";
+  if (s.includes("insum")) return "insumo";
+  if (s.includes("renov") || s.includes("carnet")) return "carnet";
+  if (s === "otros") return "otro";
+  return s;
+};
+
+const turnoDateFromRaw = (raw) => {
+  if (!raw) return null;
+  if (raw.fechaTurno && raw.fechaTurno._seconds) {
+    const d = new Date(raw.fechaTurno._seconds * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof raw.fechaTurno === "string") {
+    const s = raw.fechaTurno.includes("T") ? raw.fechaTurno : `${raw.fechaTurno}T00:00:00.000Z`;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (raw.fecha && typeof raw.fecha === "string") {
+    const d = new Date(raw.fecha);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
+const toYmdUtc = (d) => {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const isTurnoExpired = (raw, hoyStart) => {
+  const est = normalizeEstado(raw?.estado);
+  if (est !== "pendiente" && est !== "confirmado") return false;
+  const fecha = turnoDateFromRaw(raw);
+  if (!fecha) return false;
+  const soloDia = new Date(fecha);
+  soloDia.setHours(0, 0, 0, 0);
+  return soloDia.getTime() < hoyStart.getTime();
+};
+
+const applyVencidoIfNeeded = (raw, hoyStart) => {
+  if (!isTurnoExpired(raw, hoyStart)) return null;
+  const motivoRaw = String(raw.motivo || "").trim();
+  const update = { estado: "vencido", updatedAt: Timestamp.now() };
+  raw.estado = "vencido";
+  if (!motivoRaw) {
+    update.motivo = "Vencido automáticamente por fecha";
+    raw.motivo = "Vencido automáticamente por fecha";
+  }
+  return update;
+};
+
+const canTransitionEstado = (from, to) => {
+  const f = normalizeEstado(from);
+  const t = normalizeEstado(to);
+  if (t === "vencido") return false;
+  if (f === "cancelado" || f === "completado" || f === "vencido") return false;
+  if (f === "pendiente") return t === "confirmado" || t === "cancelado";
+  if (f === "confirmado") return t === "cancelado" || t === "completado";
+  return false;
+};
+
 // ➕ Crear un nuevo turno
 export const crearTurno = async (req, res) => {
   try {
@@ -109,27 +195,11 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: "Fecha es requerida" });
     }
     
-    // Procesar fecha con manejo de zona horaria
-    let date;
-    let fechaProcesada;
-    
-    if (fechaFinal.includes('T')) {
-      // Si ya viene con tiempo (ISO), parsear directamente
-      date = new Date(fechaFinal);
-      console.log("  - Fecha ISO detectada, parseando directamente");
-    } else {
-      // Si es solo fecha (YYYY-MM-DD), crear a medianoche UTC
-      console.log("  - Fecha simple detectada, creando UTC");
-      const [year, month, day] = fechaFinal.split('-').map(Number);
-      date = new Date(Date.UTC(year, month - 1, day));
-      fechaProcesada = date.toISOString().split('T')[0]; // Guardar fecha original
-      console.log("  - Fecha UTC creada:", date.toISOString());
-      console.log("  - Feza local (AR):", date.toLocaleDateString('es-AR'));
-    }
-    
-    if (isNaN(date.getTime())) {
+    const ts = toTurnoTimestamp(fechaFinal);
+    if (!ts) {
       return res.status(400).json({ message: "Fecha inválida" });
     }
+    const date = ts.toDate();
     
     console.log("  - Día de semana (0=dom):", date.getDay());
     console.log("  - Día del mes:", date.getDate());
@@ -155,21 +225,17 @@ export const crearTurno = async (req, res) => {
       }
     }
 
-    // Crear el turno con fecha UTC para evitar problemas de zona horaria
-    // Establecer 09:00 (AR) => 12:00 UTC
-    let fechaParaFirestore = fechaProcesada || fechaFinal;
-    if (fechaProcesada) {
-      fechaParaFirestore = `${fechaProcesada}T12:00:00.000Z`;
-    }
-    console.log("💾 Guardando turno con fecha:", fechaParaFirestore);
+    const fechaIso = date.toISOString();
+    console.log("💾 Guardando turno con fecha:", fechaIso);
     
     const turno = {
       productorId,
       tipoTurno,
-      fecha: fechaParaFirestore,
-      fechaTurno: fechaParaFirestore,
+      fecha: fechaIso,
+      fechaTurno: ts,
       estado: "pendiente",
       creadoEn: new Date().toISOString(),
+      updatedAt: Timestamp.now(),
       activo: true,
       ...(req.body.motivo ? { motivo: req.body.motivo } : {})
     };
@@ -185,7 +251,7 @@ export const crearTurno = async (req, res) => {
     const docGuardado = await docRef.get();
     console.log("📖 Datos guardados en Firestore:", JSON.stringify(docGuardado.data(), null, 2));
 
-    return res.json({ message: "Turno creado exitosamente", turno });
+    return res.json({ message: "Turno creado exitosamente", turno: { id: docRef.id, ...convertirTimestamps(turno) } });
 
   } catch (error) {
     console.error("Error en crearTurno:", error);
@@ -202,52 +268,38 @@ export const obtenerTurnos = async (req, res) => {
     
     if (activo !== undefined) {
       query = query.where("activo", "==", activo === "true");
-    } else {
-      // Por defecto solo activos
-      query = query.where("activo", "==", true);
     }
 
     const snapshot = await query.get();
     const hoy = new Date(); hoy.setHours(0,0,0,0);
-    const batch = db.batch(); let updates = 0;
+    const batch = db.batch(); let writes = 0;
     const raws = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
     const turnos = raws.map(({ id, ref, data }) => {
       const raw = { ...data };
-      // Normalizar fechaTurno a Date
-      let fecha;
-      if (raw.fechaTurno && raw.fechaTurno._seconds) {
-        fecha = new Date(raw.fechaTurno._seconds * 1000);
-      } else if (typeof raw.fechaTurno === 'string') {
-        // aceptar 'YYYY-MM-DD' o ISO
-        const s = raw.fechaTurno.includes('T') ? raw.fechaTurno : `${raw.fechaTurno}T00:00:00.000Z`;
-        fecha = new Date(s);
-      } else {
-        fecha = new Date(raw.fecha || Date.now());
-      }
-      const estado = String(raw.estado || 'pendiente').toLowerCase();
       // Normalizar tipo 'otra' -> 'otro'
       if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
         batch.update(ref, { tipoTurno: 'otro' });
+        writes++;
         raw.tipoTurno = 'otro';
       }
-      // Ajustar hora por defecto a 09:00 AR (12:00 UTC) para documentos antiguos
-      if (typeof raw.fechaTurno === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.fechaTurno)) {
-        const iso = `${raw.fechaTurno}T12:00:00.000Z`;
-        batch.update(ref, { fechaTurno: iso });
-        raw.fechaTurno = iso;
-        fecha = new Date(iso);
-      }
-      if (estado === 'pendiente' && fecha instanceof Date && !isNaN(fecha.getTime())) {
-        const soloDia = new Date(fecha); soloDia.setHours(0,0,0,0);
-        if (soloDia.getTime() < hoy.getTime()) {
-          batch.update(ref, { estado: 'vencido', motivo: 'Vencido automáticamente por fecha', updatedAt: Timestamp.now() });
-          updates++;
-          raw.estado = 'vencido'; raw.motivo = 'Vencido automáticamente por fecha';
+      if (typeof raw.fechaTurno === "string") {
+        const ts = toTurnoTimestamp(raw.fechaTurno);
+        if (ts) {
+          const iso = ts.toDate().toISOString();
+          batch.update(ref, { fechaTurno: ts, fecha: iso });
+          writes++;
+          raw.fechaTurno = ts;
+          raw.fecha = iso;
         }
+      }
+      const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
+      if (vencidoUpdate) {
+        batch.update(ref, vencidoUpdate);
+        writes++;
       }
       return { id, ref, ...convertirTimestamps(raw) };
     });
-    if (updates > 0) await batch.commit();
+    if (writes > 0) await batch.commit();
 
     // Enriquecer con nombre e IPT del productor
     const prodInfo = new Map();
@@ -280,10 +332,15 @@ export const obtenerTurnos = async (req, res) => {
 export const obtenerTurnoPorId = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection("turnos").doc(id).get();
+    const ref = db.collection("turnos").doc(id);
+    const doc = await ref.get();
 
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
-    res.json({ id: doc.id, ...convertirTimestamps(doc.data()) });
+    const raw = doc.data();
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
+    if (vencidoUpdate) await ref.update(vencidoUpdate);
+    res.json({ id: doc.id, ...convertirTimestamps(raw) });
   } catch (error) {
     console.error("Error al obtener el turno:", error);
     res.status(500).json({ message: "Error al obtener el turno", error: "Error al obtener el turno" });
@@ -299,16 +356,75 @@ export const actualizarTurno = async (req, res) => {
     const snap = await db.collection("turnos").doc(id).get();
     if (!snap.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const current = snap.data();
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const vencidoUpdate = applyVencidoIfNeeded(current, hoy);
+    if (vencidoUpdate) {
+      await db.collection("turnos").doc(id).update(vencidoUpdate);
+      return res.status(400).json({ message: "No puedes editar un turno vencido" });
+    }
     if (String(current.estado || '').toLowerCase() !== 'pendiente') {
       return res.status(400).json({ message: `No puedes editar un turno ${String(current.estado||'').toLowerCase()}` });
     }
 
+    let nextFechaTs = null;
     if (data.fechaTurno) {
-      const fecha = new Date(data.fechaTurno);
-      if (isNaN(fecha.getTime())) {
+      const ts = toTurnoTimestamp(data.fechaTurno);
+      if (!ts) {
         return res.status(400).json({ message: "Formato de fecha inválido" });
       }
-      data.fechaTurno = Timestamp.fromDate(fecha);
+      data.fechaTurno = ts;
+      data.fecha = ts.toDate().toISOString();
+      nextFechaTs = ts;
+    } else {
+      nextFechaTs = toTurnoTimestamp(current.fechaTurno || current.fecha);
+    }
+
+    if (nextFechaTs) {
+      const d = nextFechaTs.toDate();
+      const soloDia = new Date(d);
+      soloDia.setHours(0, 0, 0, 0);
+      if (soloDia.getTime() < hoy.getTime()) {
+        return res.status(400).json({ message: "Fecha ya pasada" });
+      }
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) {
+        return res.status(400).json({ message: "No se permiten turnos sábado o domingo" });
+      }
+    }
+
+    if (data.tipoTurno !== undefined) {
+      data.tipoTurno = normalizeTipoTurno(data.tipoTurno);
+    }
+    const nextTipo = normalizeTipoTurno(data.tipoTurno ?? current.tipoTurno);
+    const nextMotivo = Object.prototype.hasOwnProperty.call(data, "motivo") ? data.motivo : current.motivo;
+    if (nextTipo === "otro" && !String(nextMotivo || "").trim()) {
+      return res.status(400).json({ message: 'Si el tipo es "Otro", el motivo es obligatorio.' });
+    }
+
+    const targetYmd = nextFechaTs ? toYmdUtc(nextFechaTs.toDate()) : null;
+    if (targetYmd && nextTipo && current.productorId) {
+      const snapDup = await db
+        .collection("turnos")
+        .where("productorId", "==", String(current.productorId))
+        .where("activo", "==", true)
+        .get();
+      const isEstadoBloqueante = (estadoRaw) => {
+        const st = normalizeEstado(estadoRaw);
+        return st !== "cancelado" && st !== "completado" && st !== "vencido";
+      };
+      const hasDup = snapDup.docs.some((d) => {
+        if (d.id === id) return false;
+        const other = d.data();
+        if (!isEstadoBloqueante(other?.estado)) return false;
+        const otherTipo = normalizeTipoTurno(other?.tipoTurno);
+        if (otherTipo !== nextTipo) return false;
+        const otherDate = turnoDateFromRaw(other);
+        const otherYmd = toYmdUtc(otherDate);
+        return otherYmd === targetYmd;
+      });
+      if (hasDup) {
+        return res.status(400).json({ message: "Ya tenés un turno del mismo tipo para esa fecha. Elegí otra fecha o un tipo diferente." });
+      }
     }
 
     await db.collection("turnos").doc(id).update(data);
@@ -336,13 +452,36 @@ export const cambiarEstadoTurno = async (req, res) => {
     if (!estadosPermitidos.includes(estado)) {
       return res.status(400).json({ message: "Estado no válido" });
     }
+    if (normalizeEstado(estado) === "vencido") {
+      return res.status(400).json({ message: "El estado 'vencido' es automático y no puede setearse manualmente" });
+    }
 
-    await db.collection("turnos").doc(id).update({ estado, motivo: motivo || "", updatedAt: Timestamp.now() });
+    const ref = db.collection("turnos").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ message: "Turno no encontrado" });
+    const current = snap.data();
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const vencidoUpdate = applyVencidoIfNeeded(current, hoy);
+    if (vencidoUpdate) {
+      await ref.update(vencidoUpdate);
+      return res.status(400).json({ message: "El turno está vencido y no puede cambiar de estado" });
+    }
+
+    const from = normalizeEstado(current?.estado);
+    const to = normalizeEstado(estado);
+    if (!canTransitionEstado(from, to)) {
+      return res.status(400).json({ message: `Transición de estado no permitida: ${from} -> ${to}` });
+    }
+
+    const update = { estado: to, updatedAt: Timestamp.now() };
+    if (typeof motivo === "string") {
+      update.motivo = motivo;
+    }
+    await ref.update(update);
 
     // Si se confirma/completa turno de insumo, marcar asignaciones como entregadas
     try {
-      const doc = await db.collection("turnos").doc(id).get();
-      const turno = doc.data();
+      const turno = current;
       if (turno?.tipoTurno === "insumo" && (estado === "confirmado" || estado === "completado")) {
         const snap = await db
           .collection("productorInsumos")
@@ -415,13 +554,27 @@ export const obtenerTurnosPorEstado = async (req, res) => {
       return res.status(400).json({ message: "Estado no válido" });
     }
 
-    const snapshot = await db
-      .collection("turnos")
-      .where("estado", "==", estado)
-      .where("activo", "==", true)
-      .get();
+    let query = db.collection("turnos").where("activo", "==", true);
+    if (estado === "vencido") {
+      query = query.where("estado", "in", ["vencido", "pendiente", "confirmado"]);
+    } else {
+      query = query.where("estado", "==", estado);
+    }
+    const snapshot = await query.get();
 
-    const turnos = snapshot.docs.map(doc => ({ id: doc.id, ...convertirTimestamps(doc.data()) }));
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const batch = db.batch(); let writes = 0;
+    const turnos = snapshot.docs.map(doc => {
+      const raw = doc.data();
+      const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
+      if (vencidoUpdate) {
+        batch.update(doc.ref, vencidoUpdate);
+        writes++;
+      }
+      return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || "-" }) };
+    }).filter(t => normalizeEstado(t.estado) === normalizeEstado(estado));
+
+    if (writes > 0) await batch.commit();
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por estado:", error);
@@ -442,23 +595,33 @@ export const obtenerTurnosPorProductor = async (req, res) => {
     }
 
     const snapshot = await query.get();
-    const batch = db.batch();
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const batch = db.batch(); let writes = 0;
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();
       // Normalizar tipo
       if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
         batch.update(doc.ref, { tipoTurno: 'otro' });
+        writes++;
         raw.tipoTurno = 'otro';
       }
-      // Normalizar fecha: si solo hay día, fijar 12:00 UTC (09:00 AR)
-      if (typeof raw.fechaTurno === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.fechaTurno)) {
-        const iso = `${raw.fechaTurno}T12:00:00.000Z`;
-        batch.update(doc.ref, { fechaTurno: iso });
-        raw.fechaTurno = iso;
+      if (typeof raw.fechaTurno === "string") {
+        const ts = toTurnoTimestamp(raw.fechaTurno);
+        if (ts) {
+          batch.update(doc.ref, { fechaTurno: ts, fecha: ts.toDate().toISOString() });
+          writes++;
+          raw.fechaTurno = ts;
+          raw.fecha = ts.toDate().toISOString();
+        }
+      }
+      const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
+      if (vencidoUpdate) {
+        batch.update(doc.ref, vencidoUpdate);
+        writes++;
       }
       return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || '-' }) };
     });
-    await batch.commit();
+    if (writes > 0) await batch.commit();
     res.json(turnos);
   } catch (error) {
     console.error("Error al obtener los turnos por productor:", error);
@@ -503,10 +666,18 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
       return res.status(404).json({ message: "No se encontraron turnos en el rango especificado" });
     }
 
-    const turnos = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...convertirTimestamps(doc.data()),
-    }));
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const batch = db.batch(); let writes = 0;
+    const turnos = snapshot.docs.map(doc => {
+      const raw = doc.data();
+      const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
+      if (vencidoUpdate) {
+        batch.update(doc.ref, vencidoUpdate);
+        writes++;
+      }
+      return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || "-" }) };
+    });
+    if (writes > 0) await batch.commit();
 
     res.json(turnos);
   } catch (error) {

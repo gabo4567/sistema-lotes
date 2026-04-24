@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { getProductores } from '../services/productores.service'
 import HomeButton from '../components/HomeButton'
+import { db } from '../services/firebase'
 
 const toDateSafe = (raw) => {
   if (!raw) return null
@@ -92,12 +94,12 @@ const [filtros, setFiltros] = useState({
   hasta: ''
 })
 
-const loadData = async () => {
-  setLoading(true)
+const loadData = useCallback(async ({ showLoading = true } = {}) => {
+  if (showLoading) setLoading(true)
   setError('')
   try {
     // Si es historial, pedimos activo=false, si es activos pedimos activo=true, si es todos no pasamos parámetro
-    const activoParam = viewMode === 'activos' ? true : (viewMode === 'historial' ? false : undefined)
+    const activoParam = viewMode === 'activos' ? true : (viewMode === 'historial' ? false : null)
     const ts = await getTurnos(activoParam)
     setTurnos(ts)
     
@@ -120,12 +122,69 @@ const loadData = async () => {
     console.error(e)
     setError(e?.response?.data?.message || e?.message || 'No se pudieron cargar los turnos.')
   }
-  finally { setLoading(false) }
-}
+  finally { if (showLoading) setLoading(false) }
+}, [viewMode, prodMap.size])
 
 useEffect(() => {
   loadData()
+}, [viewMode, loadData])
+
+useEffect(() => {
+  if (viewMode === 'historial') setExpandedId(null)
 }, [viewMode])
+
+useEffect(() => {
+  const refreshTimerRef = { current: null }
+  const scheduleRefresh = () => {
+    if (refreshTimerRef.current) return
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null
+      loadData({ showLoading: false })
+    }, 200)
+  }
+
+  const base = collection(db, 'turnos')
+  const qRef = viewMode === 'activos'
+    ? query(base, where('activo', '==', true))
+    : (viewMode === 'historial'
+      ? query(base, where('activo', '==', false))
+      : base)
+
+  const unsub = onSnapshot(
+    qRef,
+    (snap) => {
+      const changes = snap.docChanges()
+      if (changes.length === 0) return
+      scheduleRefresh()
+    },
+    (err) => {
+      console.error('Firestore onSnapshot error:', err)
+      loadData({ showLoading: false })
+    }
+  )
+
+  return () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+    unsub()
+  }
+}, [viewMode, loadData])
+
+useEffect(() => {
+  const handleFocus = () => loadData({ showLoading: false })
+  window.addEventListener('focus', handleFocus)
+  return () => window.removeEventListener('focus', handleFocus)
+}, [viewMode, loadData])
+
+useEffect(() => {
+  const id = window.setInterval(() => {
+    if (document.hidden) return
+    loadData({ showLoading: false })
+  }, 10000)
+  return () => window.clearInterval(id)
+}, [loadData])
 
   const turnosFiltrados = useMemo(() => {
     return turnos.filter(t => {
@@ -187,6 +246,18 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   const normalizedNuevo = normalizeEstado(nuevo)
   const displayNuevo = labels[normalizedNuevo] || String(nuevo || '').trim() || labels[normalizedNuevo] || 'Pendiente'
 
+  const currentTurno = turnos.find(x=>x.id===id)
+  const fromEstado = currentTurno ? getDisplayEstado(currentTurno) : null
+  if (fromEstado && !canTransitionEstado(fromEstado, normalizedNuevo)) {
+    notify({ title: `Transición no permitida: ${fromEstado} → ${normalizedNuevo}`, icon: 'error' })
+    if (typeof onCancel === 'function') onCancel()
+    return
+  }
+  if (fromEstado && normalizeEstado(fromEstado) === normalizedNuevo) {
+    if (typeof onCancel === 'function') onCancel()
+    return
+  }
+
   const confirm = await confirmDialog({
     title: 'Confirmar cambio de estado',
     text: `¿Seguro que querés cambiar el estado a "${displayNuevo}"?`,
@@ -208,8 +279,9 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
     }catch{ null }
   }
   try {
-    await setEstadoTurno(id, nuevo)
-    setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo } : t))
+    const motivoForAdminCancel = normalizeEstado(nuevo) === 'cancelado' ? 'Cancelado por el administrador' : undefined
+    await setEstadoTurno(id, nuevo, motivoForAdminCancel)
+    setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo, ...(motivoForAdminCancel ? { motivo: motivoForAdminCancel } : {}) } : t))
     setError('')
     notify({ title: 'Estado actualizado', icon: 'success' })
   } catch (e) {
@@ -221,13 +293,20 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   }
 }
 
-const handleDesactivar = async (id) => {
+const handleArchivar = async (id) => {
   if (updatingId === id) return
+  const currentTurno = turnos.find(t => t.id === id)
+  const currentEstado = currentTurno ? getDisplayEstado(currentTurno) : null
+  const canArchive = currentEstado === 'cancelado' || currentEstado === 'completado' || currentEstado === 'vencido'
+  if (!canArchive) {
+    notify({ title: 'Solo se pueden archivar turnos cancelados, completados o vencidos.', icon: 'error' })
+    return
+  }
   const confirm = await confirmDialog({ 
-    title: 'Confirmar desactivación', 
-    text: '¿Seguro que querés desactivar este turno?', 
+    title: 'Confirmar archivo', 
+    text: '¿Seguro que querés archivar este turno?', 
     icon: 'warning',
-    confirmButtonText: 'Desactivar',
+    confirmButtonText: 'Archivar',
     cancelButtonText: 'Cancelar',
   })
   if (confirm) {
@@ -236,9 +315,9 @@ const handleDesactivar = async (id) => {
       await eliminarTurno(id)
       setTurnos(turnos.filter(t => t.id !== id))
       setError('')
-      notify({ title: 'Turno desactivado', icon: 'success' })
+      notify({ title: 'Turno archivado', icon: 'success' })
     } catch (e) {
-      const message = e?.response?.data?.message || e?.message || 'No se pudo desactivar el turno.'
+      const message = e?.response?.data?.message || e?.message || 'No se pudo archivar el turno.'
       setError(message)
       notify({ title: message, icon: 'error' })
     } finally {
@@ -318,7 +397,24 @@ const formatMotivo = (motivo)=>{
   const m = String(motivo || '').trim()
   if(!m) return '-'
   if(m.toLowerCase().includes('vencido automáticamente por fecha')) return '-'
+  if(m.toLowerCase().includes('cancelado por el productor')) return '-'
+  if(m.toLowerCase().includes('cancelado por el administrador')) return '-'
   return m
+}
+
+const getCancelNotice = (t) => {
+  const est = normalizeEstado(t?.estado)
+  if (est !== 'cancelado') return null
+  const m = String(t?.motivo || '').trim().toLowerCase()
+  if (!m) return 'Cancelado por el administrador'
+  if (m.includes('administrador')) return 'Cancelado por el administrador'
+  return 'Cancelado por el productor'
+}
+
+const getExpiredNotice = (t) => {
+  const est = getDisplayEstado(t)
+  if (est !== 'vencido') return null
+  return 'Vencido automáticamente por fecha'
 }
 
 const todayYmd = useMemo(() => toYmdLocal(new Date()), [])
@@ -376,17 +472,38 @@ const clearTodayFilter = () => {
 
 const canQuickConfirm = (t) => {
   const est = getDisplayEstado(t)
-  return est !== 'confirmado' && est !== 'completado' && est !== 'cancelado' && est !== 'vencido'
+  return est === 'pendiente'
 }
 
 const canQuickComplete = (t) => {
   const est = getDisplayEstado(t)
-  return est !== 'completado' && est !== 'cancelado'
+  return est === 'confirmado'
 }
 
 const canQuickCancel = (t) => {
   const est = getDisplayEstado(t)
-  return est !== 'cancelado' && est !== 'completado'
+  return est === 'pendiente' || est === 'confirmado'
+}
+
+const getAllowedNextEstados = (fromEstado) => {
+  const from = normalizeEstado(fromEstado)
+  if (from === 'pendiente') return ['pendiente', 'confirmado', 'cancelado']
+  if (from === 'confirmado') return ['confirmado', 'cancelado', 'completado']
+  if (from === 'cancelado') return ['cancelado']
+  if (from === 'completado') return ['completado']
+  if (from === 'vencido') return ['vencido']
+  return [from || 'pendiente']
+}
+
+const canTransitionEstado = (fromEstado, toEstado) => {
+  const from = normalizeEstado(fromEstado)
+  const to = normalizeEstado(toEstado)
+  if (from === to) return true
+  if (to === 'vencido') return false
+  if (from === 'cancelado' || from === 'completado' || from === 'vencido') return false
+  if (from === 'pendiente') return to === 'confirmado' || to === 'cancelado'
+  if (from === 'confirmado') return to === 'cancelado' || to === 'completado'
+  return false
 }
 
 return (
@@ -405,7 +522,7 @@ return (
           className={`btn turnos-toggle-btn ${viewMode === 'historial' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('historial')}
           style={{ padding: '6px 12px', fontSize: 14 }}
-        >Inactivos</button>
+        >Historial</button>
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'todos' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('todos')}
@@ -427,7 +544,7 @@ return (
           <input
             type="text"
             className="input-inst"
-            placeholder="Buscar por productor o IPT…"
+            placeholder="Buscar por productor o IPT"
             value={filtros.productor}
             onChange={e => setFiltros({ ...filtros, productor: e.target.value })}
             style={{ fontSize: 15, minHeight: 38, padding: '7px 10px' }}
@@ -599,11 +716,13 @@ return (
                       const isUpdating = updatingId === t.id
                       const productorNombre = t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'
                       const ipt = t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'
+                      const allowExpand = viewMode !== 'historial'
                       return (
                         <React.Fragment key={t.id}>
                           <tr
                             className="turnos-agenda__row"
-                            onClick={() => toggleExpand(t.id)}
+                            onClick={allowExpand ? () => toggleExpand(t.id) : undefined}
+                            style={{ opacity: t.activo === false ? 0.7 : 1 }}
                           >
                             <td className="turnos-agenda__cell">{formatTime(t.fechaTurno || t.fecha)}</td>
                             <td className="turnos-agenda__cell">{productorNombre}</td>
@@ -616,29 +735,37 @@ return (
                               {t.activo !== false ? (
                                 <div className="turnos-quick-actions">
                                   {isUpdating ? <span className="turnos-updating">Actualizando…</span> : null}
-                                  <button className="btn secondary" disabled={isUpdating || !canQuickConfirm(t)} onClick={() => handleCambioEstado(t.id, 'confirmado')}>Confirmar</button>
-                                  <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
-                                  <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
-                                  <select
-                                    className="select-inst"
-                                    value={normalizeEstado(t.estado)}
-                                    disabled={isUpdating}
-                                    onChange={e => {
-                                      const prev = normalizeEstado(t.estado)
-                                      const next = e.target.value
-                                      handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
-                                    }}
-                                    style={{ width: 150, minWidth: 'auto' }}
-                                  >
-                                    <option value="pendiente">Pendiente</option>
-                                    <option value="confirmado">Confirmado</option>
-                                    <option value="cancelado">Cancelado</option>
-                                    <option value="completado">Completado</option>
-                                    <option value="vencido">Vencido</option>
-                                  </select>
-                                  <button className="btn" disabled={isUpdating} onClick={() => handleDesactivar(t.id)} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}>
-                                    {isUpdating ? 'Actualizando…' : 'Desactivar'}
-                                  </button>
+                                  {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
+                                    <>
+                                      {displayEstado === 'pendiente' ? (
+                                        <button className="btn secondary" disabled={isUpdating || !canQuickConfirm(t)} onClick={() => handleCambioEstado(t.id, 'confirmado')}>Confirmar</button>
+                                      ) : null}
+                                      <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
+                                      {displayEstado === 'confirmado' ? (
+                                        <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
+                                      ) : null}
+                                      <select
+                                        className="select-inst"
+                                        value={normalizeEstado(displayEstado)}
+                                        disabled={isUpdating}
+                                        onChange={e => {
+                                          const prev = normalizeEstado(displayEstado)
+                                          const next = e.target.value
+                                          handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
+                                        }}
+                                        style={{ width: 150, minWidth: 'auto' }}
+                                      >
+                                        {getAllowedNextEstados(displayEstado).map(opt => (
+                                          <option key={opt} value={opt}>{estadoLabel(opt)}</option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  ) : null}
+                                  {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
+                                    <button className="btn" disabled={isUpdating} onClick={() => handleArchivar(t.id)} style={{ backgroundColor: 'transparent', color: '#374151', border: '1px solid #9ca3af' }}>
+                                      {isUpdating ? 'Actualizando…' : 'Archivar'}
+                                    </button>
+                                  ) : null}
                                 </div>
                               ) : (
                                 <button className="btn primary" disabled={isUpdating} onClick={() => handleRestaurar(t.id)}>
@@ -647,12 +774,46 @@ return (
                               )}
                             </td>
                           </tr>
-                          {isExpanded && (
+                          {allowExpand && isExpanded && (
                             <tr className="turnos-agenda__detail">
                               <td colSpan={6}>
                                 <div className="turnos-detail">
                                   <div><strong>Fecha:</strong> {formatDate(t.fechaTurno || t.fecha)} {formatTime(t.fechaTurno || t.fecha)}</div>
-                                  <div><strong>Motivo:</strong> {String(t.motivo || '-')}</div>
+                                  <div><strong>Motivo:</strong> {formatMotivo(t.motivo)}</div>
+                                  {getCancelNotice(t) ? (
+                                    <div
+                                      style={{
+                                        marginTop: 8,
+                                        display: 'inline-block',
+                                        backgroundColor: '#fffbeb',
+                                        border: '1px solid #fde68a',
+                                        color: '#92400e',
+                                        padding: '6px 10px',
+                                        borderRadius: 10,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {getCancelNotice(t)}
+                                    </div>
+                                  ) : null}
+                                  {getExpiredNotice(t) ? (
+                                    <div
+                                      style={{
+                                        marginTop: 8,
+                                        display: 'inline-block',
+                                        backgroundColor: '#f1f5f9',
+                                        border: '1px solid #e2e8f0',
+                                        color: '#334155',
+                                        padding: '6px 10px',
+                                        borderRadius: 10,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {getExpiredNotice(t)}
+                                    </div>
+                                  ) : null}
                                   <div><strong>Productor ID:</strong> {t.productorId || '-'}</div>
                                   <div><strong>Turno ID:</strong> {t.id}</div>
                                 </div>
@@ -674,14 +835,15 @@ return (
                 const isUpdating = updatingId === t.id
                 const productorNombre = t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'
                 const ipt = t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'
+                const allowExpand = viewMode !== 'historial'
                 return (
                   <div
                     key={t.id}
                     className={`turno-card ${isExpanded ? 'turno-card--expanded' : ''}`}
                     style={{ opacity: t.activo === false ? 0.7 : 1 }}
-                    onClick={() => toggleExpand(t.id)}
-                    role="button"
-                    tabIndex={0}
+                    onClick={allowExpand ? () => toggleExpand(t.id) : undefined}
+                    role={allowExpand ? 'button' : undefined}
+                    tabIndex={allowExpand ? 0 : undefined}
                   >
                     <div className="turno-header">
                       <div className="turno-date">{formatDate(t.fechaTurno || t.fecha)} · {formatTime(t.fechaTurno || t.fecha)}</div>
@@ -691,10 +853,76 @@ return (
                     <div className="turno-item"><span className="turno-label">IPT:</span> {ipt}</div>
                     <div className="turno-item"><span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}</div>
                     <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
+                    {getCancelNotice(t) ? (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          backgroundColor: '#fffbeb',
+                          border: '1px solid #fde68a',
+                          color: '#92400e',
+                          padding: '8px 10px',
+                          borderRadius: 12,
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getCancelNotice(t)}
+                      </div>
+                    ) : null}
+                    {getExpiredNotice(t) ? (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          color: '#334155',
+                          padding: '8px 10px',
+                          borderRadius: 12,
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getExpiredNotice(t)}
+                      </div>
+                    ) : null}
 
-                    {isExpanded && (
+                    {allowExpand && isExpanded && (
                       <div className="turnos-detail" onClick={(e) => e.stopPropagation()}>
-                        <div><strong>Motivo completo:</strong> {String(t.motivo || '-')}</div>
+                        <div><strong>Motivo completo:</strong> {formatMotivo(t.motivo)}</div>
+                        {getCancelNotice(t) ? (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              display: 'inline-block',
+                              backgroundColor: '#fffbeb',
+                              border: '1px solid #fde68a',
+                              color: '#92400e',
+                              padding: '6px 10px',
+                              borderRadius: 10,
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {getCancelNotice(t)}
+                          </div>
+                        ) : null}
+                        {getExpiredNotice(t) ? (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              display: 'inline-block',
+                              backgroundColor: '#f1f5f9',
+                              border: '1px solid #e2e8f0',
+                              color: '#334155',
+                              padding: '6px 10px',
+                              borderRadius: 10,
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {getExpiredNotice(t)}
+                          </div>
+                        ) : null}
                         <div><strong>Productor ID:</strong> {t.productorId || '-'}</div>
                         <div><strong>Turno ID:</strong> {t.id}</div>
                       </div>
@@ -705,35 +933,43 @@ return (
                         <>
                           <div className="turnos-quick-actions">
                             {isUpdating ? <span className="turnos-updating">Actualizando…</span> : null}
-                            <button className="btn secondary" disabled={isUpdating || !canQuickConfirm(t)} onClick={() => handleCambioEstado(t.id, 'confirmado')}>Confirmar</button>
-                            <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
-                            <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
+                            {displayEstado === 'pendiente' ? (
+                              <button className="btn secondary" disabled={isUpdating || !canQuickConfirm(t)} onClick={() => handleCambioEstado(t.id, 'confirmado')}>Confirmar</button>
+                            ) : null}
+                            {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
+                              <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
+                            ) : null}
+                            {displayEstado === 'confirmado' ? (
+                              <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
+                            ) : null}
                           </div>
 
                           <div className="turnos-actions-row">
-                            <select 
-                              className="select-inst" 
-                              style={{ width: '160px', minWidth: 'auto' }}
-                              onChange={e => {
-                                const prev = normalizeEstado(t.estado)
-                                const next = e.target.value
-                                handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
-                              }} 
-                              value={normalizeEstado(t.estado)}
-                              disabled={isUpdating}
-                            >
-                              <option value="pendiente">Pendiente</option>
-                              <option value="confirmado">Confirmado</option>
-                              <option value="cancelado">Cancelado</option>
-                              <option value="completado">Completado</option>
-                              <option value="vencido">Vencido</option>
-                            </select>
-                            <button 
-                              className="btn" 
-                              disabled={isUpdating}
-                              style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '6px 12px' }}
-                              onClick={() => handleDesactivar(t.id)}
-                            >{isUpdating ? 'Actualizando…' : 'Desactivar'}</button>
+                            {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
+                              <select 
+                                className="select-inst" 
+                                style={{ width: '160px', minWidth: 'auto' }}
+                                onChange={e => {
+                                  const prev = normalizeEstado(displayEstado)
+                                  const next = e.target.value
+                                  handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
+                                }} 
+                                value={normalizeEstado(displayEstado)}
+                                disabled={isUpdating}
+                              >
+                                {getAllowedNextEstados(displayEstado).map(opt => (
+                                  <option key={opt} value={opt}>{estadoLabel(opt)}</option>
+                                ))}
+                              </select>
+                            ) : null}
+                            {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
+                              <button 
+                                className="btn" 
+                                disabled={isUpdating}
+                                style={{ backgroundColor: 'transparent', color: '#374151', border: '1px solid #9ca3af', padding: '6px 12px' }}
+                                onClick={() => handleArchivar(t.id)}
+                              >{isUpdating ? 'Actualizando…' : 'Archivar'}</button>
+                            ) : null}
                           </div>
                         </>
                       ) : (
