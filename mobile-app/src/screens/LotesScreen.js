@@ -587,7 +587,7 @@ export default function LotesScreen() {
   const isLotesTabActive = !creating && viewMode === "listOnly";
 
   return (
-    <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Mis Lotes</Text>
 
       {showingOfflineData && (
@@ -686,7 +686,7 @@ export default function LotesScreen() {
       {creating && createStep === "polygon" && (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.grid, { marginBottom: 6 }]}>
@@ -836,7 +836,7 @@ export default function LotesScreen() {
           <ScrollView
             style={{ flex: 1 }}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 32) }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           >
             {/* Non-interactive polygon preview */}
             <View pointerEvents="none">
@@ -909,7 +909,7 @@ export default function LotesScreen() {
       )}
 
       {!creating && selected && !viewingDetailFromList && viewMode !== "listOnly" && (
-        <View style={[styles.details, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.details, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.formTitle}>Detalle del lote</Text>
           <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
           <Text style={styles.itemText}>Estado: {selected.estado}</Text>
@@ -942,7 +942,7 @@ export default function LotesScreen() {
       {viewMode === "listOnly" && !viewingDetailFromList && (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
         >
           <View style={{ padding: 8 }}>
             <Text style={{ fontWeight: "bold", marginBottom: 6, fontSize: 16, color: "#1e8449" }}>Lista de lotes</Text>
@@ -1002,7 +1002,7 @@ export default function LotesScreen() {
 
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           >
             <View style={styles.detailsCard}>
               <Text style={styles.formTitle}>Detalle del lote</Text>
@@ -1048,7 +1048,7 @@ export default function LotesScreen() {
       )}
 
       {viewMode !== "mapOnly" && viewMode !== "listOnly" && viewingList && !viewingDetailFromList && (
-        <View style={{ padding: 8, paddingBottom: Math.max(insets.bottom, 24) }}>
+        <View style={{ padding: 8, paddingBottom: Math.max(insets.bottom, 20) }}>
           <Text style={{ fontWeight: "bold", marginBottom: 6 }}>Lista de lotes</Text>
           <FlatList
             data={list}
@@ -1078,8 +1078,7 @@ export default function LotesScreen() {
                 </View>
               </View>
             )}
-            ListFooterComponent={<View style={{ height: Math.max(insets.bottom + 24, 64) }} />}
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           />
         </View>
       )}

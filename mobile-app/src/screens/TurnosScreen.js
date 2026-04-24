@@ -211,7 +211,7 @@ export default function TurnosScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}> 
+      <SafeAreaView style={styles.container}> 
         <Text style={styles.title}>Turnos</Text>
         <Text style={{ textAlign: 'center', color: '#1e8449', marginTop: 8 }}>Cargando turnos...</Text>
         <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
@@ -900,7 +900,7 @@ export default function TurnosScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Turnos</Text>
       {showingOfflineData && (
         <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#fff7ed", borderColor: "#fed7aa", borderWidth: 1, borderRadius: 10 }}>
@@ -1021,7 +1021,7 @@ export default function TurnosScreen() {
                   )}
                 </TouchableOpacity>
               )} 
-              contentContainerStyle={{ paddingBottom: 10 }}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
               showsVerticalScrollIndicator={false}
             />
           </View>
@@ -1029,7 +1029,7 @@ export default function TurnosScreen() {
       )}
 
       {view === 'form' && (
-        <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {renderFechaPicker()}
           <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setMostrarTipos(!mostrarTipos)}>
             <Text style={{ color: tipo ? '#2c3e50' : '#95a5a6' }}>{tipo || 'Tipo de turno'}</Text>
@@ -1056,7 +1056,7 @@ export default function TurnosScreen() {
           <TextInput style={styles.input} placeholder="Motivo (opcional)" value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
-          <View style={[styles.row, { marginBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={styles.row}>
             <TouchableOpacity style={styles.btn} onPress={checkDisponibilidad}><Text style={styles.btnText}>Ver disponibilidad</Text></TouchableOpacity>
             <TouchableOpacity style={styles.btn} onPress={solicitarTurno} disabled={loading || (isOnline && disp !== true)}><Text style={styles.btnText}>{loading ? "Solicitando..." : "Solicitar"}</Text></TouchableOpacity>
           </View>
@@ -1065,7 +1065,7 @@ export default function TurnosScreen() {
       )}
 
       {view === 'edit' && (
-        <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.title}>Editar Turno</Text>
           {renderFechaPicker()}
           <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setMostrarTipos(!mostrarTipos)}>
@@ -1093,7 +1093,7 @@ export default function TurnosScreen() {
           <TextInput style={styles.input} placeholder="Motivo (opcional)" value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
-          <View style={[styles.row, { marginBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={cancelarEdicion}>
               <Text style={styles.btnText}>Cancelar</Text>
             </TouchableOpacity>
@@ -1139,11 +1139,11 @@ const styles = StyleSheet.create({
   itemText: { color: "#34495e" },
   // Estilos para tarjetas de turnos
   turnoCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(15,23,42,0.10)', shadowColor: '#0f172a', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
-  turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  turnoHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  turnoHeaderRight: { flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginLeft: 10 },
   turnoFecha: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },
   turnoEstado: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, color: '#fff', overflow: 'hidden', fontSize: 12 },
-  turnoSyncBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#fef3c7', color: '#92400e', overflow: 'hidden', fontSize: 11, fontWeight: '700' },
+  turnoSyncBadge: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#fef3c7', color: '#92400e', overflow: 'hidden', fontSize: 11, fontWeight: '700', flexShrink: 1, maxWidth: 200, textAlign: 'center' },
   turnoTipo: { fontSize: 14, color: '#34495e', marginBottom: 4 },
   turnoMotivo: { fontSize: 13, color: '#7f8c8d', fontStyle: 'italic' },
   // Estilos para botones de acción

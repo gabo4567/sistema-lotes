@@ -612,12 +612,12 @@ const Informes = () => {
         </select>
         <div style={{ display:'flex', alignItems:'flex-start', gap: 8 }}>
           <div>
-            <div style={{ fontSize: 12, color: '#14532d', marginBottom: 4 }}>Fecha inicio</div>
-            <input className="input-inst" type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)} />
+            <div className="inf-date-label">Fecha inicio</div>
+            <input className="input-inst inf-date-input" type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: '#14532d', marginBottom: 4 }}>Fecha fin</div>
-            <input className="input-inst" type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)} />
+            <div className="inf-date-label">Fecha fin</div>
+            <input className="input-inst inf-date-input" type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)} />
           </div>
         </div>
         <div className="inf-actions">

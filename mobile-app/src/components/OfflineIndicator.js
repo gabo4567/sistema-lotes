@@ -1,6 +1,6 @@
 // src/components/OfflineIndicator.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { useOffline } from '../hooks/useOffline';
 
 const OfflineIndicator = () => {
@@ -34,7 +34,12 @@ const OfflineIndicator = () => {
         : 'Listo';
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: (Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0) + 14 },
+      ]}
+    >
       <View style={styles.indicator}>
         <View style={styles.icon} />
         <View style={styles.textContainer}>

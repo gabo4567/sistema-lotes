@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { lotesService } from "../services/lotes.service";
+import { getProductorByIpt } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import HomeButton from "../components/HomeButton";
 import LoteFilters from "../components/LoteFilters";
@@ -116,6 +117,70 @@ const LotesList = () => {
 
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
+  const handleExportExcel = async () => {
+    try {
+      // Importar xlsx dinámicamente
+      const XLSXModule = await import("xlsx");
+      const XLSX = XLSXModule?.default || XLSXModule;
+
+      const ipts = Array.from(
+        new Set(
+          filteredAndSortedLotes
+            .map((l) => (l?.ipt != null ? String(l.ipt).trim() : ""))
+            .filter(Boolean)
+        )
+      );
+
+      const productoresByIpt = new Map();
+      await Promise.all(
+        ipts.map(async (ipt) => {
+          try {
+            const resp = await getProductorByIpt(ipt);
+            productoresByIpt.set(ipt, resp?.data || null);
+          } catch {
+            productoresByIpt.set(ipt, null);
+          }
+        })
+      );
+
+      const exportData = filteredAndSortedLotes.map((lote) => {
+        const ipt = lote?.ipt != null ? String(lote.ipt).trim() : "";
+        const productor = ipt ? productoresByIpt.get(ipt) : null;
+        const coords =
+          lote?.poligono && Array.isArray(lote.poligono)
+            ? lote.poligono
+                .map((p) => {
+                  const lat = p?.lat ?? p?.latitude;
+                  const lng = p?.lng ?? p?.longitude;
+                  if (lat == null || lng == null) return null;
+                  return `${lat},${lng}`;
+                })
+                .filter(Boolean)
+                .join(" | ")
+            : "";
+
+        return {
+          "IPT del productor": ipt || "-",
+          "Nombre del productor": productor?.nombreCompleto || "-",
+          "Nombre del lote": lote?.nombre || "-",
+          Coordenadas: coords || "-",
+        };
+      });
+
+      // Crear workbook
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Lotes");
+
+      // Descargar archivo
+      const timestamp = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `lotes_export_${timestamp}.xlsx`);
+    } catch (err) {
+      console.error("Error al exportar Excel:", err);
+      alert("Error al exportar los datos a Excel. Por favor, intente nuevamente.");
+    }
+  };
+
   return (
     
     <div className="page-container">
@@ -123,8 +188,9 @@ const LotesList = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h2 style={{ margin: 0 }}>Gestión de Lotes</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
           <Link to="/lotes/mapa" className="btn">Mapa general</Link>
+          <button className="btn" onClick={handleExportExcel} disabled={filteredAndSortedLotes.length === 0}>Exportar Excel</button>
+          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
         </div>
       </div>
 

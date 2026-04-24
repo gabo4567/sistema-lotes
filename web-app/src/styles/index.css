@@ -565,6 +565,9 @@ body {
 .hist-row{ color: var(--inst-text); }
 .hist-label{ font-weight: 700; margin-right: 6px; }
 .informes{ }
+.inf-date-label{ font-size: 15px; color: #14532d; margin-bottom: 6px; font-weight: 600; }
+.inf-date-input{ font-size: 16px; min-height: 44px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--inst-border); }
+.inf-date-input::-webkit-calendar-picker-indicator{ transform: scale(1.15); }
 .inf-controls{ display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
 .inf-actions{ display: flex; gap: 16px; flex-wrap: wrap; }
 .select-lg{ min-height: 44px; font-size: 16px; }

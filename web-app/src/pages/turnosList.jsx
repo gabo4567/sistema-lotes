@@ -177,8 +177,28 @@ useEffect(() => {
     })
   }, [turnos, filtros, prodMap])
 
-const handleCambioEstado = async (id, nuevo)=>{
-  if (updatingId === id) return
+const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
+  if (updatingId === id) {
+    if (typeof onCancel === 'function') onCancel()
+    return
+  }
+
+  const labels = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido' }
+  const normalizedNuevo = normalizeEstado(nuevo)
+  const displayNuevo = labels[normalizedNuevo] || String(nuevo || '').trim() || labels[normalizedNuevo] || 'Pendiente'
+
+  const confirm = await confirmDialog({
+    title: 'Confirmar cambio de estado',
+    text: `¿Seguro que querés cambiar el estado a "${displayNuevo}"?`,
+    icon: 'warning',
+    confirmButtonText: 'Confirmar',
+    cancelButtonText: 'Cancelar',
+  })
+  if (!confirm) {
+    if (typeof onCancel === 'function') onCancel()
+    return
+  }
+
   setUpdatingId(id)
   const t = turnos.find(x=>x.id===id)
   if (t && (nuevo==='confirmado' || nuevo==='Aprobado') && String(t.tipoTurno).toLowerCase()==='insumo'){
@@ -410,6 +430,7 @@ return (
             placeholder="Buscar por productor o IPT…"
             value={filtros.productor}
             onChange={e => setFiltros({ ...filtros, productor: e.target.value })}
+            style={{ fontSize: 15, minHeight: 38, padding: '7px 10px' }}
           />
         </div>
 
@@ -477,31 +498,36 @@ return (
     <div className="filters-bar" style={{ 
       display: 'flex', 
       flexWrap: 'wrap', 
-      gap: 12, 
-      backgroundColor: '#f8fafc', 
-      padding: 16, 
+      gap: 14, 
+      backgroundColor: '#ffffff', 
+      padding: 18, 
       borderRadius: 12, 
-      marginBottom: 20,
-      border: '1px solid #e2e8f0'
+      marginBottom: 24,
+      alignItems: 'flex-end',
+      border: '1px solid #e5e7eb',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      width: '100%'
     }}>
-      <div className="filter-item">
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Ordenar</label>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Ordenar</label>
         <select 
           className="select-inst" 
           value={filtros.orden}
           onChange={e => setFiltros({ ...filtros, orden: e.target.value })}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
           <option value="nuevos">Más nuevos primero</option>
           <option value="antiguos">Más antiguos primero</option>
         </select>
       </div>
 
-      <div className="filter-item">
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Estado</label>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Estado</label>
         <select 
           className="select-inst" 
           value={filtros.estado}
           onChange={e => setFiltros({ ...filtros, estado: e.target.value })}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
           <option value="todos">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
@@ -512,31 +538,33 @@ return (
         </select>
       </div>
       
-      <div className="filter-item">
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Desde</label>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Desde</label>
         <input 
           type="date" 
           className="input-inst" 
           value={filtros.desde}
           onChange={e => setFiltros({ ...filtros, desde: e.target.value })}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
         />
       </div>
 
-      <div className="filter-item">
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Hasta</label>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Hasta</label>
         <input 
           type="date" 
           className="input-inst" 
           value={filtros.hasta}
           onChange={e => setFiltros({ ...filtros, hasta: e.target.value })}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
         />
       </div>
 
-      <div className="filter-item" style={{ alignSelf: 'flex-end' }}>
+      <div className="filter-item" style={{ flex: '0 0 auto' }}>
         <button 
           className="btn secondary" 
           onClick={() => setFiltros({ orden: 'nuevos', estado: 'todos', productor: '', desde: '', hasta: '' })}
-          style={{ padding: '8px 16px' }}
+          style={{ padding: '8px 18px', fontSize: 15, height: 40, borderRadius: 8 }}
         >Limpiar</button>
       </div>
     </div>
@@ -595,7 +623,11 @@ return (
                                     className="select-inst"
                                     value={normalizeEstado(t.estado)}
                                     disabled={isUpdating}
-                                    onChange={e => handleCambioEstado(t.id, e.target.value)}
+                                    onChange={e => {
+                                      const prev = normalizeEstado(t.estado)
+                                      const next = e.target.value
+                                      handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
+                                    }}
                                     style={{ width: 150, minWidth: 'auto' }}
                                   >
                                     <option value="pendiente">Pendiente</option>
@@ -682,7 +714,11 @@ return (
                             <select 
                               className="select-inst" 
                               style={{ width: '160px', minWidth: 'auto' }}
-                              onChange={e=>handleCambioEstado(t.id, e.target.value)} 
+                              onChange={e => {
+                                const prev = normalizeEstado(t.estado)
+                                const next = e.target.value
+                                handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
+                              }} 
                               value={normalizeEstado(t.estado)}
                               disabled={isUpdating}
                             >

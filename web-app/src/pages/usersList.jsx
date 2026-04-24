@@ -175,7 +175,7 @@ const UsersList = () => {
   return (
     <div className="users-list page-container" style={{ width: '100%' }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <h2 className="users-title">Usuarios</h2>
+      <h2 className="users-title">Gestión de Usuarios</h2>
       {loading ? (
         <div>Cargando usuarios...</div>
       ) : (
@@ -193,24 +193,24 @@ const UsersList = () => {
           alignItems: 'flex-end'
         }}>
           <div className="filter-item" style={{ flex: 1, minWidth: 250 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
             <input 
               type="text" 
               className="input-inst" 
               placeholder="Buscar por nombre o email..."
               value={filtros.nombre}
               onChange={e => setFiltros({ ...filtros, nombre: e.target.value })}
-              style={{ width: '100%', boxSizing: 'border-box' }}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
             />
           </div>
 
           <div className="filter-item" style={{ width: 200 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Rol</label>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Rol</label>
             <select 
               className="select-inst" 
               value={filtros.rol}
               onChange={e => setFiltros({ ...filtros, rol: e.target.value })}
-              style={{ width: '100%', boxSizing: 'border-box' }}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
             >
               <option value="todos">Todos los roles</option>
               <option value="Administrador">Administrador</option>
