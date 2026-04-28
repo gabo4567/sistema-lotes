@@ -2,6 +2,13 @@
 
 import { db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
+import { getDisponibilidadInsumos } from "./insumos.controller.js";
+
+const DEFAULT_TURNOS_CAPACIDAD_DIA = 50;
+const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
+const TURNOS_CONFIG_COLLECTION = "config";
+const TURNOS_CONFIG_DOC = "turnos";
+const DEFAULT_TURNOS_HABILITADO = true;
 
 const console = process.env.DEBUG_TURNOS === "true"
   ? globalThis.console
@@ -28,11 +35,38 @@ const normalizeEstado = (e) => String(e || "pendiente").toLowerCase().trim();
 const normalizeTipoTurno = (t) => {
   const s = String(t || "").toLowerCase().trim();
   if (!s) return s;
-  if (s === "otra") return "otro";
+  if (s === "otra" || s === "otros") return "otro";
   if (s.includes("insum")) return "insumo";
   if (s.includes("renov") || s.includes("carnet")) return "carnet";
-  if (s === "otros") return "otro";
-  return s;
+  return "otro";
+};
+
+const normalizeRole = (r) =>
+  String(r || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isAdminRequest = (req) => {
+  const role = normalizeRole(req?.user?.role);
+  return role === "administrador" || role === "admin";
+};
+
+const getAuthOwnershipIds = (req) => {
+  const ids = new Set();
+  const uid = req?.user?.uid;
+  if (uid) ids.add(String(uid));
+  const claimPid = req?.user?.firebaseClaims?.productorId;
+  if (claimPid) ids.add(String(claimPid));
+  return ids;
+};
+
+const canModifyTurno = (req, turno) => {
+  if (isAdminRequest(req)) return true;
+  const pid = String(turno?.productorId || "");
+  if (!pid) return false;
+  return getAuthOwnershipIds(req).has(pid);
 };
 
 const turnoDateFromRaw = (raw) => {
@@ -59,6 +93,70 @@ const toYmdUtc = (d) => {
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+};
+
+const isValidYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "").trim());
+
+const resolveCapacidadDia = async (ymd) => {
+  if (!isValidYmd(ymd)) return DEFAULT_TURNOS_CAPACIDAD_DIA;
+  try {
+    const snap = await db.collection(TURNOS_CAPACIDAD_COLLECTION).doc(String(ymd)).get();
+    if (!snap.exists) return DEFAULT_TURNOS_CAPACIDAD_DIA;
+    const raw = snap.data() || {};
+    const n = Number(raw.capacidad);
+    if (!Number.isFinite(n) || n <= 0) return DEFAULT_TURNOS_CAPACIDAD_DIA;
+    return n;
+  } catch {
+    return DEFAULT_TURNOS_CAPACIDAD_DIA;
+  }
+};
+
+const countTurnosActivosEnDia = async (ymd) => {
+  if (!isValidYmd(ymd)) return 0;
+  const inicio = new Date(`${ymd}T00:00:00.000Z`);
+  const fin = new Date(`${ymd}T23:59:59.999Z`);
+  const inicioIso = inicio.toISOString();
+  const finIso = fin.toISOString();
+
+  const [snapTs, snapIso] = await Promise.all([
+    db
+      .collection("turnos")
+      .where("fechaTurno", ">=", Timestamp.fromDate(inicio))
+      .where("fechaTurno", "<=", Timestamp.fromDate(fin))
+      .get(),
+    db
+      .collection("turnos")
+      .where("fecha", ">=", inicioIso)
+      .where("fecha", "<=", finIso)
+      .get(),
+  ]);
+
+  const seen = new Set();
+  const countActive = (docs) => {
+    let cnt = 0;
+    docs.forEach((d) => {
+      if (seen.has(d.id)) return;
+      seen.add(d.id);
+      const t = d.data() || {};
+      if (t.activo !== false) cnt += 1;
+    });
+    return cnt;
+  };
+
+  return countActive(snapTs.docs) + countActive(snapIso.docs);
+};
+
+const getTurnosConfig = async () => {
+  try {
+    const snap = await db.collection(TURNOS_CONFIG_COLLECTION).doc(TURNOS_CONFIG_DOC).get();
+    if (!snap.exists) return { habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "" };
+    const raw = snap.data() || {};
+    const habilitado = typeof raw.habilitado === "boolean" ? raw.habilitado : DEFAULT_TURNOS_HABILITADO;
+    const mensaje = String(raw.mensaje || "").trim();
+    return { habilitado, mensaje };
+  } catch {
+    return { habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "" };
+  }
 };
 
 const isTurnoExpired = (raw, hoyStart) => {
@@ -96,6 +194,11 @@ const canTransitionEstado = (from, to) => {
 // ➕ Crear un nuevo turno
 export const crearTurno = async (req, res) => {
   try {
+    const cfg = await getTurnosConfig();
+    if (cfg.habilitado === false) {
+      return res.status(400).json({ message: cfg.mensaje || "La solicitud de turnos está deshabilitada temporalmente." });
+    }
+
     console.log("📅 Backend - crearTurno recibido:", req.body);
     console.log("👤 Usuario autenticado:", req.user?.uid);
     console.log("🔑 Headers:", req.headers);
@@ -179,7 +282,7 @@ export const crearTurno = async (req, res) => {
     console.log("  - Procesado:", JSON.stringify(t));
     console.log("  - Resultado:", JSON.stringify(tipoNormalizado));
     
-    tipoTurno = tipoNormalizado;
+    tipoTurno = normalizeTipoTurno(tipoNormalizado);
 
     // Validar fecha (soporta tanto 'fecha' como 'fechaSolicitada')
     const fechaFinal = fecha || fechaSolicitada;
@@ -207,20 +310,62 @@ export const crearTurno = async (req, res) => {
     console.log("  - Año:", date.getFullYear());
     console.log("🕐 DEBUG FECHA - FIN");
 
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const soloDia = new Date(date);
+    soloDia.setHours(0, 0, 0, 0);
+    if (soloDia.getTime() < hoy.getTime()) {
+      return res.status(400).json({ message: "Fecha ya pasada" });
+    }
+
     // No fines de semana
     const day = date.getDay();
     if (day === 0 || day === 6) {
       return res.status(400).json({ message: "No se permiten turnos sábado o domingo" });
     }
 
+    const motivoTrim = String(req.body.motivo || "").trim();
+    if (tipoTurno === "otro" && !motivoTrim) {
+      return res.status(400).json({ message: 'Si el tipo es "Otro", el motivo es obligatorio.' });
+    }
+
+    const targetYmd = toYmdUtc(date);
+    const capacidadDia = await resolveCapacidadDia(targetYmd);
+    const turnosDia = await countTurnosActivosEnDia(targetYmd);
+    if (turnosDia >= capacidadDia) {
+      return res.status(400).json({ message: `No hay cupos disponibles para esa fecha. Capacidad: ${capacidadDia}.` });
+    }
+    if (targetYmd && productorId && tipoTurno) {
+      const snapDup = await db
+        .collection("turnos")
+        .where("productorId", "==", String(productorId))
+        .where("activo", "==", true)
+        .get();
+
+      const isEstadoBloqueante = (estadoRaw) => {
+        const st = normalizeEstado(estadoRaw);
+        return st !== "cancelado" && st !== "completado" && st !== "vencido";
+      };
+
+      const hasDup = snapDup.docs.some((d) => {
+        const other = d.data();
+        if (!isEstadoBloqueante(other?.estado)) return false;
+        const otherTipo = normalizeTipoTurno(other?.tipoTurno);
+        if (otherTipo !== tipoTurno) return false;
+        const otherDate = turnoDateFromRaw(other);
+        const otherYmd = toYmdUtc(otherDate);
+        return Boolean(otherYmd && otherYmd === targetYmd);
+      });
+
+      if (hasDup) {
+        return res.status(400).json({ message: "Ya tenés un turno del mismo tipo para esa fecha. Elegí otra fecha o un tipo diferente." });
+      }
+    }
+
     // Si es turno de insumo → verificar asignaciones en ProductorInsumos
     if (tipoTurno === "insumo") {
-      const asignSnap = await db
-        .collection("productorInsumos")
-        .where("productorId", "==", String(productorId))
-        .get();
-      const asignaciones = asignSnap.docs.map(d => d.data()).filter(x => Number(x.cantidadAsignada || 0) > 0 && x.estado !== "entregado");
-      if (asignaciones.length === 0) {
+      const disp = await getDisponibilidadInsumos(productorId);
+      if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "Usted no tiene insumos disponibles." });
       }
     }
@@ -276,11 +421,12 @@ export const obtenerTurnos = async (req, res) => {
     const raws = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
     const turnos = raws.map(({ id, ref, data }) => {
       const raw = { ...data };
-      // Normalizar tipo 'otra' -> 'otro'
-      if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
-        batch.update(ref, { tipoTurno: 'otro' });
+      const rawTipoStr = String(raw.tipoTurno || "").toLowerCase().trim();
+      const tipoNorm = rawTipoStr ? normalizeTipoTurno(rawTipoStr) : rawTipoStr;
+      if (rawTipoStr && tipoNorm && tipoNorm !== rawTipoStr) {
+        batch.update(ref, { tipoTurno: tipoNorm });
         writes++;
-        raw.tipoTurno = 'otro';
+        raw.tipoTurno = tipoNorm;
       }
       if (typeof raw.fechaTurno === "string") {
         const ts = toTurnoTimestamp(raw.fechaTurno);
@@ -337,6 +483,12 @@ export const obtenerTurnoPorId = async (req, res) => {
 
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const raw = doc.data();
+    const rawTipoStr = String(raw?.tipoTurno || "").toLowerCase().trim();
+    const tipoNorm = rawTipoStr ? normalizeTipoTurno(rawTipoStr) : rawTipoStr;
+    if (rawTipoStr && tipoNorm && tipoNorm !== rawTipoStr) {
+      await ref.update({ tipoTurno: tipoNorm });
+      raw.tipoTurno = tipoNorm;
+    }
     const hoy = new Date(); hoy.setHours(0,0,0,0);
     const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
     if (vencidoUpdate) await ref.update(vencidoUpdate);
@@ -356,6 +508,9 @@ export const actualizarTurno = async (req, res) => {
     const snap = await db.collection("turnos").doc(id).get();
     if (!snap.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const current = snap.data();
+    if (!canModifyTurno(req, current)) {
+      return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
+    }
     const hoy = new Date(); hoy.setHours(0,0,0,0);
     const vencidoUpdate = applyVencidoIfNeeded(current, hoy);
     if (vencidoUpdate) {
@@ -460,6 +615,9 @@ export const cambiarEstadoTurno = async (req, res) => {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const current = snap.data();
+    if (!canModifyTurno(req, current)) {
+      return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
+    }
     const hoy = new Date(); hoy.setHours(0,0,0,0);
     const vencidoUpdate = applyVencidoIfNeeded(current, hoy);
     if (vencidoUpdate) {
@@ -479,7 +637,7 @@ export const cambiarEstadoTurno = async (req, res) => {
     }
     await ref.update(update);
 
-    // Si se confirma/completa turno de insumo, marcar asignaciones como entregadas
+    // Si se confirma/completa turno de insumo, actualizar entrega de forma segura (sin asumir que se entrega todo)
     try {
       const turno = current;
       if (turno?.tipoTurno === "insumo" && (estado === "confirmado" || estado === "completado")) {
@@ -488,9 +646,32 @@ export const cambiarEstadoTurno = async (req, res) => {
           .where("productorId", "==", String(turno.productorId))
           .where("estado", "==", "pendiente")
           .get();
-        const batch = db.batch();
-        snap.docs.forEach(d => batch.update(d.ref, { estado: "entregado", fechaEntrega: new Date() }));
-        await batch.commit();
+        const pendientes = snap.docs
+          .map((d) => ({ ref: d.ref, data: d.data() || {} }))
+          .map(({ ref, data }) => {
+            const asignada = Number(data?.cantidadAsignada || 0);
+            const entregadaRaw = data?.cantidadEntregada;
+            const entregada = Number.isFinite(Number(entregadaRaw))
+              ? Number(entregadaRaw)
+              : (String(data?.estado || "").toLowerCase().trim() === "entregado" ? asignada : 0);
+            const disponible = Math.max(0, asignada - entregada);
+            return { ref, data, asignada, entregada, disponible };
+          })
+          .filter((x) => x.asignada > 0 && x.disponible > 0);
+
+        if (pendientes.length === 1) {
+          const now = new Date();
+          const p = pendientes[0];
+          const nuevaEntregada = p.entregada + p.disponible;
+          await p.ref.update({
+            cantidadAsignada: p.asignada,
+            cantidadEntregada: nuevaEntregada,
+            estado: "entregado",
+            fechaEntrega: now,
+            updatedAt: now,
+            ...(p.data?.createdAt === undefined ? { createdAt: p.data?.fechaAsignacion || now } : {}),
+          });
+        }
       }
     } catch (e) {}
 
@@ -509,6 +690,10 @@ export const eliminarTurno = async (req, res) => {
     
     const doc = await db.collection("turnos").doc(id).get();
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
+    const turno = doc.data();
+    if (!canModifyTurno(req, turno)) {
+      return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
+    }
     
     const updateData = { 
       activo: false, 
@@ -566,6 +751,13 @@ export const obtenerTurnosPorEstado = async (req, res) => {
     const batch = db.batch(); let writes = 0;
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();
+      const rawTipoStr = String(raw?.tipoTurno || "").toLowerCase().trim();
+      const tipoNorm = rawTipoStr ? normalizeTipoTurno(rawTipoStr) : rawTipoStr;
+      if (rawTipoStr && tipoNorm && tipoNorm !== rawTipoStr) {
+        batch.update(doc.ref, { tipoTurno: tipoNorm });
+        writes++;
+        raw.tipoTurno = tipoNorm;
+      }
       const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
       if (vencidoUpdate) {
         batch.update(doc.ref, vencidoUpdate);
@@ -599,11 +791,12 @@ export const obtenerTurnosPorProductor = async (req, res) => {
     const batch = db.batch(); let writes = 0;
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();
-      // Normalizar tipo
-      if (String(raw.tipoTurno||'').toLowerCase() === 'otra') {
-        batch.update(doc.ref, { tipoTurno: 'otro' });
+      const rawTipoStr = String(raw?.tipoTurno || "").toLowerCase().trim();
+      const tipoNorm = rawTipoStr ? normalizeTipoTurno(rawTipoStr) : rawTipoStr;
+      if (rawTipoStr && tipoNorm && tipoNorm !== rawTipoStr) {
+        batch.update(doc.ref, { tipoTurno: tipoNorm });
         writes++;
-        raw.tipoTurno = 'otro';
+        raw.tipoTurno = tipoNorm;
       }
       if (typeof raw.fechaTurno === "string") {
         const ts = toTurnoTimestamp(raw.fechaTurno);
@@ -670,6 +863,13 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
     const batch = db.batch(); let writes = 0;
     const turnos = snapshot.docs.map(doc => {
       const raw = doc.data();
+      const rawTipoStr = String(raw?.tipoTurno || "").toLowerCase().trim();
+      const tipoNorm = rawTipoStr ? normalizeTipoTurno(rawTipoStr) : rawTipoStr;
+      if (rawTipoStr && tipoNorm && tipoNorm !== rawTipoStr) {
+        batch.update(doc.ref, { tipoTurno: tipoNorm });
+        writes++;
+        raw.tipoTurno = tipoNorm;
+      }
       const vencidoUpdate = applyVencidoIfNeeded(raw, hoy);
       if (vencidoUpdate) {
         batch.update(doc.ref, vencidoUpdate);
@@ -734,53 +934,115 @@ export const disponibilidadTurno = async (req, res) => {
       console.log("❌ Fin de semana");
       return res.json({ disponible: false, motivo: "Fin de semana" });
     }
-    
-    // Para "Carnet de renovación" y "Otra", siempre están disponibles si la fecha es válida
-    if (String(tipoTurno) !== "insumo") {
-      console.log("✅ Tipo no es insumo, retornando disponible: true");
-      return res.json({ disponible: true });
+
+    const ymd = toYmdUtc(new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0, 0)));
+    const capacidadDia = await resolveCapacidadDia(ymd);
+    const turnosDia = await countTurnosActivosEnDia(ymd);
+    if (turnosDia >= capacidadDia) {
+      return res.json({ disponible: false, motivo: "No hay cupos disponibles para esa fecha." });
     }
-    
-    console.log("🔍 Procesando tipo Insumo...");
-    
-    // Solo para "Insumo" verificamos la capacidad y disponibilidad de insumos
-    const inicio = new Date(fecha);
-    const fin = new Date(fecha);
-    inicio.setHours(0,0,0,0);
-    fin.setHours(23,59,59,999);
-    
-    const snap = await db
-      .collection("turnos")
-      .where("fechaTurno", ">=", Timestamp.fromDate(inicio))
-      .where("fechaTurno", "<=", Timestamp.fromDate(fin))
-      .get();
-      
-    const items = snap.docs.map(doc => doc.data()).filter(d => d.activo !== false && d.tipoTurno === "insumo");
-    console.log("📊 Turnos de Insumo encontrados ese día:", items.length);
-    
-    // Verificar si el productor tiene asignaciones de insumos
-    if (ipt) {
-      try {
-        const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
-        if (!psnap.empty) {
-          const productorId = psnap.docs[0].id;
-          const asnap = await db.collection("productorInsumos").where("productorId", "==", String(productorId)).get();
-          const asignaciones = asnap.docs.map(d => d.data()).filter(x => Number(x.cantidadAsignada || 0) > 0 && x.estado !== "entregado");
-          const tiene = asignaciones.length > 0;
-          if (!tiene) {
-            return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles." });
+
+    if (normalizeTipoTurno(tipoTurno) === "insumo") {
+      if (ipt) {
+        try {
+          const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+          if (!psnap.empty) {
+            const productorId = psnap.docs[0].id;
+            const disp = await getDisponibilidadInsumos(productorId);
+            if (!disp?.tieneDisponible) {
+              return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles." });
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
-    
-    const capacidadPorDia = 10;
-    const disponible = items.length < capacidadPorDia;
-    console.log("📈 Capacidad:", items.length, "/", capacidadPorDia, "-> disponible:", disponible);
-    return res.json({ disponible });
+
+    return res.json({ disponible: true });
   } catch (error) {
     console.error("❌ Error en disponibilidadTurno:", error);
     return res.status(500).json({ message: "Error de disponibilidad" });
+  }
+};
+
+export const obtenerConfigTurnos = async (req, res) => {
+  try {
+    const cfg = await getTurnosConfig();
+    return res.json(cfg);
+  } catch (error) {
+    console.error("Error al obtener configuración de turnos:", error);
+    return res.status(500).json({ message: "Error al obtener configuración" });
+  }
+};
+
+export const upsertConfigTurnos = async (req, res) => {
+  try {
+    const habilitadoRaw = req.body?.habilitado;
+    if (typeof habilitadoRaw !== "boolean") {
+      return res.status(400).json({ message: "Campo 'habilitado' inválido. Debe ser boolean." });
+    }
+    const mensaje = String(req.body?.mensaje || "").trim();
+    const payload = {
+      habilitado: habilitadoRaw,
+      mensaje,
+      updatedAt: Timestamp.now(),
+    };
+    await db.collection(TURNOS_CONFIG_COLLECTION).doc(TURNOS_CONFIG_DOC).set(payload, { merge: true });
+    return res.json({ message: "Configuración guardada", ...payload });
+  } catch (error) {
+    console.error("Error al guardar configuración de turnos:", error);
+    return res.status(500).json({ message: "Error al guardar configuración" });
+  }
+};
+
+export const obtenerCapacidadTurnoDia = async (req, res) => {
+  try {
+    const { fecha } = req.query;
+    const ymd = String(fecha || "").trim();
+    if (!isValidYmd(ymd)) {
+      return res.status(400).json({ message: "Parámetro 'fecha' inválido (YYYY-MM-DD)" });
+    }
+    const snap = await db.collection(TURNOS_CAPACIDAD_COLLECTION).doc(ymd).get();
+    if (!snap.exists) {
+      return res.json({ fecha: ymd, capacidad: DEFAULT_TURNOS_CAPACIDAD_DIA, configurada: false });
+    }
+    const raw = snap.data() || {};
+    const capacidad = Number(raw.capacidad);
+    return res.json({
+      fecha: ymd,
+      capacidad: Number.isFinite(capacidad) ? capacidad : DEFAULT_TURNOS_CAPACIDAD_DIA,
+      configurada: true,
+    });
+  } catch (error) {
+    console.error("Error al obtener capacidad de turnos:", error);
+    return res.status(500).json({ message: "Error al obtener capacidad" });
+  }
+};
+
+export const upsertCapacidadTurnoDia = async (req, res) => {
+  try {
+    const { fecha } = req.params;
+    const ymd = String(fecha || "").trim();
+    if (!isValidYmd(ymd)) {
+      return res.status(400).json({ message: "Parámetro 'fecha' inválido (YYYY-MM-DD)" });
+    }
+    const capacidadRaw = req.body?.capacidad;
+    const capacidad = Number(capacidadRaw);
+    if (!Number.isFinite(capacidad) || capacidad <= 0) {
+      return res.status(400).json({ message: "Capacidad inválida. Debe ser un número mayor a 0." });
+    }
+    const ref = db.collection(TURNOS_CAPACIDAD_COLLECTION).doc(ymd);
+    const snap = await ref.get();
+    const payload = {
+      fecha: ymd,
+      capacidad,
+      updatedAt: Timestamp.now(),
+      ...(snap.exists ? {} : { createdAt: Timestamp.now() }),
+    };
+    await ref.set(payload, { merge: true });
+    return res.json({ message: "Capacidad guardada", fecha: ymd, capacidad });
+  } catch (error) {
+    console.error("Error al guardar capacidad de turnos:", error);
+    return res.status(500).json({ message: "Error al guardar capacidad" });
   }
 };
 

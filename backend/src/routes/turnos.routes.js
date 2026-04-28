@@ -4,6 +4,10 @@ import { Router } from "express";
 import {
   crearTurno,
   obtenerTurnos,
+  obtenerConfigTurnos,
+  upsertConfigTurnos,
+  obtenerCapacidadTurnoDia,
+  upsertCapacidadTurnoDia,
   obtenerTurnoPorId,
   actualizarTurno,
   cambiarEstadoTurno,
@@ -28,6 +32,10 @@ router.get("/disponibilidad", disponibilidadTurno);
 // CRUD principal - requiere autenticación
 router.post("/", crearTurno);
 router.get("/", obtenerTurnos);
+router.get("/config", obtenerConfigTurnos);
+router.put("/config", upsertConfigTurnos);
+router.get("/capacidad", obtenerCapacidadTurnoDia);
+router.put("/capacidad/:fecha", upsertCapacidadTurnoDia);
 router.get("/:id", obtenerTurnoPorId);
 router.put("/:id", actualizarTurno);
 router.patch("/:id/estado", cambiarEstadoTurno);

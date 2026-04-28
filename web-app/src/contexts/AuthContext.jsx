@@ -7,14 +7,13 @@ import { tokenStore } from "../utils/tokenStore";
 import { AuthContext } from "./AuthContextBase.js";
 
 const normalizeRole = (r) => {
-  if (!r) return r;
-  const map = {
-    Administrador: "Administrador",
-    Tecnico: "Técnico",
-    "Técnico": "Técnico",
-    Supervisor: "Supervisor",
-  };
-  return map[r] || r;
+  const v = String(r || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (v === "productor") return "Productor";
+  return "Administrador";
 };
 
 const decodeToken = (t) => {

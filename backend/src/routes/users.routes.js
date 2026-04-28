@@ -4,11 +4,42 @@ import { db, admin } from "../utils/firebase.js";
 
 const router = express.Router();
 
+const normalizeRoleValue = (role) => {
+  const v = String(role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (!v) return "";
+  if (v === "productor") return "Productor";
+  return "Administrador";
+};
+
+const resolveRole = (data, docId) => {
+  const normalized = normalizeRoleValue(data?.role);
+  if (normalized) return normalized;
+  const looksLikeProductor = Boolean(data?.ipt) || String(docId || "").startsWith("prod_");
+  return looksLikeProductor ? "Productor" : "Administrador";
+};
+
 // 📌 Obtener todos los usuarios
 router.get("/", async (req, res) => {
   try {
     const snapshot = await db.collection("users").get();
-    let all = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const batch = db.batch();
+    let hasWrites = false;
+    let all = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      const roleResolved = resolveRole(data, doc.id);
+      if (data?.role !== roleResolved) {
+        batch.update(doc.ref, { role: roleResolved, updatedAt: new Date() });
+        hasWrites = true;
+      }
+      return { id: doc.id, ...data, role: roleResolved };
+    });
+    if (hasWrites) {
+      await batch.commit();
+    }
 
     // Remover explícitamente duplicado solicitado por IPT y email
     all = all.filter(u => !(String(u?.ipt||'') === '123456' && String(u?.email||'').toLowerCase() === 'juan.gabriel@ejemplo.com'));
@@ -72,12 +103,11 @@ router.patch("/:uid", async (req, res) => {
   try {
     const { uid } = req.params;
     const { nombre, role, activo, ipt } = req.body;
-    const allowedRoles = ["Administrador", "Tecnico", "Técnico", "Supervisor", "Productor"];
     const updates = {};
     if (nombre) updates.nombre = nombre;
-    if (role && allowedRoles.includes(role)) updates.role = role;
+    if (role) updates.role = normalizeRoleValue(role) === "Productor" ? "Productor" : "Administrador";
     if (activo !== undefined) updates.activo = Boolean(activo);
-    if (role === "Productor" && ipt) updates.ipt = String(ipt);
+    if (normalizeRoleValue(role) === "Productor" && ipt) updates.ipt = String(ipt);
     if (!Object.keys(updates).length) return res.status(400).json({ error: "Sin cambios" });
     await db.collection("users").doc(uid).update({ ...updates, updatedAt: new Date() });
     res.json({ message: "Usuario actualizado" });

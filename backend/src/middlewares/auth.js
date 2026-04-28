@@ -1,6 +1,22 @@
 import crypto from "crypto";
 import { admin } from "../utils/firebase.js";
 
+const normalizeRole = (role) => {
+  const v = String(role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (!v) return "";
+  if (v === "productor") return "Productor";
+  return "Administrador";
+};
+
+const normalizeUser = (user) => {
+  if (!user) return user;
+  return { ...user, role: normalizeRole(user.role) || user.role };
+};
+
 const getSecret = () => {
   const secret = process.env.JWT_SECRET;
 
@@ -38,7 +54,7 @@ export const requireAuth = (req, res, next) => {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
     if (!token) return res.status(401).json({ error: "No autenticado" });
     const payload = verify(token);
-    req.user = payload;
+    req.user = normalizeUser(payload);
     next();
   } catch (e) {
     if (isAuthConfigError(e)) {
@@ -61,7 +77,7 @@ export const requireFirebaseAuth = async (req, res, next) => {
       req.user = {
         uid: decodedToken.uid,
         email: decodedToken.email,
-        role: decodedToken.role || "Productor",
+        role: normalizeRole(decodedToken.role) || "Productor",
         firebaseClaims: decodedToken
       };
       next();
@@ -69,7 +85,7 @@ export const requireFirebaseAuth = async (req, res, next) => {
       // Si falla Firebase, intentar con JWT tradicional
       try {
         const payload = verify(token);
-        req.user = payload;
+        req.user = normalizeUser(payload);
         next();
       } catch (jwtError) {
         if (isAuthConfigError(jwtError)) {
@@ -91,7 +107,8 @@ export const requireFirebaseAuth = async (req, res, next) => {
 export const requireRole = (roles) => (req, res, next) => {
   try {
     if (!req.user) return res.status(401).json({ error: "No autenticado" });
-    if (!roles.includes(req.user.role)) return res.status(403).json({ error: "Acceso denegado" });
+    const role = normalizeRole(req.user.role) || req.user.role;
+    if (!roles.includes(role)) return res.status(403).json({ error: "Acceso denegado" });
     next();
   } catch (e) {
     return res.status(403).json({ error: "Acceso denegado" });

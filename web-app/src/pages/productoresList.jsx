@@ -31,9 +31,34 @@ const ProductoresList = () => {
 
   const normalize = (s) => String(s||"").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const normalizeIpt = (raw) => {
-    const digits = String(raw ?? '').replace(/\D/g, '');
-    const noLeftZeros = digits.replace(/^0+/, '');
-    return noLeftZeros;
+    if (raw === null || raw === undefined) return "";
+    if (typeof raw === "number") {
+      if (!Number.isFinite(raw)) return "";
+      if (Number.isInteger(raw)) {
+        const s = String(raw).replace(/\D/g, "");
+        return s.replace(/^0+/, "");
+      }
+      const rounded = Math.round(raw);
+      if (Math.abs(raw - rounded) < 1e-9) {
+        const s = String(rounded).replace(/\D/g, "");
+        return s.replace(/^0+/, "");
+      }
+      return "";
+    }
+    const s = String(raw).trim();
+    if (!s) return "";
+    const low = s.toLowerCase();
+    if (low === "nan" || low === "undefined" || low === "null") return "";
+    const numericCandidate = s.replace(/\s+/g, "").replace(",", ".");
+    if (/^\d+(\.\d+)?(e[+-]?\d+)?$/i.test(numericCandidate)) {
+      const n = Number(numericCandidate);
+      if (Number.isFinite(n) && Number.isInteger(n)) {
+        const out = String(n).replace(/\D/g, "");
+        return out.replace(/^0+/, "");
+      }
+    }
+    const digits = s.replace(/\D/g, "");
+    return digits.replace(/^0+/, "");
   };
 
   const existingIptSet = useMemo(() => {
@@ -85,16 +110,21 @@ const ProductoresList = () => {
         return;
       }
 
+      const normalizeKey = (k) => String(k || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const getCol = (row, name) => {
         if (!row || typeof row !== "object") return "";
-        const wanted = String(name || "").trim().toLowerCase();
-        const key = Object.keys(row).find((k) => String(k).trim().toLowerCase() === wanted);
+        const wanted = normalizeKey(name);
+        const keys = Object.keys(row);
+        const key = keys.find((k) => normalizeKey(k) === wanted)
+          || keys.find((k) => normalizeKey(k).replace(/\s+/g, "") === wanted.replace(/\s+/g, ""))
+          || keys.find((k) => normalizeKey(k).replace(/\s+/g, "").startsWith(wanted.replace(/\s+/g, "")));
         return key ? row[key] : "";
       };
 
       let imported = 0;
       let duplicated = 0;
-      const seen = new Set(existingIptSet);
+      const existingSeen = new Set(existingIptSet);
+      const fileSeen = new Set();
       const rowsWithData = rows.filter((r) => {
         const ipt = normalizeIpt(getCol(r, "ipt"));
         const nombre = String(getCol(r, "nombre")).trim();
@@ -106,13 +136,30 @@ const ProductoresList = () => {
         return;
       }
 
-      for (const row of rowsWithData) {
-        const ipt = normalizeIpt(getCol(row, "ipt"));
-        const nombre = String(getCol(row, "nombre")).trim();
-        const cuil = String(getCol(row, "cuil")).trim();
-        if (!ipt || !nombre || !cuil) continue;
-        if (seen.has(ipt)) {
+      const logLimit = 50;
+      for (let idx = 0; idx < rowsWithData.length; idx += 1) {
+        const row = rowsWithData[idx];
+        const iptRaw = getCol(row, "ipt");
+        const ipt = normalizeIpt(iptRaw);
+        const nombreRaw = getCol(row, "nombre");
+        const nombre = String(nombreRaw ?? "").trim();
+        const cuilRaw = getCol(row, "cuil");
+        const cuil = String(cuilRaw ?? "").trim();
+        if (idx < logLimit) {
+          console.log("[IMPORT XLSX] fila", idx + 1, { iptRaw, ipt, nombre: nombre || null, cuil: cuil || null });
+        }
+        if (!ipt || !nombre || !cuil) {
+          if (idx < logLimit) console.log("[IMPORT XLSX] ignorada (faltan requeridos)", idx + 1);
+          continue;
+        }
+        if (fileSeen.has(ipt)) {
           duplicated += 1;
+          if (idx < logLimit) console.log("[IMPORT XLSX] duplicada dentro del archivo", idx + 1, { ipt });
+          continue;
+        }
+        if (existingSeen.has(ipt)) {
+          duplicated += 1;
+          if (idx < logLimit) console.log("[IMPORT XLSX] duplicada contra sistema", idx + 1, { ipt });
           continue;
         }
 
@@ -135,7 +182,8 @@ const ProductoresList = () => {
             email: email || "",
           });
           imported += 1;
-          seen.add(ipt);
+          fileSeen.add(ipt);
+          existingSeen.add(ipt);
         } catch {
           continue;
         }
@@ -186,105 +234,105 @@ const ProductoresList = () => {
   return (
     <div className="users-list page-container" style={{ width: '100%' }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      {loading ? (
-        <div style={{ padding: 24 }}>Cargando…</div>
-      ) : (
-      <>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: 12, flexWrap: 'wrap' }}>
-          <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }} onClick={onClickImport} disabled={importing}>
-              {importing ? "Importando…" : "Importar Excel"}
-            </button>
-            <Link to="/productores/nuevo" className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }}>Nuevo productor</Link>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx"
-              style={{ display: "none" }}
-              onChange={(e) => onImportFile(e.target.files?.[0])}
-            />
-          </div>
-        </div>
-        <div className="filters-bar" style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap', 
-          gap: 12, 
-          backgroundColor: '#f8fafc', 
-          padding: 16, 
-          borderRadius: 12, 
-          marginBottom: 20,
-          border: '1px solid #e2e8f0',
-          alignItems: 'flex-end'
-        }}>
-          <div className="filter-item" style={{ flex: 1, minWidth: 220 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>IPT</label>
-            <input
-              type="text"
-              className="input-inst"
-              placeholder="Filtrar por IPT..."
-              value={iptFilter}
-              onChange={e=>setIptFilter(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
-            />
-          </div>
-          <div className="filter-item" style={{ flex: 1, minWidth: 260 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
-            <input
-              type="text"
-              className="input-inst"
-              placeholder="Filtrar por nombre..."
-              value={nameFilter}
-              onChange={e=>setNameFilter(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
-            />
-          </div>
-          <button
-            className="btn secondary"
-            onClick={() => { setIptFilter(''); setNameFilter(''); }}
-            style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
-          >
-            Limpiar Filtros
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: 12, flexWrap: 'wrap' }}>
+        <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }} onClick={onClickImport} disabled={importing}>
+            {importing ? "Importando…" : "Importar Excel"}
           </button>
+          <Link to="/productores/nuevo" className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }}>Nuevo productor</Link>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            style={{ display: "none" }}
+            onChange={(e) => onImportFile(e.target.files?.[0])}
+          />
         </div>
-      <div className="table-wrap">
-        <table className="table-inst" style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f0f0f0' }}>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Teléfono</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Localidad</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Ingresos</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {viewItems.length === 0 ? (
-              <tr><td colSpan={7} style={{ border: '1px solid #ddd', padding: '12px', textAlign:'center' }}>Sin resultados</td></tr>
-            ) : viewItems.map((p) => (
-              <tr key={p.id}>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.ipt || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.nombreCompleto || ''}>{p.nombreCompleto || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.telefono || ''}>{p.telefono || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.domicilioCasa || ''}>{p.domicilioCasa || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.estado || '-'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
-                <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
-                  <div className="actions-col" style={{ display:'grid', gridTemplateColumns:'auto auto', gap:8, justifyItems:'center', alignItems:'center' }}>
-                    <button className="btn btn-compact" onClick={() => onVer(p.id)}>Ver</button>
-                    <button className="btn btn-compact" onClick={() => onEditar(p.id)}>Editar</button>
-                    <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>
-                    <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)}>Re-empadronado</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
-      </>
+
+      <div className="filters-bar" style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 12, 
+        backgroundColor: '#f8fafc', 
+        padding: 16, 
+        borderRadius: 12, 
+        marginBottom: 20,
+        border: '1px solid #e2e8f0',
+        alignItems: 'flex-end'
+      }}>
+        <div className="filter-item" style={{ flex: 1, minWidth: 220 }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>IPT</label>
+          <input
+            type="text"
+            className="input-inst"
+            placeholder="Filtrar por IPT..."
+            value={iptFilter}
+            onChange={e=>setIptFilter(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
+          />
+        </div>
+        <div className="filter-item" style={{ flex: 1, minWidth: 260 }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
+          <input
+            type="text"
+            className="input-inst"
+            placeholder="Filtrar por nombre..."
+            value={nameFilter}
+            onChange={e=>setNameFilter(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
+          />
+        </div>
+        <button
+          className="btn secondary"
+          onClick={() => { setIptFilter(''); setNameFilter(''); }}
+          style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          Limpiar Filtros
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando…</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table-inst" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f0f0f0' }}>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Teléfono</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Localidad</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Ingresos</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {viewItems.length === 0 ? (
+                <tr><td colSpan={7} style={{ border: '1px solid #ddd', padding: '12px', textAlign:'center' }}>Sin resultados</td></tr>
+              ) : viewItems.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.ipt || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.nombreCompleto || ''}>{p.nombreCompleto || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.telefono || ''}>{p.telefono || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.domicilioCasa || ''}>{p.domicilioCasa || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.estado || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                    <div className="actions-col" style={{ display:'grid', gridTemplateColumns:'auto auto', gap:8, justifyItems:'center', alignItems:'center' }}>
+                      <button className="btn btn-compact" onClick={() => onVer(p.id)}>Ver</button>
+                      <button className="btn btn-compact" onClick={() => onEditar(p.id)}>Editar</button>
+                      <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>
+                      <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)}>Re-empadronado</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

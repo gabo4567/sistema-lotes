@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
 import Layout from "../components/Layout";
 import MapPolygonEditor from "../components/MapPolygonEditor";
+import Swal from "sweetalert2";
 
 const METERS_PER_DEGREE_LAT = 111320;
 
@@ -46,7 +47,132 @@ const LoteAdminForm = () => {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
   const [poly, setPoly] = useState([]);
+  const [ultimaMod, setUltimaMod] = useState(null);
   const hasApiKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+
+  const formatFecha = (ts) => {
+    if (!ts) return "-";
+    try {
+      const d =
+        typeof ts?.toDate === "function"
+          ? ts.toDate()
+          : typeof ts?._seconds === "number"
+            ? new Date(ts._seconds * 1000)
+            : typeof ts?.seconds === "number"
+              ? new Date(ts.seconds * 1000)
+              : new Date(ts);
+      if (isNaN(d.getTime())) return "-";
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const min = String(d.getMinutes()).padStart(2, "0");
+      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+    } catch {
+      return "-";
+    }
+  };
+
+  const accionLabel = (accion) => {
+    const a = String(accion || "").toLowerCase().trim();
+    if (a === "crear") return "Creó el lote";
+    if (a === "actualizar") return "Actualizó el lote";
+    if (a === "eliminar") return "Eliminó el lote";
+    return accion || "-";
+  };
+
+  const renderCambios = (cambios) => {
+    if (!cambios || typeof cambios !== "object") return "<div style='color:#6b7280'>Sin detalles</div>";
+    const entries = Object.entries(cambios);
+    if (entries.length === 0) return "<div style='color:#6b7280'>Sin detalles</div>";
+    const esc = (v) => {
+      try {
+        return String(v)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      } catch {
+        return "";
+      }
+    };
+    return `
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+        ${entries
+          .map(([k, v]) => {
+            const antes = v?.antes ?? "-";
+            const despues = v?.despues ?? "-";
+            return `
+              <div style="border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#f8fafc;">
+                <div style="font-weight:700; margin-bottom:6px;">Campo: ${esc(k)}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <div><div style="color:#64748b; font-size:12px;">Antes</div><div style="white-space:pre-wrap;">${esc(typeof antes === "object" ? JSON.stringify(antes) : antes)}</div></div>
+                  <div><div style="color:#64748b; font-size:12px;">Después</div><div style="white-space:pre-wrap;">${esc(typeof despues === "object" ? JSON.stringify(despues) : despues)}</div></div>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  };
+
+  const openHistorial = async (loteId) => {
+    await Swal.fire({
+      title: "Historial del lote",
+      html: "<div style='padding:8px 0'>Cargando historial…</div>",
+      confirmButtonText: "Cerrar",
+      confirmButtonColor: "#2E7D32",
+      width: 800,
+      didOpen: async () => {
+        try {
+          Swal.showLoading();
+          const data = await lotesService.getHistorialLote(loteId);
+          const historial = Array.isArray(data) ? data : [];
+          const top = historial[0];
+          setUltimaMod(top ? { usuarioId: top.usuarioId, usuarioNombre: top.usuarioNombre, fecha: top.fecha } : null);
+          if (historial.length === 0) {
+            Swal.update({
+              html: "<div style='color:#6b7280; padding:8px 0'>Sin historial</div>",
+              showConfirmButton: true,
+            });
+            Swal.hideLoading();
+            return;
+          }
+          const html = `
+            <div style="text-align:left; display:flex; flex-direction:column; gap:12px; max-height:60vh; overflow:auto; padding-right:6px;">
+              ${historial
+                .map((h) => {
+                  const isUpd = String(h?.accion || "").toLowerCase().trim() === "actualizar";
+                  const cambiosHtml = isUpd ? renderCambios(h?.cambios) : "<div style='color:#6b7280'>Sin detalles</div>";
+                  const nombre = h?.usuarioNombre || h?.usuarioId || "-";
+                  return `
+                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px; background:#ffffff;">
+                      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <div style="font-weight:800;">${accionLabel(h?.accion)}</div>
+                        <div style="color:#64748b;">${formatFecha(h?.fecha)}</div>
+                      </div>
+                      <div style="margin-top:6px; color:#475569;">Usuario: <span style="font-weight:700;">${nombre}</span></div>
+                      ${cambiosHtml}
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          `;
+          Swal.update({ html, showConfirmButton: true });
+          Swal.hideLoading();
+        } catch {
+          Swal.update({
+            html: "<div style='color:#b91c1c; padding:8px 0'>No se pudo cargar el historial</div>",
+            showConfirmButton: true,
+          });
+          Swal.hideLoading();
+        }
+      },
+    });
+  };
 
   useEffect(()=>{ (async ()=>{
     if (isEdit) {
@@ -64,6 +190,14 @@ const LoteAdminForm = () => {
           poligonoText: polyText,
         });
         setPoly(Array.isArray(data.poligono) ? data.poligono : []);
+        try {
+          const hist = await lotesService.getHistorialLote(id);
+          const arr = Array.isArray(hist) ? hist : [];
+          const top = arr[0];
+          setUltimaMod(top ? { usuarioId: top.usuarioId, usuarioNombre: top.usuarioNombre, fecha: top.fecha } : null);
+        } catch {
+          setUltimaMod(null);
+        }
       } catch (err) {
         setError(err.message || "No se pudo cargar el lote");
       }
@@ -158,7 +292,17 @@ const LoteAdminForm = () => {
 
   return (
       <div className="section-card prod-form page-container">
-      <h2 className="users-title">{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h2 className="users-title" style={{ margin: 0 }}>{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
+        {isEdit ? (
+          <button type="button" className="btn secondary" onClick={() => openHistorial(id)}>Ver historial</button>
+        ) : null}
+      </div>
+      {isEdit && ultimaMod?.usuarioId ? (
+        <div style={{ marginTop: 8, marginBottom: 12, color: "#475569", fontSize: 14 }}>
+          Última modificación: {ultimaMod.usuarioNombre || ultimaMod.usuarioId} · {formatFecha(ultimaMod.fecha)}
+        </div>
+      ) : null}
       <form onSubmit={onSubmit} className="form-grid">
         <input className="input-inst" placeholder="Nombre del lote" value={form.nombre} onChange={e=>onChange('nombre', e.target.value)} />
         <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />

@@ -28,6 +28,11 @@ export const lotesService = {
     return res.data;
   },
 
+  async getHistorialLote(id) {
+    const res = await api.get(`/lotes/${id}/historial`);
+    return res.data;
+  },
+
   async createLote(data) {
     if (!data || !Array.isArray(data.poligono) || data.poligono.length < 3) {
       throw new Error("El lote debe tener un poligono valido de al menos 3 puntos");

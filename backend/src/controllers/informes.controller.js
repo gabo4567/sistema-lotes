@@ -63,10 +63,8 @@ export const obtenerResumenGeneral = async (req, res) => {
     });
     const roleRank = (r) => {
       const v = norm(r);
-      if (v === 'administrador') return 4;
-      if (v === 'supervisor') return 3;
-      if (v === 'tecnico' || v === 'técnico') return 2;
       if (v === 'productor') return 1;
+      if (v) return 2;
       return 0;
     };
     const dedupByEmail = () => {

@@ -10,6 +10,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
 
+const normalizeRole = (role) => {
+  const v = String(role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (!v) return "";
+  if (v === "productor") return "Productor";
+  return "Administrador";
+};
+
 const FIREBASE_SIGN_IN_ERRORS = {
   INVALID_LOGIN_CREDENTIALS: { status: 401, message: "Credenciales inválidas" },
   INVALID_PASSWORD: { status: 401, message: "Credenciales inválidas" },
@@ -89,8 +100,7 @@ export const registerUser = async (req, res) => {
       displayName: nombre,
     });
 
-    const allowed = ["Administrador", "Tecnico", "Técnico", "Supervisor"];
-    const finalRole = allowed.includes(role) ? role : "Tecnico";
+    const finalRole = "Administrador";
     await db.collection("users").doc(userRecord.uid).set({
       email: emailNormalized,
       nombre,
@@ -302,7 +312,7 @@ export const loginUser = async (req, res) => {
     const emailNormalized = normalizeEmail(firebaseEmail);
 
     // 2. Buscar el rol del usuario en Firestore (por UID primero, luego por email)
-    let role = "Tecnico";
+    let role = "Administrador";
     let resolvedUid = uid;
 
     const userDoc = await db.collection("users").doc(uid).get();
@@ -311,7 +321,7 @@ export const loginUser = async (req, res) => {
       if (data.activo === false) {
         return res.status(403).json({ error: "Usuario inactivo" });
       }
-      role = data.role || "Tecnico";
+      role = normalizeRole(data.role) || "Administrador";
     } else if (emailNormalized) {
       // Fallback: buscar por email (usuarios registrados antes de indexar por UID)
       const snap = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
@@ -320,25 +330,25 @@ export const loginUser = async (req, res) => {
         if (data.activo === false) {
           return res.status(403).json({ error: "Usuario inactivo" });
         }
-        role = data.role || "Tecnico";
+        role = normalizeRole(data.role) || "Administrador";
         resolvedUid = snap.docs[0].id;
       }
     }
 
     // 3. Los productores usan la app móvil — no el panel web
-    if (String(role).toLowerCase() === "productor") {
+    if (normalizeRole(role) === "Productor") {
       return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
     }
 
     // 4. Actualizar último acceso
     await db.collection("users").doc(resolvedUid).set({
       email: emailNormalized,
-      role,
+      role: "Administrador",
       ultimoAcceso: new Date(),
     }, { merge: true });
 
-    const webToken = makeToken({ uid: resolvedUid, email: emailNormalized, role });
-    res.json({ token: webToken, role });
+    const webToken = makeToken({ uid: resolvedUid, email: emailNormalized, role: "Administrador" });
+    res.json({ token: webToken, role: "Administrador" });
   } catch (error) {
     logServerError("Error al hacer login", error);
     res.status(500).json({ error: "No se pudo iniciar sesión" });

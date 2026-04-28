@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno } from '../services/turnos.service'
+import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { getProductores } from '../services/productores.service'
@@ -62,6 +62,8 @@ const parseYmdLocal = (ymd, { endOfDay = false } = {}) => {
   return d
 }
 
+const isValidYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
+
 const normalizeEstado = (e) => String(e || 'pendiente').toLowerCase().trim()
 
 const getDisplayEstado = (t) => {
@@ -84,6 +86,20 @@ const [viewMode, setViewMode] = useState('activos') // 'activos', 'historial', '
 const [viewStyle, setViewStyle] = useState('cards') // 'cards' | 'agenda'
 const [updatingId, setUpdatingId] = useState(null)
 const [expandedId, setExpandedId] = useState(null)
+const [insumosDispByProd, setInsumosDispByProd] = useState({})
+
+const [capModalOpen, setCapModalOpen] = useState(false)
+const [capFecha, setCapFecha] = useState(toYmdLocal(new Date()))
+const [capacidad, setCapacidad] = useState('')
+const [capInfo, setCapInfo] = useState(null)
+const [capLoading, setCapLoading] = useState(false)
+const [capSaving, setCapSaving] = useState(false)
+
+const [cfgModalOpen, setCfgModalOpen] = useState(false)
+const [cfgLoading, setCfgLoading] = useState(false)
+const [cfgSaving, setCfgSaving] = useState(false)
+const [cfgHabilitado, setCfgHabilitado] = useState(true)
+const [cfgMensaje, setCfgMensaje] = useState('')
 
 // Estados para filtros
 const [filtros, setFiltros] = useState({
@@ -186,6 +202,44 @@ useEffect(() => {
   return () => window.clearInterval(id)
 }, [loadData])
 
+useEffect(() => {
+  if (!capModalOpen) return
+  if (!isValidYmd(capFecha)) return
+  let mounted = true
+  setCapLoading(true)
+  getCapacidadTurnoDia(capFecha)
+    .then((data) => {
+      if (!mounted) return
+      setCapInfo(data)
+      const v = data?.capacidad
+      setCapacidad(v === 0 || v ? String(v) : '')
+    })
+    .catch((e) => {
+      console.error(e)
+      notify({ title: e?.response?.data?.message || e?.message || 'No se pudo cargar la capacidad.', icon: 'error' })
+    })
+    .finally(() => { if (mounted) setCapLoading(false) })
+  return () => { mounted = false }
+}, [capModalOpen, capFecha])
+
+useEffect(() => {
+  if (!cfgModalOpen) return
+  let mounted = true
+  setCfgLoading(true)
+  getTurnosConfig()
+    .then((data) => {
+      if (!mounted) return
+      setCfgHabilitado(Boolean(data?.habilitado))
+      setCfgMensaje(String(data?.mensaje || ''))
+    })
+    .catch((e) => {
+      console.error(e)
+      notify({ title: e?.response?.data?.message || e?.message || 'No se pudo cargar la configuración.', icon: 'error' })
+    })
+    .finally(() => { if (mounted) setCfgLoading(false) })
+  return () => { mounted = false }
+}, [cfgModalOpen])
+
   const turnosFiltrados = useMemo(() => {
     return turnos.filter(t => {
       // Filtro por estado
@@ -274,8 +328,16 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   const t = turnos.find(x=>x.id===id)
   if (t && (nuevo==='confirmado' || nuevo==='Aprobado') && String(t.tipoTurno).toLowerCase()==='insumo'){
     try{
-      const { disponible } = await insumosService.disponibilidadPorProductor(t.productorId)
-      await notify({ title: disponible ? 'Usted tiene turno para retirar.' : 'Usted no tiene insumos disponibles.', icon: disponible ? 'success' : 'warning' })
+      const disp = await loadInsumosDisp(t.productorId)
+      const tiene = Boolean(disp?.tieneDisponible ?? disp?.disponible)
+      const asignado = Number(disp?.totalAsignado ?? 0)
+      const entregado = Number(disp?.totalEntregado ?? 0)
+      const disponible = Number(disp?.totalDisponible ?? 0)
+      await notify({
+        title: tiene ? 'Insumos disponibles para retirar' : 'Sin insumos disponibles',
+        text: `Asignado: ${asignado} · Entregado: ${entregado} · Disponible: ${disponible}`,
+        icon: tiene ? 'success' : 'warning'
+      })
     }catch{ null }
   }
   try {
@@ -453,8 +515,30 @@ const agendaItems = useMemo(() => {
   return arr
 }, [turnosFiltrados])
 
+const loadInsumosDisp = useCallback(async (productorId) => {
+  const pid = String(productorId || '').trim()
+  if (!pid) return null
+  if (insumosDispByProd[pid]) return insumosDispByProd[pid]
+  try {
+    const data = await insumosService.disponibilidadPorProductor(pid)
+    setInsumosDispByProd((cur) => ({ ...cur, [pid]: data }))
+    return data
+  } catch {
+    return null
+  }
+}, [insumosDispByProd])
+
 const toggleExpand = (id) => {
-  setExpandedId((cur) => (cur === id ? null : id))
+  setExpandedId((cur) => {
+    const next = cur === id ? null : id
+    if (next) {
+      const t = turnos.find(x => x.id === id)
+      if (t && String(t.tipoTurno || '').toLowerCase() === 'insumo') {
+        loadInsumosDisp(t.productorId)
+      }
+    }
+    return next
+  })
 }
 
 const setTodayFilter = () => {
@@ -468,6 +552,66 @@ const clearTodayFilter = () => {
     if (next.hasta === todayYmd) next.hasta = ''
     return next
   })
+}
+
+const openCapacidadModal = () => {
+  setCapFecha(todayYmd)
+  setCapModalOpen(true)
+}
+
+const closeCapacidadModal = () => {
+  if (capSaving) return
+  setCapModalOpen(false)
+}
+
+const openConfigModal = () => {
+  setCfgModalOpen(true)
+}
+
+const closeConfigModal = () => {
+  if (cfgSaving) return
+  setCfgModalOpen(false)
+}
+
+const saveConfigTurnos = async () => {
+  const habilitado = Boolean(cfgHabilitado)
+  const mensaje = String(cfgMensaje || '').trim()
+  setCfgSaving(true)
+  try {
+    await setTurnosConfig(habilitado, mensaje)
+    notify({ title: 'Configuración guardada', icon: 'success' })
+    setCfgModalOpen(false)
+  } catch (e) {
+    console.error(e)
+    notify({ title: e?.response?.data?.message || e?.message || 'No se pudo guardar la configuración.', icon: 'error' })
+  } finally {
+    setCfgSaving(false)
+  }
+}
+
+const saveCapacidad = async () => {
+  const ymd = String(capFecha || '').trim()
+  if (!isValidYmd(ymd)) {
+    notify({ title: 'Fecha inválida (YYYY-MM-DD).', icon: 'error' })
+    return
+  }
+  const n = Number(capacidad)
+  if (!Number.isFinite(n) || n <= 0) {
+    notify({ title: 'Capacidad inválida. Debe ser un número mayor a 0.', icon: 'error' })
+    return
+  }
+  setCapSaving(true)
+  try {
+    await setCapacidadTurnoDia(ymd, n)
+    notify({ title: 'Capacidad guardada', icon: 'success' })
+    setCapInfo({ fecha: ymd, capacidad: n, configurada: true })
+    setCapModalOpen(false)
+  } catch (e) {
+    console.error(e)
+    notify({ title: e?.response?.data?.message || e?.message || 'No se pudo guardar la capacidad.', icon: 'error' })
+  } finally {
+    setCapSaving(false)
+  }
 }
 
 const canQuickConfirm = (t) => {
@@ -538,6 +682,131 @@ return (
       </div>
     ) : null}
 
+    {capModalOpen ? (
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999,
+        }}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) closeCapacidadModal()
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Capacidad de turnos por día</div>
+            <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
+          </div>
+          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Fecha</label>
+              <input
+                type="date"
+                className="input-inst"
+                value={capFecha}
+                onChange={(e) => setCapFecha(e.target.value)}
+                disabled={capSaving}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Capacidad</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                className="input-inst"
+                value={capacidad}
+                onChange={(e) => setCapacidad(e.target.value)}
+                disabled={capSaving}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              />
+              <div style={{ fontSize: 13, color: '#6b7280' }}>
+                {capLoading ? 'Cargando capacidad…' : (capInfo?.configurada ? 'Capacidad configurada para este día.' : 'Sin configuración: se usa el valor por defecto del sistema.')}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving}>Cancelar</button>
+            <button className="btn primary" onClick={saveCapacidad} disabled={capSaving || capLoading}>
+              {capSaving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {cfgModalOpen ? (
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999,
+        }}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) closeConfigModal()
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: 560, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
+            <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
+          </div>
+          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={cfgHabilitado}
+                onChange={(e) => setCfgHabilitado(e.target.checked)}
+                disabled={cfgSaving || cfgLoading}
+              />
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                {cfgHabilitado ? 'Turnos habilitados' : 'Turnos deshabilitados'}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Mensaje (opcional)</label>
+              <input
+                type="text"
+                className="input-inst"
+                value={cfgMensaje}
+                onChange={(e) => setCfgMensaje(e.target.value)}
+                disabled={cfgSaving || cfgLoading}
+                placeholder="Ej: La solicitud de turnos estará disponible a partir del 01/06."
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              />
+              <div style={{ fontSize: 13, color: '#6b7280' }}>
+                {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se devuelve al intentar solicitar un turno cuando está deshabilitado.'}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving}>Cancelar</button>
+            <button className="btn primary" onClick={saveConfigTurnos} disabled={cfgSaving || cfgLoading}>
+              {cfgSaving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
     <div className="turnos-toolbar">
       <div className="turnos-toolbar__left">
         <div className="turnos-search">
@@ -567,6 +836,22 @@ return (
       </div>
 
       <div className="turnos-toolbar__right">
+        <button
+          className="btn secondary"
+          onClick={openConfigModal}
+          disabled={loading}
+          style={{ padding: '6px 12px' }}
+        >
+          Habilitación
+        </button>
+        <button
+          className="btn secondary"
+          onClick={openCapacidadModal}
+          disabled={loading}
+          style={{ padding: '6px 12px' }}
+        >
+          Capacidad por día
+        </button>
         <div className="turnos-view-toggle">
           <button
             className={`btn turnos-toggle-btn ${viewStyle === 'cards' ? 'turnos-toggle-btn--active' : ''}`}
@@ -835,6 +1120,8 @@ return (
                 const isUpdating = updatingId === t.id
                 const productorNombre = t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'
                 const ipt = t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'
+                const isInsumo = String(t.tipoTurno || '').toLowerCase() === 'insumo'
+                const insDisp = isInsumo ? insumosDispByProd[String(t.productorId || '').trim()] : null
                 const allowExpand = viewMode !== 'historial'
                 return (
                   <div
@@ -853,6 +1140,11 @@ return (
                     <div className="turno-item"><span className="turno-label">IPT:</span> {ipt}</div>
                     <div className="turno-item"><span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}</div>
                     <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
+                    {isInsumo && insDisp ? (
+                      <div className="turno-item">
+                        <span className="turno-label">Insumos:</span> Asignado {Number(insDisp.totalAsignado ?? 0)} · Entregado {Number(insDisp.totalEntregado ?? 0)} · Disponible {Number(insDisp.totalDisponible ?? 0)}
+                      </div>
+                    ) : null}
                     {getCancelNotice(t) ? (
                       <div
                         style={{
@@ -889,6 +1181,16 @@ return (
                     {allowExpand && isExpanded && (
                       <div className="turnos-detail" onClick={(e) => e.stopPropagation()}>
                         <div><strong>Motivo completo:</strong> {formatMotivo(t.motivo)}</div>
+                        {isInsumo ? (
+                          <div style={{ marginTop: 8 }}>
+                            <strong>Insumos:</strong>{' '}
+                            {insDisp ? (
+                              <>Asignado {Number(insDisp.totalAsignado ?? 0)} · Entregado {Number(insDisp.totalEntregado ?? 0)} · Disponible {Number(insDisp.totalDisponible ?? 0)}</>
+                            ) : (
+                              <>Cargando…</>
+                            )}
+                          </div>
+                        ) : null}
                         {getCancelNotice(t) ? (
                           <div
                             style={{

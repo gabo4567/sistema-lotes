@@ -2,6 +2,95 @@ import { db } from "../utils/firebase.js";
 
 const NOMBRES_PERMITIDOS = ["Arada", "Almácigo", "Transplante", "Cosecha", "Almácigo"];
 
+const toNumber = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeProductorInsumoEstado = ({ cantidadAsignada, cantidadEntregada }) => {
+  const asig = toNumber(cantidadAsignada, 0);
+  const ent = toNumber(cantidadEntregada, 0);
+  if (asig > 0 && ent >= asig) return "entregado";
+  return "pendiente";
+};
+
+const buildNormalizePatchProductorInsumo = (raw) => {
+  const patch = {};
+
+  const cantidadAsignada = toNumber(raw?.cantidadAsignada, 0);
+  let cantidadEntregada = raw?.cantidadEntregada;
+  if (cantidadEntregada === undefined || cantidadEntregada === null) {
+    const est = String(raw?.estado || "").toLowerCase().trim();
+    if (est === "entregado" && cantidadAsignada > 0) cantidadEntregada = cantidadAsignada;
+    else cantidadEntregada = 0;
+    patch.cantidadEntregada = cantidadEntregada;
+  }
+
+  const ent = toNumber(cantidadEntregada, 0);
+  let entFixed = ent;
+  if (entFixed < 0) entFixed = 0;
+  if (cantidadAsignada >= 0 && entFixed > cantidadAsignada) entFixed = cantidadAsignada;
+  if (entFixed !== ent) patch.cantidadEntregada = entFixed;
+
+  const estado = normalizeProductorInsumoEstado({ cantidadAsignada, cantidadEntregada: entFixed });
+  if (!["pendiente", "entregado"].includes(String(raw?.estado || "").toLowerCase().trim())) {
+    patch.estado = estado;
+  } else if (String(raw?.estado || "").toLowerCase().trim() !== estado) {
+    patch.estado = estado;
+  }
+
+  if (raw?.createdAt === undefined) {
+    patch.createdAt = raw?.fechaAsignacion || raw?.creadoEn || new Date();
+  }
+  if (raw?.updatedAt === undefined) {
+    patch.updatedAt = new Date();
+  }
+
+  return {
+    normalized: {
+      ...raw,
+      productorId: raw?.productorId !== undefined ? String(raw.productorId) : raw?.productorId,
+      cantidadAsignada,
+      cantidadEntregada: entFixed,
+      estado,
+      createdAt: raw?.createdAt ?? patch.createdAt,
+      updatedAt: raw?.updatedAt ?? patch.updatedAt,
+    },
+    patch,
+  };
+};
+
+export const getDisponibilidadInsumos = async (productorId) => {
+  const pid = String(productorId || "").trim();
+  if (!pid) {
+    return { totalAsignado: 0, totalEntregado: 0, totalDisponible: 0, tieneDisponible: false };
+  }
+
+  const snap = await db.collection("productorInsumos").where("productorId", "==", pid).get();
+  let totalAsignado = 0;
+  let totalEntregado = 0;
+  let totalDisponible = 0;
+
+  snap.docs.forEach((d) => {
+    const raw = d.data() || {};
+    if (raw.activo === false) return;
+    const { normalized } = buildNormalizePatchProductorInsumo(raw);
+    const asig = toNumber(normalized.cantidadAsignada, 0);
+    const ent = toNumber(normalized.cantidadEntregada, 0);
+    if (asig <= 0) return;
+    totalAsignado += asig;
+    totalEntregado += ent;
+    totalDisponible += Math.max(0, asig - ent);
+  });
+
+  return {
+    totalAsignado,
+    totalEntregado,
+    totalDisponible,
+    tieneDisponible: totalDisponible > 0,
+  };
+};
+
 export const crearInsumo = async (req, res) => {
   try {
     const { nombre, cantidadDisponible, unidad, descripcion, estado } = req.body;
@@ -127,9 +216,12 @@ export const asignarInsumoAProductor = async (req, res) => {
         productorId: String(productorId),
         insumoId: id,
         cantidadAsignada: cant,
+        cantidadEntregada: 0,
         fechaAsignacion: new Date(),
         estado: "pendiente",
         activo: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
       const asignRef = await db.collection("productorInsumos").add(asignacion);
       await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });
@@ -141,7 +233,16 @@ export const asignarInsumoAProductor = async (req, res) => {
       const actual = Number(data.cantidadAsignada || 0);
       if (disponible < cant) return res.status(400).json({ error: "Stock insuficiente" });
       const nueva = actual + cant;
-      await asignDoc.ref.update({ cantidadAsignada: nueva, updatedAt: new Date() });
+      const prevEnt = toNumber(data?.cantidadEntregada, 0);
+      if (prevEnt < 0) return res.status(400).json({ error: "cantidadEntregada inválida en la asignación existente" });
+      const estado = normalizeProductorInsumoEstado({ cantidadAsignada: nueva, cantidadEntregada: prevEnt });
+      await asignDoc.ref.update({
+        cantidadAsignada: nueva,
+        cantidadEntregada: prevEnt,
+        estado,
+        updatedAt: new Date(),
+        ...(data?.createdAt === undefined ? { createdAt: data?.fechaAsignacion || new Date() } : {}),
+      });
       await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });
       const updated = await asignDoc.ref.get();
       return res.json({ id: asignDoc.id, ...updated.data() });
@@ -155,7 +256,18 @@ export const listarAsignacionesPorInsumo = async (req, res) => {
   try {
     const { id } = req.params; // insumoId
     const snap = await db.collection("productorInsumos").where("insumoId", "==", id).get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const batch = db.batch();
+    let writes = 0;
+    const items = snap.docs.map(d => {
+      const raw = d.data() || {};
+      const { normalized, patch } = buildNormalizePatchProductorInsumo(raw);
+      if (Object.keys(patch).length > 0) {
+        batch.update(d.ref, patch);
+        writes++;
+      }
+      return { id: d.id, ...normalized };
+    });
+    if (writes > 0) await batch.commit();
     res.json(items);
   } catch (e) {
     res.status(500).json({ error: "Error al obtener asignaciones" });
@@ -166,7 +278,18 @@ export const listarAsignacionesPorProductor = async (req, res) => {
   try {
     const { productorId } = req.params;
     const snap = await db.collection("productorInsumos").where("productorId", "==", String(productorId)).get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const batch = db.batch();
+    let writes = 0;
+    const items = snap.docs.map(d => {
+      const raw = d.data() || {};
+      const { normalized, patch } = buildNormalizePatchProductorInsumo(raw);
+      if (Object.keys(patch).length > 0) {
+        batch.update(d.ref, patch);
+        writes++;
+      }
+      return { id: d.id, ...normalized };
+    });
+    if (writes > 0) await batch.commit();
     res.json(items);
   } catch (e) {
     res.status(500).json({ error: "Error al obtener asignaciones" });
@@ -176,18 +299,30 @@ export const listarAsignacionesPorProductor = async (req, res) => {
 export const actualizarAsignacion = async (req, res) => {
   try {
     const { asignacionId } = req.params;
-    const { cantidadAsignada, descripcion } = req.body;
+    const { cantidadAsignada, cantidadEntregada, descripcion } = req.body;
     const ref = db.collection("productorInsumos").doc(String(asignacionId));
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "Asignación no encontrada" });
     const asign = snap.data();
-    const vieja = Number(asign.cantidadAsignada || 0);
+    const vieja = toNumber(asign?.cantidadAsignada, 0);
+    const entVieja = toNumber(
+      asign?.cantidadEntregada ?? (String(asign?.estado || "").toLowerCase().trim() === "entregado" ? vieja : 0),
+      0
+    );
     let delta = 0;
     let nueva = vieja;
+    let nuevaEnt = entVieja;
     if (cantidadAsignada !== undefined) {
       nueva = Number(cantidadAsignada);
-      if (!isFinite(nueva) || nueva < 0) return res.status(400).json({ error: "Cantidad inválida" });
+      if (!isFinite(nueva) || nueva <= 0) return res.status(400).json({ error: "cantidadAsignada inválida" });
+      if (entVieja < 0) return res.status(400).json({ error: "cantidadEntregada inválida" });
+      if (entVieja > nueva) return res.status(400).json({ error: "cantidadEntregada no puede ser mayor que cantidadAsignada" });
       delta = nueva - vieja;
+    }
+    if (cantidadEntregada !== undefined) {
+      nuevaEnt = Number(cantidadEntregada);
+      if (!isFinite(nuevaEnt) || nuevaEnt < 0) return res.status(400).json({ error: "cantidadEntregada inválida" });
+      if (nuevaEnt > nueva) return res.status(400).json({ error: "cantidadEntregada no puede ser mayor que cantidadAsignada" });
     }
     if (delta !== 0) {
       const iref = db.collection("insumos").doc(String(asign.insumoId));
@@ -202,7 +337,9 @@ export const actualizarAsignacion = async (req, res) => {
         await iref.update({ cantidadDisponible: stock + Math.abs(delta), updatedAt: new Date() });
       }
     }
-    const updateData = { cantidadAsignada: nueva, updatedAt: new Date() };
+    const estado = normalizeProductorInsumoEstado({ cantidadAsignada: nueva, cantidadEntregada: nuevaEnt });
+    const updateData = { cantidadAsignada: nueva, cantidadEntregada: nuevaEnt, estado, updatedAt: new Date() };
+    if (asign?.createdAt === undefined) updateData.createdAt = asign?.fechaAsignacion || new Date();
     if (descripcion !== undefined) updateData.descripcion = String(descripcion || "");
     await ref.update(updateData);
     res.json({ message: "Asignación actualizada" });
@@ -213,10 +350,46 @@ export const actualizarAsignacion = async (req, res) => {
 export const obtenerDisponibilidadInsumosProductor = async (req, res) => {
   try {
     const { productorId } = req.params;
-    const snap = await db.collection("productorInsumos").where("productorId", "==", String(productorId)).get();
-    const items = snap.docs.map(d => d.data()).filter(x => Number(x.cantidadAsignada || 0) > 0 && x.estado !== "entregado");
-    const disponible = items.length > 0;
-    res.json({ disponible, asignaciones: items.length });
+    const pid = String(productorId || "").trim();
+    const snap = await db.collection("productorInsumos").where("productorId", "==", pid).get();
+    const batch = db.batch();
+    let writes = 0;
+
+    let totalAsignado = 0;
+    let totalEntregado = 0;
+    let totalDisponible = 0;
+    let asignaciones = 0;
+
+    snap.docs.forEach((d) => {
+      const raw = d.data() || {};
+      if (raw.activo === false) return;
+      const { normalized, patch } = buildNormalizePatchProductorInsumo(raw);
+      if (Object.keys(patch).length > 0) {
+        batch.update(d.ref, patch);
+        writes++;
+      }
+
+      const asig = toNumber(normalized.cantidadAsignada, 0);
+      const ent = toNumber(normalized.cantidadEntregada, 0);
+      if (asig <= 0) return;
+      totalAsignado += asig;
+      totalEntregado += ent;
+      const disp = Math.max(0, asig - ent);
+      totalDisponible += disp;
+      if (disp > 0) asignaciones++;
+    });
+
+    if (writes > 0) await batch.commit();
+
+    const tieneDisponible = totalDisponible > 0;
+    res.json({
+      disponible: tieneDisponible,
+      asignaciones,
+      totalAsignado,
+      totalEntregado,
+      totalDisponible,
+      tieneDisponible,
+    });
   } catch (e) {
     res.status(500).json({ error: "Error al verificar disponibilidad" });
   }
@@ -227,7 +400,20 @@ export const marcarAsignacionesEntregadas = async (req, res) => {
     const { productorId } = req.params;
     const snap = await db.collection("productorInsumos").where("productorId", "==", String(productorId)).where("estado", "==", "pendiente").get();
     const batch = db.batch();
-    snap.docs.forEach(doc => batch.update(doc.ref, { estado: "entregado", fechaEntrega: new Date() }));
+    const now = new Date();
+    snap.docs.forEach(doc => {
+      const raw = doc.data() || {};
+      const asig = toNumber(raw?.cantidadAsignada, 0);
+      const entrega = Math.max(0, asig);
+      batch.update(doc.ref, {
+        cantidadAsignada: asig,
+        cantidadEntregada: entrega,
+        estado: normalizeProductorInsumoEstado({ cantidadAsignada: asig, cantidadEntregada: entrega }),
+        fechaEntrega: now,
+        updatedAt: now,
+        ...(raw?.createdAt === undefined ? { createdAt: raw?.fechaAsignacion || now } : {}),
+      });
+    });
     await batch.commit();
     res.json({ message: "Asignaciones marcadas como entregadas", cantidad: snap.docs.length });
   } catch (e) {

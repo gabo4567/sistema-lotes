@@ -17,3 +17,23 @@ export const getTurnosPorProductor = async (ipt, activo)=>{
   return res.data 
 }
 export const getDisponibilidad = async (fechaSolicitada, tipoTurno)=>{ const res = await api.get(`/turnos/disponibilidad`, { params: { fechaSolicitada, tipoTurno } }); return res.data }
+
+export const getTurnosConfig = async ()=>{
+  const res = await api.get(`/turnos/config`)
+  return res.data
+}
+
+export const setTurnosConfig = async (habilitado, mensaje)=>{
+  const res = await api.put(`/turnos/config`, { habilitado, mensaje })
+  return res.data
+}
+
+export const getCapacidadTurnoDia = async (fecha)=>{
+  const res = await api.get(`/turnos/capacidad`, { params: { fecha } })
+  return res.data
+}
+
+export const setCapacidadTurnoDia = async (fecha, capacidad)=>{
+  const res = await api.put(`/turnos/capacidad/${fecha}`, { capacidad })
+  return res.data
+}

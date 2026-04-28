@@ -23,6 +23,20 @@ const InsumosList = () => {
   const [producerSearchTerm, setProducerSearchTerm] = useState('')
   const [showProducerResults, setShowProducerResults] = useState(false)
 
+  const resumenProd = useMemo(() => {
+    const list = Array.isArray(asignacionesProd) ? asignacionesProd : []
+    let asignado = 0
+    let entregado = 0
+    list.forEach(a => {
+      const ca = Number(a?.cantidadAsignada ?? 0)
+      const ce = Number(a?.cantidadEntregada ?? (String(a?.estado || '').toLowerCase() === 'entregado' ? ca : 0))
+      if (Number.isFinite(ca) && ca > 0) asignado += ca
+      if (Number.isFinite(ce) && ce > 0) entregado += ce
+    })
+    const disponible = Math.max(0, asignado - entregado)
+    return { asignado, entregado, disponible, tieneDisponible: disponible > 0 }
+  }, [asignacionesProd])
+
   const load = async ()=>{
     try {
       setLoading(true)
@@ -287,6 +301,40 @@ const InsumosList = () => {
               IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
             </span>
           </div>
+
+          <div style={{
+            border: '1px solid #e2e8f0',
+            borderTop: 'none',
+            padding: '10px 20px',
+            background: '#fff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+              Asignado: <span style={{ color: '#0f172a' }}>{resumenProd.asignado}</span>
+            </div>
+            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+              Entregado: <span style={{ color: '#0f172a' }}>{resumenProd.entregado}</span>
+            </div>
+            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+              Disponible: <span style={{ color: resumenProd.tieneDisponible ? '#166534' : '#b91c1c' }}>{resumenProd.disponible}</span>
+            </div>
+            {!resumenProd.tieneDisponible && (
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#991b1b',
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: 12
+              }}>
+                Sin insumos disponibles
+              </div>
+            )}
+          </div>
           
           <div className="table-wrap" style={{ 
             border: '1px solid #e2e8f0', 
@@ -331,7 +379,9 @@ const InsumosList = () => {
                 <thead>
                   <tr style={{ background:'#f8fafc' }}>
                     <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Insumo</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Cantidad</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Asignado</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Entregado</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Disponible</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', minWidth: 200 }}>Descripción</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', minWidth: 280 }}>Acciones</th>
                   </tr>
@@ -340,6 +390,9 @@ const InsumosList = () => {
                   {asignacionesProd.map(a=> {
                     const ins = items.find(i=> i.id === a.insumoId) || {}
                     const nombreInsumo = ins.nombre || insumoNames[a.insumoId] || ''
+                    const asignado = Number(a?.cantidadAsignada ?? 0)
+                    const entregado = Number(a?.cantidadEntregada ?? (String(a?.estado || '').toLowerCase() === 'entregado' ? asignado : 0))
+                    const disponible = Math.max(0, asignado - entregado)
                     return (
                       <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '12px 16px', fontWeight: 500 }}>{nombreInsumo || '-'}</td>
@@ -351,7 +404,30 @@ const InsumosList = () => {
                             fontWeight: 600,
                             color: '#475569'
                           }}>
-                            {a.cantidadAsignada ?? 0} bolsas
+                            {asignado}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <span style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            color: '#475569'
+                          }}>
+                            {entregado}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <span style={{
+                            backgroundColor: disponible > 0 ? '#f0fdf4' : '#fef2f2',
+                            border: `1px solid ${disponible > 0 ? '#dcfce7' : '#fecaca'}`,
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontWeight: 700,
+                            color: disponible > 0 ? '#166534' : '#991b1b'
+                          }}>
+                            {disponible}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', color: '#64748b', fontSize: 13 }}>{a.descripcion || '-'}</td>
