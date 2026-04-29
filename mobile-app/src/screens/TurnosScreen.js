@@ -18,8 +18,11 @@ export default function TurnosScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [iosPickerDate, setIosPickerDate] = useState(new Date());
   const [disp, setDisp] = useState(null);
+  const [dispLoading, setDispLoading] = useState(false);
+  const [dispHint, setDispHint] = useState("");
   const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -32,10 +35,12 @@ export default function TurnosScreen() {
   const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
   const [showingOfflineData, setShowingOfflineData] = useState(false);
   const prevPendingOpsRef = React.useRef(pendingOperations);
+  const dispReqRef = React.useRef(0);
+  const dispTimerRef = React.useRef(null);
 
   const loadList = async () => {
     try {
-      setLoading(true);
+      setListLoading(true);
       const currentUid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "";
       const cacheKey = `cache_turnos_${currentUid || "unknown"}_${listMode}`;
       if (!isOnline) {
@@ -114,7 +119,7 @@ export default function TurnosScreen() {
       setList([]);
     }
     finally {
-      setLoading(false);
+      setListLoading(false);
     }
   };
 
@@ -208,16 +213,6 @@ export default function TurnosScreen() {
     setError("");
     setSuccess("");
   }, [fechaInput, tipo, motivo]);
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}> 
-        <Text style={styles.title}>Turnos</Text>
-        <Text style={{ textAlign: 'center', color: '#1e8449', marginTop: 8 }}>Cargando turnos...</Text>
-        <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
-      </SafeAreaView>
-    );
-  }
   
   const testFlujoTurno = async () => {
     try {
@@ -599,67 +594,131 @@ export default function TurnosScreen() {
     setShowDatePicker(true);
   };
 
-  const checkDisponibilidad = async () => {
-    setError("");
-    setSuccess("");
-    setDisp(null);
-    if (!fechaInput || !tipo) { setError("Completá fecha (DD-MM-YYYY) y tipo"); return; }
-    const fechaIso = toIso(fechaInput);
-    if (!fechaIso) { setError("Fecha inválida. Formato DD-MM-YYYY"); return; }
+  const recalcularDisponibilidad = async (fechaValue, tipoValue, requestId) => {
+    const isStale = () => dispReqRef.current !== requestId;
+
+    const fechaIso = toIso(fechaValue);
+    if (!fechaIso) {
+      if (isStale()) return;
+      setDisp(false);
+      setDispHint("Fecha inválida. Formato DD-MM-YYYY");
+      return;
+    }
     const now = new Date();
-    const todayIso = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
-    if (fechaIso < todayIso) { setError("Fecha ya pasada"); setDisp(false); return; }
-    
-    // Validar fin de semana
+    const todayIso = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+    if (fechaIso < todayIso) {
+      if (isStale()) return;
+      setDisp(false);
+      setDispHint("Fecha ya pasada");
+      return;
+    }
+
     const diaSemana = getUTCDayFromIsoDate(fechaIso);
-    if (diaSemana === null) { setError("Fecha inválida"); return; }
-    if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
+    if (diaSemana === null) {
+      if (isStale()) return;
+      setDisp(false);
+      setDispHint("Fecha inválida");
+      return;
+    }
+    if (diaSemana === 0 || diaSemana === 6) {
+      if (isStale()) return;
+      setDisp(false);
+      setDispHint("No se permiten turnos sábado o domingo");
+      return;
+    }
     const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
     if (feriadoLabel) {
-      setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`);
+      if (isStale()) return;
       setDisp(false);
+      setDispHint(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`);
       return;
     }
 
     if (!isOnline) {
+      if (isStale()) return;
       setDisp(true);
-      setSuccess("Sin conexión: no se puede verificar disponibilidad. Podés solicitar el turno y se enviará automáticamente cuando vuelva internet (puede ser rechazado si no hay cupo/disponibilidad).");
+      setDispHint("Sin conexión: se enviará cuando vuelva internet (puede ser rechazado si no hay cupo).");
       return;
     }
-    
+
     try {
       const tokenResult = await auth.currentUser?.getIdTokenResult();
       const ipt = tokenResult?.claims?.ipt;
-      const tipoParam = tipo.toLowerCase().includes('insumo') ? 'insumo' : 
-                     tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov') ? 'carnet' : 'otra';
-      const query = `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` + (tipoParam === 'insumo' && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "");
-      console.log("🔍 Verificando disponibilidad para:", { fechaIso, tipo: tipoParam, ipt, query });
+      const tipoParam = tipoValue.toLowerCase().includes("insumo")
+        ? "insumo"
+        : tipoValue.toLowerCase().includes("renovación") || tipoValue.toLowerCase().includes("renov")
+          ? "carnet"
+          : "otra";
+      const query =
+        `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` +
+        (tipoParam === "insumo" && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "");
       const resp = await fetch(`${API_URL}/turnos/disponibilidad?${query}`);
       const responseText = await resp.text();
-      console.log("📡 Respuesta cruda del backend:", responseText);
       let j;
       try {
         j = JSON.parse(responseText);
       } catch (e) {
         console.error("❌ Error parseando JSON:", e);
+        if (isStale()) return;
         setError("Error en respuesta del servidor");
         return;
       }
-      console.log("📡 Respuesta parseada del backend:", j);
       const ok = Boolean(j?.disponible);
-      console.log("✅ Disponible:", ok);
+      if (isStale()) return;
       setDisp(ok);
-      if (!ok) setError(j?.motivo || j?.reason || "No disponible");
-    } catch (e) { 
+      setDispHint(ok ? "" : String(j?.motivo || j?.reason || "No disponible"));
+    } catch (e) {
       console.error("❌ Error verificando disponibilidad:", e);
-      setError("No se pudo verificar disponibilidad"); 
+      if (isStale()) return;
+      setError("No se pudo verificar disponibilidad");
     }
   };
+
+  useEffect(() => {
+    if (view !== "form") return;
+
+    if (dispTimerRef.current) {
+      clearTimeout(dispTimerRef.current);
+      dispTimerRef.current = null;
+    }
+
+    setDisp(null);
+    setDispHint("");
+
+    if (!fechaInput || !tipo) {
+      setDispLoading(false);
+      return;
+    }
+
+    const requestId = ++dispReqRef.current;
+    setDispLoading(true);
+    dispTimerRef.current = setTimeout(() => {
+      Promise.resolve(recalcularDisponibilidad(fechaInput, tipo, requestId))
+        .catch(() => {})
+        .finally(() => {
+          if (dispReqRef.current === requestId) setDispLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      if (dispTimerRef.current) {
+        clearTimeout(dispTimerRef.current);
+        dispTimerRef.current = null;
+      }
+    };
+  }, [view, fechaInput, tipo, isOnline]);
+
+  useEffect(() => {
+    if (view !== "form") return;
+    if (normalizeTipoFromLabel(tipo) !== "otro" && String(motivo || "").trim()) {
+      setMotivo("");
+    }
+  }, [view, tipo, motivo]);
 
   const solicitarTurno = async () => {
     setError("");
     setSuccess("");
-    setLoading(true);
+    setActionLoading(true);
     try {
       console.log("🚀 Iniciando solicitud de turno...");
       console.log("📅 Fecha input:", fechaInput);
@@ -823,7 +882,7 @@ export default function TurnosScreen() {
       console.error("❌ Error solicitando turno:", e);
       setError(e.message || "Error"); 
     } finally { 
-      setLoading(false); 
+      setActionLoading(false); 
     }
   };
 
@@ -845,9 +904,9 @@ export default function TurnosScreen() {
 
   const guardarEdicion = async () => {
     if (!turnoEditando) return;
-    setLoading(true);
     setError("");
     setSuccess("");
+    setActionLoading(true);
     try {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) { setError("No estás autenticado"); return; }
@@ -960,7 +1019,7 @@ export default function TurnosScreen() {
       console.error("❌ Error actualizando turno:", error);
       setError(error.message || "Error al actualizar turno");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -981,7 +1040,9 @@ export default function TurnosScreen() {
   };
 
   const cancelarTurno = async (turno) => {
-    setLoading(true);
+    setError("");
+    setSuccess("");
+    setActionLoading(true);
     try {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
@@ -1010,7 +1071,7 @@ export default function TurnosScreen() {
       console.error("❌ Error cancelando turno:", error);
       setError(error.message || "Error al cancelar turno");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -1035,7 +1096,9 @@ export default function TurnosScreen() {
   };
 
   const archivarTurno = async (turno) => {
-    setLoading(true);
+    setError("");
+    setSuccess("");
+    setActionLoading(true);
     try {
       const st = getDisplayEstado(turno);
       if (!isEstadoFinal(st)) throw new Error("Solo se pueden archivar turnos cancelados, completados o vencidos.");
@@ -1059,7 +1122,7 @@ export default function TurnosScreen() {
       console.error("❌ Error archivando turno:", error);
       setError(error.message || "Error al archivar turno");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -1076,11 +1139,28 @@ export default function TurnosScreen() {
   const isSolicitarTabActive = view === "form";
   const isVerMisTurnosTabActive = view !== "form";
 
+  const formatFechaLarga = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+    const dias = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    const dia = dias[date.getDay()] || "";
+    const num = date.getDate();
+    const mes = meses[date.getMonth()] || "";
+    const yyyy = date.getFullYear();
+    if (!dia || !mes || !Number.isFinite(num) || !Number.isFinite(yyyy)) return "";
+    return `${dia} ${num} de ${mes} de ${yyyy}`;
+  };
+
   const renderFechaPicker = () => (
     <>
       <TouchableOpacity style={[styles.input, { justifyContent: "center" }]} onPress={openDatePicker}>
         <Text style={{ color: fechaInput ? "#2c3e50" : "#95a5a6" }}>{fechaInput || "Fecha (DD/MM/AAAA)"}</Text>
       </TouchableOpacity>
+      {fechaInput ? (
+        <Text style={styles.fechaLargaText}>
+          {formatFechaLarga(parseInputToDate(fechaInput))}
+        </Text>
+      ) : null}
       {showDatePicker && Platform.OS === "android" ? (
         <DateTimePicker
           value={parseInputToDate(fechaInput) || minSelectableDate()}
@@ -1238,17 +1318,32 @@ export default function TurnosScreen() {
             </View>
 
             <FlatList 
-              data={[...list.filter(t => filtroEstado === "todos" || getDisplayEstado(t) === filtroEstado)].sort((a, b) => {
+              data={((listLoading && (!Array.isArray(list) || list.length === 0)) ? Array.from({ length: 6 }, (_, i) => ({ id: `skeleton_${i}`, _isSkeleton: true })) : [...list.filter(t => filtroEstado === "todos" || getDisplayEstado(t) === filtroEstado)].sort((a, b) => {
                 const aMs = getTurnoDateMs(a);
                 const bMs = getTurnoDateMs(b);
                 if (aMs === null && bMs === null) return 0;
                 if (aMs === null) return 1;
                 if (bMs === null) return -1;
                 return orden === "lejanos" ? bMs - aMs : aMs - bMs;
-              })} 
+              }))} 
               keyExtractor={(item) => item.id} 
-              ListEmptyComponent={<Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
+              ListHeaderComponent={listLoading && Array.isArray(list) && list.length > 0 ? (
+                <View style={{ paddingVertical: 10 }}>
+                  <ActivityIndicator color="#1e8449" />
+                </View>
+              ) : null}
+              ListEmptyComponent={listLoading ? <ActivityIndicator color="#1e8449" style={{ marginTop: 18 }} /> : <Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
               renderItem={({ item }) => {
+                if (item?._isSkeleton) {
+                  return (
+                    <View style={[styles.turnoCard, styles.skeletonCard]}>
+                      <View style={[styles.skeletonLine, { width: "55%" }]} />
+                      <View style={[styles.skeletonLine, { width: "75%", marginTop: 10 }]} />
+                      <View style={[styles.skeletonLine, { width: "65%", marginTop: 10 }]} />
+                      <View style={[styles.skeletonPill, { width: 110, marginTop: 14 }]} />
+                    </View>
+                  );
+                }
                 const displayEstado = getDisplayEstado(item);
                 return (
                   <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
@@ -1301,9 +1396,14 @@ export default function TurnosScreen() {
       {view === 'form' && (
         <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {renderFechaPicker()}
-          <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setMostrarTipos(!mostrarTipos)}>
-            <Text style={{ color: tipo ? '#2c3e50' : '#95a5a6' }}>{tipo || 'Tipo de turno'}</Text>
+          <TouchableOpacity
+            style={[styles.input, { justifyContent: "center" }, !fechaInput && styles.inputDisabled]}
+            onPress={() => setMostrarTipos(!mostrarTipos)}
+            disabled={!fechaInput}
+          >
+            <Text style={{ color: tipo ? "#2c3e50" : "#95a5a6" }}>{tipo || "Tipo de turno"}</Text>
           </TouchableOpacity>
+          {!fechaInput ? <Text style={styles.helperText}>Seleccioná primero la fecha</Text> : null}
           {tipo ? (
             <Text style={{ fontSize: 12, color: '#7f8c8d', marginBottom: 8 }}>
               🔍 Tipo detectado: {(() => {
@@ -1323,14 +1423,42 @@ export default function TurnosScreen() {
               ))}
             </View>
           )}
-          <TextInput style={styles.input} placeholder={normalizeTipoFromLabel(tipo) === 'otro' ? 'Motivo (obligatorio)' : 'Motivo (opcional)'} value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
+          {normalizeTipoFromLabel(tipo) === "otro" ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Motivo (obligatorio)"
+              value={motivo}
+              onChangeText={setMotivo}
+              multiline
+              numberOfLines={3}
+            />
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
+          {fechaInput && tipo ? (
+            <View style={{ marginTop: 2, marginBottom: 8 }}>
+              <Text style={styles.dispStatusText}>
+                Disponibilidad: {dispLoading ? "Verificando..." : disp === null ? "-" : disp ? "Sí" : "No"}
+              </Text>
+              {dispHint ? <Text style={styles.dispHintText}>{dispHint}</Text> : null}
+            </View>
+          ) : null}
           <View style={styles.row}>
-            <TouchableOpacity style={styles.btn} onPress={checkDisponibilidad}><Text style={styles.btnText}>Ver disponibilidad</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.btn} onPress={solicitarTurno} disabled={loading || (isOnline && disp !== true)}><Text style={styles.btnText}>{loading ? "Solicitando..." : "Solicitar"}</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, (!fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())) && styles.btnDisabled]}
+              onPress={solicitarTurno}
+              disabled={
+                actionLoading ||
+                dispLoading ||
+                !fechaInput ||
+                !tipo ||
+                disp !== true ||
+                (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())
+              }
+            >
+              <Text style={styles.btnText}>{actionLoading ? "Solicitando..." : "Solicitar"}</Text>
+            </TouchableOpacity>
           </View>
-          {disp !== null && <Text style={{ marginTop: 8 }}>Disponibilidad: {disp ? "Sí" : "No"}</Text>}
         </View>
       )}
 
@@ -1367,8 +1495,8 @@ export default function TurnosScreen() {
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={cancelarEdicion}>
               <Text style={styles.btnText}>Cancelar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.btn} onPress={guardarEdicion} disabled={loading || (normalizeTipoFromLabel(tipo) === 'otro' && !String(motivo || '').trim())}>
-              <Text style={styles.btnText}>{loading ? "Guardando..." : "Guardar cambios"}</Text>
+            <TouchableOpacity style={styles.btn} onPress={guardarEdicion} disabled={actionLoading || (normalizeTipoFromLabel(tipo) === 'otro' && !String(motivo || '').trim())}>
+              <Text style={styles.btnText}>{actionLoading ? "Guardando..." : "Guardar cambios"}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1377,11 +1505,6 @@ export default function TurnosScreen() {
   );
 }
 
-// (loading handled inside component)
-
-// Mostrar pantalla de carga cuando `loading` está activo
-if (false) {}
-
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12, backgroundColor: "#fff" },
   title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
@@ -1389,13 +1512,19 @@ const styles = StyleSheet.create({
   cardBar: { flexDirection: "row", gap: 12, backgroundColor: "#ffffff", padding: 10, borderRadius: 10, elevation: 3 },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 12 },
   input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10, marginBottom: 12 },
+  inputDisabled: { backgroundColor: "#f3f4f6", borderColor: "#d1d5db" },
   dropdown: { borderWidth: 1, borderColor: '#dfe6e9', borderRadius: 8, backgroundColor: '#ffffff', marginBottom: 12 },
   option: { padding: 10, borderBottomWidth: 1, borderBottomColor: '#ecf0f1' },
   row: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 8 },
   btn: { backgroundColor: "#1e8449", padding: 10, borderRadius: 8 },
+  btnDisabled: { opacity: 0.6 },
   primary: { backgroundColor: "#2ecc71" },
   secondary: { backgroundColor: "#3498db" },
   btnText: { color: "#fff" },
+  helperText: { fontSize: 12, color: "#7f8c8d", textAlign: "center", marginTop: -6, marginBottom: 8 },
+  fechaLargaText: { fontSize: 15, color: "#374151", textAlign: "center", marginTop: -6, marginBottom: 10, fontWeight: "600" },
+  dispStatusText: { textAlign: "center", fontSize: 14, color: "#111827", marginBottom: 10 },
+  dispHintText: { fontSize: 12, color: "#7f8c8d", textAlign: "center" },
   topTabText: { fontSize: 15, fontWeight: "700" },
   topTabInactive: { opacity: 1, borderWidth: 2.5, borderColor: "transparent" },
   topTabActive: { opacity: 1, borderWidth: 2.5, borderColor: "#fff", elevation: 6, shadowColor: "#000", shadowOpacity: 0.22, shadowOffset: { width: 0, height: 3 }, shadowRadius: 5 },
@@ -1417,6 +1546,9 @@ const styles = StyleSheet.create({
   turnoTipo: { fontSize: 14, color: '#34495e', marginBottom: 4 },
   turnoMotivo: { fontSize: 13, color: '#7f8c8d', fontStyle: 'italic' },
   turnoNotice: { marginTop: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
+  skeletonCard: { borderColor: "rgba(15,23,42,0.08)" },
+  skeletonLine: { height: 14, backgroundColor: "#e5e7eb", borderRadius: 8 },
+  skeletonPill: { height: 22, backgroundColor: "#e5e7eb", borderRadius: 999 },
   turnoNoticeText: { fontSize: 13, fontWeight: '700' },
   turnoNoticeCancel: { backgroundColor: '#fef3c7', borderColor: '#fde68a' },
   turnoNoticeCancelText: { color: '#92400e' },

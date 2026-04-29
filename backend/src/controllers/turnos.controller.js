@@ -9,6 +9,8 @@ const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
 const TURNOS_CONFIG_COLLECTION = "config";
 const TURNOS_CONFIG_DOC = "turnos";
 const DEFAULT_TURNOS_HABILITADO = true;
+const HORA_APERTURA = 7;
+const HORA_CIERRE = 13;
 
 const console = process.env.DEBUG_TURNOS === "true"
   ? globalThis.console
@@ -316,6 +318,19 @@ export const crearTurno = async (req, res) => {
     soloDia.setHours(0, 0, 0, 0);
     if (soloDia.getTime() < hoy.getTime()) {
       return res.status(400).json({ message: "Fecha ya pasada" });
+    }
+    if (soloDia.getTime() === hoy.getTime()) {
+      const ahora = new Date();
+      const cierreHoy = new Date();
+      cierreHoy.setHours(HORA_CIERRE, 0, 0, 0);
+      if (ahora.getTime() >= cierreHoy.getTime()) {
+        return res
+          .status(400)
+          .json({
+            message:
+              `El horario de atención para hoy ya finalizó (${String(HORA_APERTURA).padStart(2, "0")}:00 a ${String(HORA_CIERRE).padStart(2, "0")}:00). Seleccioná otra fecha.`,
+          });
+      }
     }
 
     // No fines de semana

@@ -55,24 +55,7 @@ export default function PerfilScreen() {
       mounted = false;
     };
   }, []);
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <Text style={{ marginTop: 8, color: '#1e8449' }}>Cargando perfil…</Text>
-        <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
-      </View>
-    );
-  }
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
-      </View>
-    );
-  }
-
-  const campos = normalizeCampos(data);
+  const campos = data ? normalizeCampos(data) : [];
 
   const renderUbicaciones = (ubicaciones) => (
     <View style={styles.ubicacionesContainer}>
@@ -98,30 +81,43 @@ export default function PerfilScreen() {
     <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}>
         <Text style={styles.title}>Mi Perfil</Text>
-        <View style={styles.card}>
-          <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
-          <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
-          <Text style={styles.item}>CUIL: {data?.cuil}</Text>
-          <Text style={styles.item}>Email: {data?.email || "-"}</Text>
-          <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
-          <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
-          <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
-          <Text style={styles.item}>Estado: {data?.estado}</Text>
-          <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
-          
-          <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
-
-          <View style={styles.camposContainer}>
-            {campos.map((c, idx) => (
-              <View key={c.id} style={[styles.campoBlock, idx > 0 ? styles.campoBlockSpacing : null]}>
-                <View style={styles.campoHeader}>
-                  <Text style={styles.campoTitle}>{c.nombre}</Text>
-                </View>
-                {renderUbicaciones(c.ubicaciones)}
-              </View>
-            ))}
+        {error ? (
+          <View style={styles.card}>
+            <Text style={styles.error}>{error}</Text>
           </View>
-        </View>
+        ) : loading ? (
+          <View style={styles.card}>
+            <View style={styles.center}>
+              <Text style={{ marginTop: 8, color: "#1e8449" }}>Cargando perfil…</Text>
+              <ActivityIndicator color="#1e8449" style={{ marginTop: 8 }} />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
+            <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
+            <Text style={styles.item}>CUIL: {data?.cuil}</Text>
+            <Text style={styles.item}>Email: {data?.email || "-"}</Text>
+            <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
+            <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
+            <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
+            <Text style={styles.item}>Estado: {data?.estado}</Text>
+            <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
+            
+            <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
+
+            <View style={styles.camposContainer}>
+              {campos.map((c, idx) => (
+                <View key={c.id} style={[styles.campoBlock, idx > 0 ? styles.campoBlockSpacing : null]}>
+                  <View style={styles.campoHeader}>
+                    <Text style={styles.campoTitle}>{c.nombre}</Text>
+                  </View>
+                  {renderUbicaciones(c.ubicaciones)}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

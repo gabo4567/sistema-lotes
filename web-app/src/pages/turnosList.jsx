@@ -103,7 +103,7 @@ const [cfgMensaje, setCfgMensaje] = useState('')
 
 // Estados para filtros
 const [filtros, setFiltros] = useState({
-  orden: 'nuevos',
+  orden: 'proximos',
   estado: 'todos',
   productor: '',
   desde: '',
@@ -284,9 +284,12 @@ useEffect(() => {
       
       return true
     }).sort((a, b) => {
-      const da = toDateSafe(a.fechaTurno || a.fecha)?.getTime() ?? 0
-      const db = toDateSafe(b.fechaTurno || b.fecha)?.getTime() ?? 0
-      return filtros.orden === 'nuevos' ? db - da : da - db
+      const aMs = toDateSafe(a?.fechaTurno || a?.fecha)?.getTime() ?? null
+      const bMs = toDateSafe(b?.fechaTurno || b?.fecha)?.getTime() ?? null
+      if (aMs === null && bMs === null) return 0
+      if (aMs === null) return 1
+      if (bMs === null) return -1
+      return filtros.orden === 'lejanos' ? bMs - aMs : aMs - bMs
     })
   }, [turnos, filtros, prodMap])
 
@@ -505,15 +508,7 @@ const summary = useMemo(() => {
   return counts
 }, [turnosFiltrados, todayYmd])
 
-const agendaItems = useMemo(() => {
-  const arr = [...turnosFiltrados]
-  arr.sort((a, b) => {
-    const da = toDateSafe(a?.fechaTurno || a?.fecha)?.getTime() ?? 0
-    const db = toDateSafe(b?.fechaTurno || b?.fecha)?.getTime() ?? 0
-    return da - db
-  })
-  return arr
-}, [turnosFiltrados])
+const agendaItems = turnosFiltrados
 
 const loadInsumosDisp = useCallback(async (productorId) => {
   const pid = String(productorId || '').trim()
@@ -627,16 +622,6 @@ const canQuickComplete = (t) => {
 const canQuickCancel = (t) => {
   const est = getDisplayEstado(t)
   return est === 'pendiente' || est === 'confirmado'
-}
-
-const getAllowedNextEstados = (fromEstado) => {
-  const from = normalizeEstado(fromEstado)
-  if (from === 'pendiente') return ['pendiente', 'confirmado', 'cancelado']
-  if (from === 'confirmado') return ['confirmado', 'cancelado', 'completado']
-  if (from === 'cancelado') return ['cancelado']
-  if (from === 'completado') return ['completado']
-  if (from === 'vencido') return ['vencido']
-  return [from || 'pendiente']
 }
 
 const canTransitionEstado = (fromEstado, toEstado) => {
@@ -918,8 +903,8 @@ return (
           onChange={e => setFiltros({ ...filtros, orden: e.target.value })}
           style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
-          <option value="nuevos">Más nuevos primero</option>
-          <option value="antiguos">Más antiguos primero</option>
+          <option value="proximos">Más próximos</option>
+          <option value="lejanos">Más lejanos</option>
         </select>
       </div>
 
@@ -965,7 +950,7 @@ return (
       <div className="filter-item" style={{ flex: '0 0 auto' }}>
         <button 
           className="btn secondary" 
-          onClick={() => setFiltros({ orden: 'nuevos', estado: 'todos', productor: '', desde: '', hasta: '' })}
+          onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '' })}
           style={{ padding: '8px 18px', fontSize: 15, height: 40, borderRadius: 8 }}
         >Limpiar</button>
       </div>
@@ -1029,21 +1014,6 @@ return (
                                       {displayEstado === 'confirmado' ? (
                                         <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
                                       ) : null}
-                                      <select
-                                        className="select-inst"
-                                        value={normalizeEstado(displayEstado)}
-                                        disabled={isUpdating}
-                                        onChange={e => {
-                                          const prev = normalizeEstado(displayEstado)
-                                          const next = e.target.value
-                                          handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
-                                        }}
-                                        style={{ width: 150, minWidth: 'auto' }}
-                                      >
-                                        {getAllowedNextEstados(displayEstado).map(opt => (
-                                          <option key={opt} value={opt}>{estadoLabel(opt)}</option>
-                                        ))}
-                                      </select>
                                     </>
                                   ) : null}
                                   {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
@@ -1247,23 +1217,6 @@ return (
                           </div>
 
                           <div className="turnos-actions-row">
-                            {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
-                              <select 
-                                className="select-inst" 
-                                style={{ width: '160px', minWidth: 'auto' }}
-                                onChange={e => {
-                                  const prev = normalizeEstado(displayEstado)
-                                  const next = e.target.value
-                                  handleCambioEstado(t.id, next, { onCancel: () => { e.target.value = prev } })
-                                }} 
-                                value={normalizeEstado(displayEstado)}
-                                disabled={isUpdating}
-                              >
-                                {getAllowedNextEstados(displayEstado).map(opt => (
-                                  <option key={opt} value={opt}>{estadoLabel(opt)}</option>
-                                ))}
-                              </select>
-                            ) : null}
                             {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
                               <button 
                                 className="btn" 
