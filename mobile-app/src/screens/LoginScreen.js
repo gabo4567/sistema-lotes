@@ -6,6 +6,7 @@ import ButtonPrimary from "../components/ButtonPrimary";
 import { API_URL } from "../utils/constants";
 import { signInWithCustomToken } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
+import { apiFetch } from "../api/api";
 
 export default function LoginScreen({ navigation }) {
   const { setUser } = useContext(AuthContext);
@@ -33,7 +34,7 @@ export default function LoginScreen({ navigation }) {
 
     try {
       if (__DEV__) console.log("API_URL:", API_URL);
-      const resp = await fetch(`${API_URL}/auth/login-productor`, {
+      const resp = await apiFetch(`${API_URL}/auth/login-productor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ipt: String(ipt).trim(), password }),
@@ -55,6 +56,8 @@ export default function LoginScreen({ navigation }) {
 
       if (code === "backend") message = err?.message || message;
       else if (code === "auth/invalid-credential") message = "Credenciales incorrectas.";
+      else if (code === "OFFLINE") message = "Sin conexión a internet.";
+      else if (code === "SERVER_WAKING") message = err?.message || "Conectando al servidor…";
       else if (String(err?.message || "").includes("Network request failed")) message = "No se pudo conectar al servidor.";
 
       setError(message);

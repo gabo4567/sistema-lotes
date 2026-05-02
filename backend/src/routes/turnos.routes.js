@@ -18,6 +18,7 @@ import {
   obtenerTurnosPorRangoFechas,
   disponibilidadTurno,
 } from "../controllers/turnos.controller.js";
+import { idempotency } from "../middlewares/idempotency.js";
 
 const router = Router();
 
@@ -30,17 +31,17 @@ router.get("/ping", (req, res) => {
 router.get("/disponibilidad", disponibilidadTurno);
 
 // CRUD principal - requiere autenticación
-router.post("/", crearTurno);
+router.post("/", idempotency(), crearTurno);
 router.get("/", obtenerTurnos);
 router.get("/config", obtenerConfigTurnos);
-router.put("/config", upsertConfigTurnos);
+router.put("/config", idempotency(), upsertConfigTurnos);
 router.get("/capacidad", obtenerCapacidadTurnoDia);
-router.put("/capacidad/:fecha", upsertCapacidadTurnoDia);
+router.put("/capacidad/:fecha", idempotency(), upsertCapacidadTurnoDia);
 router.get("/:id", obtenerTurnoPorId);
-router.put("/:id", actualizarTurno);
-router.patch("/:id/estado", cambiarEstadoTurno);
-router.patch("/:id/restaurar", restaurarTurno);
-router.delete("/:id", eliminarTurno);
+router.put("/:id", idempotency(), actualizarTurno);
+router.patch("/:id/estado", idempotency(), cambiarEstadoTurno);
+router.patch("/:id/restaurar", idempotency(), restaurarTurno);
+router.delete("/:id", idempotency(), eliminarTurno);
 
 // 📊 Endpoints complementarios - requieren autenticación
 router.get("/estado/:estado", obtenerTurnosPorEstado);

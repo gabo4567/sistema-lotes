@@ -5,6 +5,7 @@ import { API_URL } from "../utils/constants";
 import { auth } from "../services/firebase";
 import { signInWithCustomToken } from "firebase/auth";
 import { AuthContext } from "../context/AuthContext";
+import { apiFetch } from "../api/api";
 
 export default function ChangePasswordScreen({ route, navigation }) {
   const { ipt } = route.params || {};
@@ -34,7 +35,7 @@ export default function ChangePasswordScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
-      const resp = await fetch(`${API_URL}/auth/productor/cambiar-password`, {
+      const resp = await apiFetch(`${API_URL}/auth/productor/cambiar-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ipt, oldPassword, newPassword }),
@@ -53,6 +54,8 @@ export default function ChangePasswordScreen({ route, navigation }) {
     } catch (err) {
       const code = err?.code || "error";
       let message = err?.message || "No se pudo cambiar la contraseña.";
+      if (code === "OFFLINE") message = "Sin conexión a internet.";
+      if (code === "SERVER_WAKING") message = err?.message || "Conectando al servidor…";
       setError(message);
     } finally {
       setLoading(false);

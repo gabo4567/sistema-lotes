@@ -36,16 +36,6 @@ export default {
             "La app necesita acceder a tu ubicación para mostrar tus lotes en el mapa."
         }
       ],
-      [
-        "expo-image-picker",
-        {
-          cameraPermission:
-            "El sistema de lotes necesita acceso a tu cámara para tomar fotos como evidencia de las mediciones.",
-          microphonePermission: false,
-          photosPermission:
-            "El sistema de lotes necesita acceso a tu galería para adjuntar fotos como evidencia de las mediciones."
-        }
-      ],
       "@react-native-community/datetimepicker"
     ],
 
@@ -55,12 +45,6 @@ export default {
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           "Necesitamos tu ubicación para mostrar tus lotes en el mapa.",
-        NSCameraUsageDescription:
-          "El sistema de lotes necesita acceso a tu cámara para tomar fotos como evidencia de las mediciones.",
-        NSPhotoLibraryUsageDescription:
-          "El sistema de lotes necesita acceso a tu galería para adjuntar fotos como evidencia de las mediciones.",
-        NSPhotoLibraryAddUsageDescription:
-          "El sistema de lotes necesita guardar fotos en tu galería."
       }
     },
 
@@ -79,9 +63,6 @@ export default {
       permissions: [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
       ]
     },
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
-import Layout from "../components/Layout";
 import MapPolygonEditor from "../components/MapPolygonEditor";
 import Swal from "sweetalert2";
 
@@ -44,7 +43,6 @@ const LoteAdminForm = () => {
   const isEdit = Boolean(id);
   const [form, setForm] = useState({ nombre:"", ipt:"", superficie:"", ubicacionLat:"", ubicacionLng:"", metodoMarcado:"aereo", observacionesTecnico:"", poligonoText:"" });
   const [loading, setLoading] = useState(false);
-  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
   const [poly, setPoly] = useState([]);
   const [ultimaMod, setUltimaMod] = useState(null);
@@ -235,31 +233,6 @@ const LoteAdminForm = () => {
     return lat != null && lng != null ? { lat, lng } : undefined;
   })();
 
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError("El navegador no soporta geolocalizacion");
-      return;
-    }
-
-    setLocating(true);
-    setError("");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setForm((current) => ({
-          ...current,
-          ubicacionLat: String(coords.latitude),
-          ubicacionLng: String(coords.longitude),
-        }));
-        setLocating(false);
-      },
-      (geoError) => {
-        setError(geoError.message || "No se pudo obtener la ubicacion actual");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
   const onSubmit = async (e) => {
     e.preventDefault(); setError(""); setLoading(true);
     try {
@@ -304,23 +277,61 @@ const LoteAdminForm = () => {
         </div>
       ) : null}
       <form onSubmit={onSubmit} className="form-grid">
-        <input className="input-inst" placeholder="Nombre del lote" value={form.nombre} onChange={e=>onChange('nombre', e.target.value)} />
-        <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
-        <input className="input-inst" placeholder="Ubicación lat" value={form.ubicacionLat} onChange={e=>onChange('ubicacionLat', e.target.value)} />
-        <input className="input-inst" placeholder="Ubicación lng" value={form.ubicacionLng} onChange={e=>onChange('ubicacionLng', e.target.value)} />
-        <input className="input-inst" placeholder="Superficie (ha)" value={form.superficie} onChange={e=>onChange('superficie', e.target.value)} />
-        <input className="input-inst" value="Método: Aéreo" readOnly style={{ backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }} />
-        <button type="button" className="btn" onClick={useCurrentLocation} disabled={locating}>{locating ? 'Ubicando…' : 'Usar mi ubicación'}</button>
-        <div className="map-card" style={{ gridColumn: '1 / -1' }}>
-          <div style={{ marginBottom: 8 }}>Editar polígono en el mapa</div>
-          <MapPolygonEditor points={poly} center={center} onChange={syncPolygonInForm} />
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Nombre del lote</label>
+          <input className="input-inst" placeholder="Ej: Lote del Sur" value={form.nombre} onChange={e=>onChange('nombre', e.target.value)} />
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>IPT del productor</label>
+          <input className="input-inst" placeholder="Ej: 654321" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
+        </div>
+
+        <div className="map-card" style={{ gridColumn: "1 / -1" }}>
+          <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+            <div style={{ fontWeight: 800, color: "#111827" }}>Polígono del lote</div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ width: "100%", maxWidth: 900 }}>
+              <MapPolygonEditor points={poly} center={center} onChange={syncPolygonInForm} />
+            </div>
+          </div>
           {!hasApiKey && (
             <div style={{ marginTop: 6, color: '#6b7280' }}>Sin API key: usá el campo de texto para cargar el polígono (lat,lng por línea)</div>
           )}
         </div>
-        <div style={{ gridColumn: '1 / -1', color: '#6b7280', fontSize: 14 }}>Si dejás la superficie o la ubicación vacías, el sistema las deriva automáticamente desde el polígono.</div>
-        <textarea className="input-inst" placeholder="Polígono (una línea por punto: lat,lng)" rows={6} value={form.poligonoText} onChange={e=>onChange('poligonoText', e.target.value)} />
-        <textarea className="input-inst" placeholder="Observaciones del técnico" value={form.observacionesTecnico} onChange={e=>onChange('observacionesTecnico', e.target.value)} />
+
+        <div style={{ gridColumn: "1 / -1", display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Coordenadas del polígono (una por línea: lat,lng)</label>
+          <textarea className="input-inst" rows={6} value={form.poligonoText} onChange={e=>onChange('poligonoText', e.target.value)} placeholder="Ej:\n-29.1537,-59.2526\n-29.1529,-59.2518\n-29.1530,-59.2513" />
+          <div style={{ color: "#64748b", fontSize: 13 }}>Estas coordenadas definen la forma del lote.</div>
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Superficie (hectáreas)</label>
+          <input className="input-inst" placeholder="Ej: 12.50" value={form.superficie} onChange={e=>onChange('superficie', e.target.value)} />
+          <div style={{ color: "#64748b", fontSize: 13 }}>Si se deja vacío, se calcula automáticamente a partir del polígono.</div>
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Ubicación (latitud y longitud)</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <input className="input-inst" placeholder="Latitud" value={form.ubicacionLat} onChange={e=>onChange('ubicacionLat', e.target.value)} />
+            <input className="input-inst" placeholder="Longitud" value={form.ubicacionLng} onChange={e=>onChange('ubicacionLng', e.target.value)} />
+          </div>
+          <div style={{ color: "#64748b", fontSize: 13 }}>Punto de referencia del lote. Si se deja vacío, se calcula automáticamente.</div>
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Observaciones del administrador</label>
+          <textarea className="input-inst" placeholder="Observaciones del administrador" value={form.observacionesTecnico} onChange={e=>onChange('observacionesTecnico', e.target.value)} />
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Método</label>
+          <input className="input-inst" value="Aéreo" readOnly style={{ backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }} />
+        </div>
+
         {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/lotes')}>Cancelar</button>

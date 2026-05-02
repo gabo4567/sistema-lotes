@@ -90,9 +90,11 @@ export const useWalkingGPS = () => {
   }, []);
 
   const startWalking = useCallback(async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    const { status } = await Location.getForegroundPermissionsAsync();
     if (status !== 'granted') {
-      throw new Error('Se requiere permiso de ubicación para el modo GPS caminando.');
+      const err = new Error('Se requiere permiso de ubicación para el modo GPS caminando.');
+      err.code = 'LOCATION_PERMISSION_REQUIRED';
+      throw err;
     }
 
     setRoute([]);

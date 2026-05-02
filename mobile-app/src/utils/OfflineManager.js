@@ -10,6 +10,8 @@ class OfflineManager {
     this.operationListeners = [];
     this.operationQueue = [];
     this.isProcessingQueue = false;
+    this.backendWarmedUp = false;
+    this.inFlight = new Map();
 
     // Inicializar detección de conectividad
     this.initializeConnectivity();
@@ -37,6 +39,100 @@ class OfflineManager {
 
     // Cargar operaciones pendientes del storage
     await this.loadPendingOperations();
+  }
+
+  sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  isRetryableStatus(status) {
+    return status === 502 || status === 503 || status === 504;
+  }
+
+  async fetchWithRetry(url, options = {}) {
+    if (options?._dedupe !== false) {
+      const method = String(options?.method || "GET").toUpperCase();
+      const isMutating = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+      const body = (() => {
+        const b = options?.body;
+        if (b === undefined || b === null) return "";
+        if (typeof b === "string") return b;
+        try {
+          return JSON.stringify(b);
+        } catch {
+          return String(b);
+        }
+      })();
+      const lockKey = options?._lockKey ? String(options._lockKey) : `${method} ${String(url)} ${body}`;
+      const existing = this.inFlight.get(lockKey);
+      if (existing) return existing.then((r) => r.clone());
+      const headers = (options?.headers && typeof options.headers === "object") ? { ...options.headers } : {};
+      if (isMutating && !headers["Idempotency-Key"] && !headers["idempotency-key"]) {
+        const rand = Math.random().toString(16).slice(2);
+        headers["Idempotency-Key"] = `k_${Date.now().toString(16)}_${rand}`;
+      }
+      const p = (async () => this.fetchWithRetry(url, { ...options, headers, _dedupe: false }))().finally(() => {
+        this.inFlight.delete(lockKey);
+      });
+      this.inFlight.set(lockKey, p);
+      return p.then((r) => r.clone());
+    }
+
+    const method = String(options?.method || "GET").toUpperCase();
+    const canRetry = method === "GET";
+    const maxRetries = canRetry ? 2 : 0;
+    const baseDelayMs = 900;
+    const timeoutMs = this.backendWarmedUp ? 15000 : 25000;
+
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const attemptTimeoutMs = attempt === 0 ? timeoutMs : 15000;
+        const resp = await this.fetchWithTimeout(url, options, attemptTimeoutMs);
+        if (!resp.ok && this.isRetryableStatus(resp.status) && attempt < maxRetries) {
+          await this.sleep(baseDelayMs * (attempt + 1));
+          continue;
+        }
+        if (resp.ok) this.backendWarmedUp = true;
+        if (!resp.ok && this.isRetryableStatus(resp.status)) {
+          const err = new Error("Conectando al servidor… puede demorar al iniciar. Reintentá en unos segundos.");
+          err.code = "SERVER_WAKING";
+          throw err;
+        }
+        return resp;
+      } catch (e) {
+        lastError = e;
+        const isAbort = e?.name === "AbortError";
+        if (!canRetry || attempt >= maxRetries) break;
+        if (!isAbort && String(e?.message || "").toLowerCase().includes("network request failed") === false) {
+          break;
+        }
+        await this.sleep(baseDelayMs * (attempt + 1));
+      }
+    }
+
+    const net = await NetInfo.fetch().catch(() => null);
+    const isConnected = net?.isConnected ?? true;
+    if (!isConnected) {
+      const err = new Error("Sin conexión a internet.");
+      err.code = "OFFLINE";
+      throw err;
+    }
+    if (lastError?.code === "SERVER_WAKING") throw lastError;
+    const err = new Error("El servidor está iniciando o demorando en responder. Reintentá en unos segundos.");
+    err.code = "SERVER_WAKING";
+    throw err;
   }
 
   // Suscribirse a cambios de conectividad
@@ -116,9 +212,22 @@ class OfflineManager {
           this.notifyOperationListeners({ status: 'success', operation, result });
         } catch (error) {
           console.warn('Error ejecutando operación offline:', error);
-          operation.retryCount = (operation.retryCount || 0) + 1;
           operation.lastAttemptAt = new Date().toISOString();
           operation.lastError = error?.message || String(error);
+
+          if (error?.nonRetryable) {
+            const wasFailed = operation.status === 'failed';
+            operation.status = 'failed';
+            operation.error = operation.lastError;
+            operation.retryCount = Math.max(Number(operation.retryCount || 0), 3);
+            if (!wasFailed) {
+              this.notifyOperationListeners({ status: 'failed', operation, error: operation.error });
+            }
+            await this.savePendingOperations();
+            continue;
+          }
+
+          operation.retryCount = (operation.retryCount || 0) + 1;
 
           // Si falló muchas veces, marcar como fallida
           if (operation.retryCount >= 3) {
@@ -140,30 +249,32 @@ class OfflineManager {
 
   // Ejecutar una operación específica
   async executeOperation(operation) {
-    const { type, data, endpoint, method = 'POST' } = operation;
+    const { type } = operation;
 
     // Aquí implementarías la lógica específica para cada tipo de operación
     switch (type) {
       case 'CREATE_LOTE':
-        return await this.syncCreateLote(data);
+        return await this.syncCreateLote(operation);
       case 'UPDATE_LOTE':
-        return await this.syncUpdateLote(data);
+        return await this.syncUpdateLote(operation);
       case 'CREATE_TURNO':
-        return await this.syncCreateTurno(data);
+        return await this.syncCreateTurno(operation);
       case 'UPDATE_UBICACION':
-        return await this.syncUpdateUbicacion(data);
+        return await this.syncUpdateUbicacion(operation);
       default:
         throw new Error(`Tipo de operación no soportado: ${type}`);
     }
   }
 
   // Implementaciones específicas de sincronización
-  async syncCreateLote(data) {
-    const response = await fetch(`${API_URL}/lotes`, {
+  async syncCreateLote(operation) {
+    const data = operation?.data;
+    const response = await this.fetchWithRetry(`${API_URL}/lotes`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await this.getAuthToken()}`
+        'Authorization': `Bearer ${await this.getAuthToken()}`,
+        'Idempotency-Key': `offline_${String(operation?.id)}`
       },
       body: JSON.stringify(data)
     });
@@ -175,12 +286,14 @@ class OfflineManager {
     return response.json();
   }
 
-  async syncUpdateLote(data) {
-    const response = await fetch(`${API_URL}/lotes/${data.id}`, {
+  async syncUpdateLote(operation) {
+    const data = operation?.data;
+    const response = await this.fetchWithRetry(`${API_URL}/lotes/${data.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await this.getAuthToken()}`
+        'Authorization': `Bearer ${await this.getAuthToken()}`,
+        'Idempotency-Key': `offline_${String(operation?.id)}`
       },
       body: JSON.stringify(data)
     });
@@ -192,24 +305,40 @@ class OfflineManager {
     return response.json();
   }
 
-  async syncCreateTurno(data) {
-    const response = await fetch(`${API_URL}/turnos`, {
+  async syncCreateTurno(operation) {
+    const data = operation?.data;
+    const response = await this.fetchWithRetry(`${API_URL}/turnos`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await this.getAuthToken()}`
+        'Authorization': `Bearer ${await this.getAuthToken()}`,
+        'Idempotency-Key': `offline_${String(operation?.id)}`
       },
       body: JSON.stringify(data)
     });
 
     if (!response.ok) {
-      throw new Error('Error sincronizando turno');
+      let msg = 'No se pudo sincronizar el turno';
+      try {
+        const j = await response.json();
+        msg = j?.message || j?.error || msg;
+      } catch {
+        try {
+          const t = await response.text();
+          if (t) msg = t;
+        } catch {}
+      }
+      const err = new Error(msg);
+      err.httpStatus = response.status;
+      err.nonRetryable = response.status >= 400 && response.status < 500 && response.status !== 429;
+      throw err;
     }
 
     return response.json();
   }
 
-  async syncUpdateUbicacion(data) {
+  async syncUpdateUbicacion(operation) {
+    const data = operation?.data;
     const productorId = data?.productorId || data?.id || data?.productor?.id;
     const ubicaciones = data?.ubicaciones;
     const campos = data?.campos;
@@ -218,11 +347,12 @@ class OfflineManager {
       throw new Error('Datos de ubicación incompletos');
     }
 
-    const response = await fetch(`${API_URL}/productores/${productorId}`, {
+    const response = await this.fetchWithRetry(`${API_URL}/productores/${productorId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await this.getAuthToken()}`
+        'Authorization': `Bearer ${await this.getAuthToken()}`,
+        'Idempotency-Key': `offline_${String(operation?.id)}`
       },
       body: JSON.stringify({ ubicaciones, campos, campoActivoId })
     });
@@ -279,6 +409,11 @@ class OfflineManager {
   // Limpiar operaciones fallidas (opcional)
   async clearFailedOperations() {
     this.operationQueue = this.operationQueue.filter(op => op.status !== 'failed');
+    await this.savePendingOperations();
+  }
+
+  async clearPendingOperations() {
+    this.operationQueue = this.operationQueue.filter(op => op?.status === 'failed');
     await this.savePendingOperations();
   }
 

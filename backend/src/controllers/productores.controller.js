@@ -315,13 +315,21 @@ export const historialIngresos = async (req, res) => {
 export const setPushToken = async (req, res) => {
   try {
     const { ipt } = req.params;
-    const { token } = req.body;
+    const { token, type } = req.body;
     if (!token) return res.status(400).json({ error: "Token requerido" });
     const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
     if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
     const doc = snap.docs[0];
-    await doc.ref.update({ pushTokens: FieldValue.arrayUnion(token) });
-    res.json({ message: "Push token registrado" });
+    const rawType = String(type || "").toLowerCase().trim();
+    const isExpo = rawType === "expo" || String(token).startsWith("ExponentPushToken");
+    const isFcm = rawType === "fcm";
+    const payload = isFcm
+      ? { fcmTokens: FieldValue.arrayUnion(token) }
+      : isExpo
+        ? { expoPushTokens: FieldValue.arrayUnion(token) }
+        : { pushTokens: FieldValue.arrayUnion(token) };
+    await doc.ref.set(payload, { merge: true });
+    res.json({ message: "Push token registrado", type: isFcm ? "fcm" : (isExpo ? "expo" : "generic") });
   } catch (error) {
     res.status(500).json({ error: "Error al registrar push token" });
   }

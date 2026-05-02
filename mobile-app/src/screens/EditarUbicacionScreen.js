@@ -1,10 +1,11 @@
 // src/screens/EditarUbicacionScreen.js
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { offlineUbicacionesOperations } from '../utils/offlineOperations';
+import { usePermissionPrompt } from '../components/PermissionPromptModal';
 
 const LABELS = {
   entradaDomicilio: 'Entrada del domicilio',
@@ -58,6 +59,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
   const [marker, setMarker] = useState(null);
   const [saving, setSaving] = useState(false);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+  const { ask: askPermission, Prompt: PermissionPrompt } = usePermissionPrompt();
 
   const campos = normalizeCampos(productor);
   const requestedCampoId = campoId ? String(campoId) : '';
@@ -68,31 +70,69 @@ export default function EditarUbicacionScreen({ route, navigation }) {
     campos[0];
   const current = selectedCampo?.ubicaciones?.[tipo];
 
-  const requestLocationAccess = async () => {
+  const requestLocationAccess = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       setLocationPermissionDenied(true);
-      setRegion(null);
-      return;
+      Alert.alert(
+        'Permiso de ubicación denegado',
+        'Podés seguir eligiendo la ubicación manualmente en el mapa. Si querés centrar el mapa en tu posición, habilitá el permiso desde la configuración.',
+        [
+          { text: 'Entendido', style: 'cancel' },
+          {
+            text: 'Abrir configuración',
+            onPress: async () => {
+              try {
+                await Linking.openSettings();
+              } catch {
+                Alert.alert('No disponible', 'No se pudo abrir configuración del sistema');
+              }
+            },
+          },
+        ]
+      );
+      return false;
     }
     setLocationPermissionDenied(false);
+    return true;
+  }, []);
 
-    let initial = null;
-    if (current?.lat != null && current?.lng != null) {
-      initial = { latitude: current.lat, longitude: current.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-      setMarker({ latitude: current.lat, longitude: current.lng });
-    } else {
-      const loc = await Location.getCurrentPositionAsync({});
-      initial = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 };
-    }
-    setRegion(initial);
-  };
+  const ensureLocationAccess = useCallback(async () => {
+    try {
+      const current = await Location.getForegroundPermissionsAsync();
+      if (current?.status === 'granted') {
+        setLocationPermissionDenied(false);
+        return true;
+      }
+    } catch {}
+
+    const accepted = await askPermission({
+      title: 'Activar ubicación',
+      body: 'Necesitamos tu ubicación para centrar el mapa en tu posición y facilitar la carga de la ubicación.',
+      acceptText: 'Habilitar',
+      cancelText: 'Ahora no',
+    });
+    if (!accepted) return false;
+    return await requestLocationAccess();
+  }, [askPermission, requestLocationAccess]);
 
   useEffect(() => {
-    (async () => {
-      await requestLocationAccess();
-    })();
-  }, []);
+    if (current?.lat != null && current?.lng != null) {
+      setRegion({ latitude: current.lat, longitude: current.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 });
+      setMarker({ latitude: current.lat, longitude: current.lng });
+      return;
+    }
+    setRegion({ latitude: -34.6037, longitude: -58.3816, latitudeDelta: 0.6, longitudeDelta: 0.6 });
+  }, [current?.lat, current?.lng]);
+
+  const useMyLocation = useCallback(async () => {
+    const ok = await ensureLocationAccess();
+    if (!ok) return;
+    const loc = await Location.getCurrentPositionAsync({});
+    const nextMarker = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+    setMarker(nextMarker);
+    setRegion({ ...nextMarker, latitudeDelta: 0.02, longitudeDelta: 0.02 });
+  }, [ensureLocationAccess]);
 
   const onMapPress = (e) => {
     const { coordinate } = e.nativeEvent;
@@ -152,6 +192,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}> 
+      <PermissionPrompt />
       <Text style={styles.title}>{LABELS[tipo] || 'Editar ubicación'}</Text>
       {region ? (
         <MapView style={[styles.map, { marginBottom: Math.max(insets.bottom, 16) }]} initialRegion={region} onPress={onMapPress} ref={mapRef}>
@@ -164,7 +205,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
           <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
           <Text style={styles.info}>Para editar ubicaciones debes habilitar el permiso de ubicación.</Text>
           <View style={styles.row}>
-            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={ensureLocationAccess}>
               <Text style={styles.btnText}>Reintentar</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -185,6 +226,9 @@ export default function EditarUbicacionScreen({ route, navigation }) {
         <Text style={styles.info}>Cargando mapa…</Text>
       )}
       <View style={styles.panel}>
+        <TouchableOpacity style={[styles.btn, styles.secondary, { marginHorizontal: 0 }]} onPress={useMyLocation}>
+          <Text style={styles.btnText}>Usar mi ubicación</Text>
+        </TouchableOpacity>
         <Text style={styles.info}>{marker ? `Lat: ${marker.latitude.toFixed(6)}  Lng: ${marker.longitude.toFixed(6)}` : 'Tocá el mapa para marcar'}</Text>
         <View style={styles.row}>
           <TouchableOpacity style={[styles.btn, styles.primary]} onPress={save} disabled={saving || !marker}>

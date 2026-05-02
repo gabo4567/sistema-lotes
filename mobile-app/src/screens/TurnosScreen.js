@@ -1,10 +1,12 @@
 // mobile-app/src/screens/TurnosScreen.js
 
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView, Modal, Platform } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView, Modal, Platform, AppState } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
+import { apiFetch, authFetch } from "../api/api";
 import { offlineTurnosOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -20,6 +22,7 @@ export default function TurnosScreen() {
   const [disp, setDisp] = useState(null);
   const [dispLoading, setDispLoading] = useState(false);
   const [dispHint, setDispHint] = useState("");
+  const [turnosConfig, setTurnosConfig] = useState({ estadoActual: null, mensaje: "" });
   const [list, setList] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -37,6 +40,90 @@ export default function TurnosScreen() {
   const prevPendingOpsRef = React.useRef(pendingOperations);
   const dispReqRef = React.useRef(0);
   const dispTimerRef = React.useRef(null);
+  const toYmdLocal = (d) => {
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const turnosDisabled = turnosConfig?.estadoActual !== true;
+  const turnosStatusUnknown = turnosConfig?.estadoActual == null;
+
+  const loadTurnosConfig = useCallback(async ({ forceRefresh = false } = {}) => {
+    const cacheKey = "turnos_config_cache_v3";
+    try {
+      const cachedRaw = await AsyncStorage.getItem(cacheKey);
+      const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+      if (cached && typeof cached === "object") {
+        const fetchedAt = Number.isFinite(Number(cached?.fetchedAt)) ? Number(cached.fetchedAt) : 0;
+        const isStale = fetchedAt > 0 ? (Date.now() - fetchedAt) > 2 * 60 * 1000 : true;
+        const estadoActual =
+          isOnline && isStale
+            ? null
+            : (typeof cached?.estadoActual === "boolean" ? cached.estadoActual : null);
+        const mensaje = String(cached?.mensaje || "").trim();
+        setTurnosConfig((prev) => ({ ...prev, ...cached, estadoActual, mensaje }));
+      }
+    } catch {}
+
+    if (!isOnline) return;
+
+    try {
+      const resp = await authFetch(`${API_URL}/turnos/config`, { forceRefresh });
+      const j = await resp.json().catch(() => null);
+      if (__DEV__) {
+        console.log("📡 /turnos/config resp:", { ok: resp.ok, status: resp.status, body: j });
+      }
+      if (!resp.ok) throw new Error(j?.message || "No se pudo obtener configuración de turnos");
+
+      const modo = String(j?.modo || "").toLowerCase().trim() === "rango" ? "rango" : "manual";
+      const desde = String(j?.desde || "").trim();
+      const hasta = String(j?.hasta || "").trim();
+      const rangoModo = String(j?.rangoModo || "").toLowerCase().trim() === "disable" ? "disable" : "enable";
+      const mensaje = String(j?.mensaje || "").trim();
+      const estadoActual = typeof j?.estadoActual === "boolean" ? j.estadoActual : false;
+
+      const next = { modo, desde, hasta, rangoModo, estadoActual, mensaje, fetchedAt: Date.now() };
+      setTurnosConfig(next);
+      try {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
+      } catch {}
+    } catch (e) {
+      setTurnosConfig((prev) => ({
+        ...(prev && typeof prev === "object" ? prev : {}),
+        estadoActual: typeof prev?.estadoActual === "boolean" ? prev.estadoActual : false,
+        mensaje: String(prev?.mensaje || "").trim(),
+      }));
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    loadTurnosConfig();
+  }, [loadTurnosConfig]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTurnosConfig({ forceRefresh: true });
+      return () => {};
+    }, [loadTurnosConfig])
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        loadTurnosConfig({ forceRefresh: true });
+      }
+    });
+    return () => sub.remove();
+  }, [loadTurnosConfig]);
+
+  useEffect(() => {
+    if (!turnosDisabled) return;
+    setMostrarTipos(false);
+    setShowDatePicker(false);
+  }, [turnosDisabled]);
 
   const loadList = async () => {
     try {
@@ -70,6 +157,8 @@ export default function TurnosScreen() {
                   motivo: op?.data?.motivo || "",
                   _isOffline: true,
                   _operationId: op.id,
+                  _syncFailed: op?.status === "failed",
+                  _syncError: op?.error || op?.lastError || null,
                 };
               });
             } catch {}
@@ -103,11 +192,7 @@ export default function TurnosScreen() {
       const productorId = tokenResult?.claims?.productorId || currentUid;
       const activo = listMode === "activos";
       
-      const resp = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=${activo}`, {
-        headers: {
-          "Authorization": `Bearer ${idToken}`
-        }
-      });
+      const resp = await authFetch(`${API_URL}/turnos/productor/${productorId}?activo=${activo}`);
       const j = await resp.json();
       const next = Array.isArray(j) ? j : [];
       setList(next);
@@ -126,7 +211,7 @@ export default function TurnosScreen() {
   const testBackendConnection = async () => {
     try {
       console.log("🧪 Testeando conexión con backend...");
-      const resp = await fetch(`${API_URL}/turnos/ping`);
+      const resp = await apiFetch(`${API_URL}/turnos/ping`);
       const data = await resp.json();
       console.log("✅ Conexión exitosa:", data);
     } catch (error) {
@@ -233,11 +318,10 @@ export default function TurnosScreen() {
       
       console.log("📤 Enviando a /api/test/test-turno:", body);
       
-      const resp = await fetch(`${API_URL}/test/test-turno`, {
+      const resp = await authFetch(`${API_URL}/test/test-turno`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`
         },
         body: JSON.stringify(body)
       });
@@ -282,7 +366,7 @@ export default function TurnosScreen() {
       console.log("📡 URL completa:", `${API_URL}/test/public/test-turno`);
       
       const startTime = Date.now();
-      const resp = await fetch(`${API_URL}/test/public/test-turno`, {
+      const resp = await apiFetch(`${API_URL}/test/public/test-turno`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -348,12 +432,11 @@ export default function TurnosScreen() {
       console.log("📤 Enviando a /api/test/test-turno:", body);
       
       const startTime = Date.now();
-      const resp = await fetch(`${API_URL}/test/test-turno`, {
+      const resp = await authFetch(`${API_URL}/test/test-turno`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify(body)
       });
@@ -652,7 +735,7 @@ export default function TurnosScreen() {
       const query =
         `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` +
         (tipoParam === "insumo" && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "");
-      const resp = await fetch(`${API_URL}/turnos/disponibilidad?${query}`);
+      const resp = await apiFetch(`${API_URL}/turnos/disponibilidad?${query}`);
       const responseText = await resp.text();
       let j;
       try {
@@ -676,6 +759,7 @@ export default function TurnosScreen() {
 
   useEffect(() => {
     if (view !== "form") return;
+    if (turnosDisabled) return;
 
     if (dispTimerRef.current) {
       clearTimeout(dispTimerRef.current);
@@ -706,7 +790,7 @@ export default function TurnosScreen() {
         dispTimerRef.current = null;
       }
     };
-  }, [view, fechaInput, tipo, isOnline]);
+  }, [view, fechaInput, tipo, isOnline, turnosDisabled]);
 
   useEffect(() => {
     if (view !== "form") return;
@@ -716,6 +800,7 @@ export default function TurnosScreen() {
   }, [view, tipo, motivo]);
 
   const solicitarTurno = async () => {
+    if (turnosDisabled) return;
     setError("");
     setSuccess("");
     setActionLoading(true);
@@ -808,9 +893,7 @@ export default function TurnosScreen() {
       let turnosParaValidar = Array.isArray(list) ? list : [];
       if (isOnline && productorId && idToken) {
         try {
-          const respTurnos = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=true`, {
-            headers: { "Authorization": `Bearer ${idToken}` }
-          });
+          const respTurnos = await authFetch(`${API_URL}/turnos/productor/${productorId}?activo=true`);
           const jTurnos = await respTurnos.json();
           if (Array.isArray(jTurnos)) {
             turnosParaValidar = [...turnosParaValidar, ...jTurnos];
@@ -961,9 +1044,7 @@ export default function TurnosScreen() {
       let turnosParaValidar = Array.isArray(list) ? list : [];
       if (isOnline && productorId && idToken) {
         try {
-          const respTurnos = await fetch(`${API_URL}/turnos/productor/${productorId}?activo=true`, {
-            headers: { "Authorization": `Bearer ${idToken}` }
-          });
+          const respTurnos = await authFetch(`${API_URL}/turnos/productor/${productorId}?activo=true`);
           const jTurnos = await respTurnos.json();
           if (Array.isArray(jTurnos)) {
             turnosParaValidar = [...turnosParaValidar, ...jTurnos];
@@ -995,9 +1076,9 @@ export default function TurnosScreen() {
 
       const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivoTrim };
       console.log("📤 Actualizando turno:", body);
-      const resp = await fetch(`${API_URL}/turnos/${turnoEditando.id}`, {
+      const resp = await authFetch(`${API_URL}/turnos/${turnoEditando.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
       if (!resp.ok) {
@@ -1050,11 +1131,10 @@ export default function TurnosScreen() {
       
       const body = { estado: 'cancelado', motivo: 'Cancelado por el productor' };
       
-      const resp = await fetch(`${API_URL}/turnos/${turno.id}/estado`, {
+      const resp = await authFetch(`${API_URL}/turnos/${turno.id}/estado`, {
         method: "PATCH",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}` 
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(body)
       });
@@ -1104,9 +1184,9 @@ export default function TurnosScreen() {
       if (!isEstadoFinal(st)) throw new Error("Solo se pueden archivar turnos cancelados, completados o vencidos.");
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
-      const resp = await fetch(`${API_URL}/turnos/${turno.id}`, {
+      const resp = await authFetch(`${API_URL}/turnos/${turno.id}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${idToken}` }
+        headers: {}
       });
       if (!resp.ok) {
         let msg = "Error al archivar turno";
@@ -1153,7 +1233,11 @@ export default function TurnosScreen() {
 
   const renderFechaPicker = () => (
     <>
-      <TouchableOpacity style={[styles.input, { justifyContent: "center" }]} onPress={openDatePicker}>
+      <TouchableOpacity
+        style={[styles.input, { justifyContent: "center" }, turnosDisabled && styles.inputDisabled]}
+        onPress={openDatePicker}
+        disabled={turnosDisabled}
+      >
         <Text style={{ color: fechaInput ? "#2c3e50" : "#95a5a6" }}>{fechaInput || "Fecha (DD/MM/AAAA)"}</Text>
       </TouchableOpacity>
       {fechaInput ? (
@@ -1243,13 +1327,13 @@ export default function TurnosScreen() {
       <View style={styles.topBar}>
         <View style={styles.cardBar}>
           <TouchableOpacity
-            style={[styles.btn, styles.primary, isSolicitarTabActive ? styles.topTabActive : styles.topTabInactive]}
+            style={[styles.btn, styles.primary, styles.topTabBtn, isSolicitarTabActive ? styles.topTabActive : styles.topTabInactive]}
             onPress={() => setView("form")}
           >
             <Text style={[styles.btnText, styles.topTabText, isSolicitarTabActive && styles.topTabTextActive]}>Solicitar Turno</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.btn, styles.secondary, isVerMisTurnosTabActive ? styles.topTabActive : styles.topTabInactive]}
+            style={[styles.btn, styles.secondary, styles.topTabBtn, isVerMisTurnosTabActive ? styles.topTabActive : styles.topTabInactive]}
             onPress={() => setView("list")}
           >
             <Text style={[styles.btnText, styles.topTabText, isVerMisTurnosTabActive && styles.topTabTextActive]}>Ver Mis Turnos</Text>
@@ -1317,89 +1401,101 @@ export default function TurnosScreen() {
               </ScrollView>
             </View>
 
-            <FlatList 
-              data={((listLoading && (!Array.isArray(list) || list.length === 0)) ? Array.from({ length: 6 }, (_, i) => ({ id: `skeleton_${i}`, _isSkeleton: true })) : [...list.filter(t => filtroEstado === "todos" || getDisplayEstado(t) === filtroEstado)].sort((a, b) => {
-                const aMs = getTurnoDateMs(a);
-                const bMs = getTurnoDateMs(b);
-                if (aMs === null && bMs === null) return 0;
-                if (aMs === null) return 1;
-                if (bMs === null) return -1;
-                return orden === "lejanos" ? bMs - aMs : aMs - bMs;
-              }))} 
-              keyExtractor={(item) => item.id} 
-              ListHeaderComponent={listLoading && Array.isArray(list) && list.length > 0 ? (
-                <View style={{ paddingVertical: 10 }}>
-                  <ActivityIndicator color="#1e8449" />
-                </View>
-              ) : null}
-              ListEmptyComponent={listLoading ? <ActivityIndicator color="#1e8449" style={{ marginTop: 18 }} /> : <Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
-              renderItem={({ item }) => {
-                if (item?._isSkeleton) {
+            {listLoading ? (
+              <View style={{ marginTop: 10, paddingTop: 22, alignItems: "center" }}>
+                <Text style={{ color: "#166534", fontWeight: "700", marginBottom: 10 }}>Cargando turnos...</Text>
+                <ActivityIndicator color="#1e8449" />
+              </View>
+            ) : (
+              <FlatList 
+                data={[...list.filter(t => filtroEstado === "todos" || getDisplayEstado(t) === filtroEstado)].sort((a, b) => {
+                  const aMs = getTurnoDateMs(a);
+                  const bMs = getTurnoDateMs(b);
+                  if (aMs === null && bMs === null) return 0;
+                  if (aMs === null) return 1;
+                  if (bMs === null) return -1;
+                  return orden === "lejanos" ? bMs - aMs : aMs - bMs;
+                })} 
+                keyExtractor={(item) => item.id} 
+                ListEmptyComponent={<Text style={styles.emptyText}>No hay turnos para mostrar.</Text>}
+                renderItem={({ item }) => {
+                  const displayEstado = getDisplayEstado(item);
                   return (
-                    <View style={[styles.turnoCard, styles.skeletonCard]}>
-                      <View style={[styles.skeletonLine, { width: "55%" }]} />
-                      <View style={[styles.skeletonLine, { width: "75%", marginTop: 10 }]} />
-                      <View style={[styles.skeletonLine, { width: "65%", marginTop: 10 }]} />
-                      <View style={[styles.skeletonPill, { width: 110, marginTop: 14 }]} />
-                    </View>
+                    <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
+                      <View style={styles.turnoHeader}>
+                        <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
+                        <View style={styles.turnoHeaderRight}>
+                          <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(displayEstado) }]}>{displayEstado}</Text>
+                          {item._isOffline ? (
+                            <Text style={styles.turnoSyncBadge}>{item._syncFailed ? "Error de sincronización" : "Pendiente de sincronización"}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
+                      <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
+                      {getCancelNotice(item) ? (
+                        <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
+                          <Text style={[styles.turnoNoticeText, styles.turnoNoticeCancelText]}>{getCancelNotice(item)}</Text>
+                        </View>
+                      ) : null}
+                      {getExpiredNotice(item) ? (
+                        <View style={[styles.turnoNotice, styles.turnoNoticeExpired]}>
+                          <Text style={[styles.turnoNoticeText, styles.turnoNoticeExpiredText]}>{getExpiredNotice(item)}</Text>
+                        </View>
+                      ) : null}
+                      
+                      {item.activo !== false && !isEstadoFinal(displayEstado) ? (
+                        <View style={styles.turnoActions}>
+                          {displayEstado === "pendiente" ? (
+                            <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
+                              <Text style={styles.btnActionText}>Editar</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          {displayEstado === "pendiente" || displayEstado === "confirmado" ? (
+                            <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
+                              <Text style={styles.btnActionText}>Cancelar Turno</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </TouchableOpacity>
                   );
-                }
-                const displayEstado = getDisplayEstado(item);
-                return (
-                  <TouchableOpacity style={[styles.turnoCard, item.activo === false && { opacity: 0.7 }]}>
-                    <View style={styles.turnoHeader}>
-                      <Text style={styles.turnoFecha}>{formatDDMMYYYY(item.fechaTurno)}</Text>
-                      <View style={styles.turnoHeaderRight}>
-                        <Text style={[styles.turnoEstado, { backgroundColor: getEstadoColor(displayEstado) }]}>{displayEstado}</Text>
-                        {item._isOffline ? (
-                          <Text style={styles.turnoSyncBadge}>Pendiente de sincronización</Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
-                    <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
-                    {getCancelNotice(item) ? (
-                      <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
-                        <Text style={[styles.turnoNoticeText, styles.turnoNoticeCancelText]}>{getCancelNotice(item)}</Text>
-                      </View>
-                    ) : null}
-                    {getExpiredNotice(item) ? (
-                      <View style={[styles.turnoNotice, styles.turnoNoticeExpired]}>
-                        <Text style={[styles.turnoNoticeText, styles.turnoNoticeExpiredText]}>{getExpiredNotice(item)}</Text>
-                      </View>
-                    ) : null}
-                    
-                    {item.activo !== false && !isEstadoFinal(displayEstado) ? (
-                      <View style={styles.turnoActions}>
-                        {displayEstado === "pendiente" ? (
-                          <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
-                            <Text style={styles.btnActionText}>Editar</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {displayEstado === "pendiente" || displayEstado === "confirmado" ? (
-                          <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
-                            <Text style={styles.btnActionText}>Cancelar Turno</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              }} 
-              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
-              showsVerticalScrollIndicator={false}
-            />
+                }} 
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
           </View>
         </View>
       )}
 
       {view === 'form' && (
-        <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[styles.card, styles.formCard, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          {turnosStatusUnknown ? (
+            <View style={[styles.turnosDisabledCard, { backgroundColor: "#f3f4f6", borderColor: "#e5e7eb" }]}>
+              <Text style={[styles.turnosDisabledTitle, { color: "#374151" }]}>Consultando estado de turnos…</Text>
+              <Text style={[styles.turnosDisabledSubtitle, { color: "#6b7280" }]}>Esperá un momento.</Text>
+            </View>
+          ) : turnosDisabled ? (
+            <View style={styles.turnosDisabledCard}>
+              <Text style={styles.turnosDisabledTitle}>Turnos deshabilitados hasta nuevo aviso</Text>
+              {String(turnosConfig?.mensaje || "").trim() ? (
+                <Text style={styles.turnosDisabledSubtitle}>{String(turnosConfig.mensaje).trim()}</Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.turnosEnabledCard}>
+              <Text style={styles.turnosEnabledTitle}>Turnos habilitados</Text>
+              {String(turnosConfig?.mensaje || "").trim() ? (
+                <Text style={styles.turnosEnabledSubtitle}>{String(turnosConfig.mensaje).trim()}</Text>
+              ) : null}
+            </View>
+          )}
           {renderFechaPicker()}
           <TouchableOpacity
-            style={[styles.input, { justifyContent: "center" }, !fechaInput && styles.inputDisabled]}
+            style={[styles.input, { justifyContent: "center" }, (turnosDisabled || !fechaInput) && styles.inputDisabled]}
             onPress={() => setMostrarTipos(!mostrarTipos)}
-            disabled={!fechaInput}
+            disabled={turnosDisabled || !fechaInput}
           >
             <Text style={{ color: tipo ? "#2c3e50" : "#95a5a6" }}>{tipo || "Tipo de turno"}</Text>
           </TouchableOpacity>
@@ -1425,12 +1521,13 @@ export default function TurnosScreen() {
           )}
           {normalizeTipoFromLabel(tipo) === "otro" ? (
             <TextInput
-              style={styles.input}
-              placeholder="Motivo (obligatorio)"
+              style={[styles.input, turnosDisabled && styles.inputDisabled]}
+              placeholder={fechaInput ? "Motivo (obligatorio)" : "Motivo"}
               value={motivo}
               onChangeText={setMotivo}
               multiline
               numberOfLines={3}
+              editable={!turnosDisabled}
             />
           ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -1445,11 +1542,15 @@ export default function TurnosScreen() {
           ) : null}
           <View style={styles.row}>
             <TouchableOpacity
-              style={[styles.btn, (!fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())) && styles.btnDisabled]}
+              style={[
+                styles.btn,
+                (turnosDisabled || !fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())) && styles.btnDisabled,
+              ]}
               onPress={solicitarTurno}
               disabled={
                 actionLoading ||
                 dispLoading ||
+                turnosDisabled ||
                 !fechaInput ||
                 !tipo ||
                 disp !== true ||
@@ -1508,9 +1609,10 @@ export default function TurnosScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12, backgroundColor: "#fff" },
   title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
-  topBar: { paddingHorizontal: 8, paddingTop: 4 },
-  cardBar: { flexDirection: "row", gap: 12, backgroundColor: "#ffffff", padding: 10, borderRadius: 10, elevation: 3 },
+  topBar: { paddingHorizontal: 8, paddingTop: 4, marginBottom: 7, alignItems: "center" },
+  cardBar: { flexDirection: "row", gap: 12, backgroundColor: "#ffffff", padding: 10, borderRadius: 10, elevation: 3, alignSelf: "center", width: "100%", maxWidth: 460, justifyContent: "center" },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 12 },
+  formCard: { marginTop: 2 },
   input: { borderWidth: 1.5, borderColor: "#95a5a6", backgroundColor: "#fdfefe", padding: 12, borderRadius: 10, marginBottom: 12 },
   inputDisabled: { backgroundColor: "#f3f4f6", borderColor: "#d1d5db" },
   dropdown: { borderWidth: 1, borderColor: '#dfe6e9', borderRadius: 8, backgroundColor: '#ffffff', marginBottom: 12 },
@@ -1525,6 +1627,13 @@ const styles = StyleSheet.create({
   fechaLargaText: { fontSize: 15, color: "#374151", textAlign: "center", marginTop: -6, marginBottom: 10, fontWeight: "600" },
   dispStatusText: { textAlign: "center", fontSize: 14, color: "#111827", marginBottom: 10 },
   dispHintText: { fontSize: 12, color: "#7f8c8d", textAlign: "center" },
+  turnosDisabledCard: { backgroundColor: "#fff7ed", borderColor: "#fed7aa", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  turnosDisabledTitle: { color: "#9a3412", fontWeight: "800", fontSize: 13, marginBottom: 4 },
+  turnosDisabledSubtitle: { color: "#9a3412", fontWeight: "700", fontSize: 12 },
+  turnosEnabledCard: { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  turnosEnabledTitle: { color: "#166534", fontWeight: "800", fontSize: 13, marginBottom: 4 },
+  turnosEnabledSubtitle: { color: "#166534", fontWeight: "700", fontSize: 12 },
+  topTabBtn: { flex: 1, minHeight: 46, alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 14 },
   topTabText: { fontSize: 15, fontWeight: "700" },
   topTabInactive: { opacity: 1, borderWidth: 2.5, borderColor: "transparent" },
   topTabActive: { opacity: 1, borderWidth: 2.5, borderColor: "#fff", elevation: 6, shadowColor: "#000", shadowOpacity: 0.22, shadowOffset: { width: 0, height: 3 }, shadowRadius: 5 },

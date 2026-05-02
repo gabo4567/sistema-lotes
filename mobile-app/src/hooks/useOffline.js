@@ -42,6 +42,10 @@ export const useOffline = () => {
     return offlineManager.clearFailedOperations();
   };
 
+  const clearPendingOperations = () => {
+    return offlineManager.clearPendingOperations();
+  };
+
   const retryFailedOperations = () => {
     return offlineManager.retryFailedOperations();
   };
@@ -63,6 +67,7 @@ export const useOffline = () => {
     addToQueue,
     getStatus,
     clearFailedOperations,
+    clearPendingOperations,
     retryFailedOperations,
     syncNow,
     subscribeOperations

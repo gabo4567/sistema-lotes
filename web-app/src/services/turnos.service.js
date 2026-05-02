@@ -23,8 +23,26 @@ export const getTurnosConfig = async ()=>{
   return res.data
 }
 
-export const setTurnosConfig = async (habilitado, mensaje)=>{
-  const res = await api.put(`/turnos/config`, { habilitado, mensaje })
+export const setTurnosConfig = async (configOrHabilitado, mensaje, desde, hasta, rangoModo, modo)=>{
+  let body = {}
+  if (configOrHabilitado && typeof configOrHabilitado === 'object' && !Array.isArray(configOrHabilitado)) {
+    body = { ...configOrHabilitado }
+  } else {
+    body = { habilitado: configOrHabilitado, mensaje, desde, hasta, rangoModo, modo }
+  }
+
+  const m = String(body?.modo || '').toLowerCase().trim()
+  if (m === 'manual') {
+    body.modo = 'manual'
+    body.desde = null
+    body.hasta = null
+    body.rangoModo = null
+  } else if (m === 'rango') {
+    body.modo = 'rango'
+    delete body.habilitado
+  }
+
+  const res = await api.put(`/turnos/config`, body)
   return res.data
 }
 

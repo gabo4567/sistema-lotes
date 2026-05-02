@@ -1,10 +1,10 @@
 // src/components/OfflineIndicator.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, StatusBar, Alert } from 'react-native';
 import { useOffline } from '../hooks/useOffline';
 
 const OfflineIndicator = () => {
-  const { isOnline, pendingOperations, failedOperations, lastFailedError, isProcessing, retryFailedOperations, syncNow } = useOffline();
+  const { isOnline, pendingOperations, failedOperations, lastFailedError, isProcessing, retryFailedOperations, clearFailedOperations, clearPendingOperations, syncNow } = useOffline();
   const [isManualActionRunning, setIsManualActionRunning] = useState(false);
 
   const shouldShow = useMemo(() => {
@@ -55,35 +55,80 @@ const OfflineIndicator = () => {
         {isOnline && !isProcessing && (pendingOperations > 0 || failedOperations > 0) ? (
           <View style={styles.actions}>
             {failedOperations > 0 ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, isManualActionRunning && styles.actionBtnDisabled]}
-                disabled={isManualActionRunning}
-                onPress={async () => {
-                  try {
-                    setIsManualActionRunning(true);
-                    await retryFailedOperations();
-                  } finally {
-                    setIsManualActionRunning(false);
-                  }
-                }}
-              >
-                <Text style={styles.actionText}>Reintentar</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, isManualActionRunning && styles.actionBtnDisabled]}
+                  disabled={isManualActionRunning}
+                  onPress={async () => {
+                    try {
+                      setIsManualActionRunning(true);
+                      await retryFailedOperations();
+                    } finally {
+                      setIsManualActionRunning(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.actionText}>Reintentar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtnSecondary, isManualActionRunning && styles.actionBtnDisabled]}
+                  disabled={isManualActionRunning}
+                  onPress={async () => {
+                    try {
+                      setIsManualActionRunning(true);
+                      await clearFailedOperations();
+                    } finally {
+                      setIsManualActionRunning(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.actionTextSecondary}>Descartar</Text>
+                </TouchableOpacity>
+              </>
             ) : (
-              <TouchableOpacity
-                style={[styles.actionBtn, isManualActionRunning && styles.actionBtnDisabled]}
-                disabled={isManualActionRunning}
-                onPress={async () => {
-                  try {
-                    setIsManualActionRunning(true);
-                    await syncNow();
-                  } finally {
-                    setIsManualActionRunning(false);
-                  }
-                }}
-              >
-                <Text style={styles.actionText}>Sincronizar</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, isManualActionRunning && styles.actionBtnDisabled]}
+                  disabled={isManualActionRunning}
+                  onPress={async () => {
+                    try {
+                      setIsManualActionRunning(true);
+                      await syncNow();
+                    } finally {
+                      setIsManualActionRunning(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.actionText}>Sincronizar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtnSecondary, isManualActionRunning && styles.actionBtnDisabled]}
+                  disabled={isManualActionRunning}
+                  onPress={() => {
+                    Alert.alert(
+                      'Descartar cambios pendientes',
+                      'Esto eliminará los cambios pendientes guardados en el dispositivo y no se enviarán al servidor.',
+                      [
+                        { text: 'Cancelar', style: 'cancel' },
+                        {
+                          text: 'Descartar',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              setIsManualActionRunning(true);
+                              await clearPendingOperations();
+                            } finally {
+                              setIsManualActionRunning(false);
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.actionTextSecondary}>Descartar</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         ) : null}
@@ -138,6 +183,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     marginLeft: 12,
+    flexDirection: 'row',
+    gap: 8,
   },
   actionBtn: {
     paddingVertical: 6,
@@ -145,12 +192,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#1e8449',
   },
+  actionBtnSecondary: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#1e8449',
+  },
   actionBtnDisabled: {
     opacity: 0.6,
   },
   actionText: {
     color: '#fff',
     fontWeight: '700',
+    fontSize: 12,
+  },
+  actionTextSecondary: {
+    color: '#1e8449',
+    fontWeight: '800',
     fontSize: 12,
   },
 });

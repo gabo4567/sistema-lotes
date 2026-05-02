@@ -114,8 +114,9 @@ const Login = () => {
       }
 
       if (err?.code === "ECONNABORTED") {
-        setError("No se pudo conectar al servidor. Intente más tarde.");
-        await notify({ title: "Error de conexión", text: "No se pudo conectar al servidor. Intente más tarde.", icon: "error" });
+        const msg = err?.message || "Conectando al servidor… puede demorar al iniciar. Reintentá en unos segundos.";
+        setError(msg);
+        await notify({ title: "Error de conexión", text: msg, icon: "error" });
       } else {
         setError("No se pudo iniciar sesión. Intente de nuevo.");
         await notify({ title: "No se pudo iniciar sesión", text: "Intente de nuevo en unos minutos.", icon: "error" });

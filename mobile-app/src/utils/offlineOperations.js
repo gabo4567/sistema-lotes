@@ -7,9 +7,8 @@ export const offlineLotesOperations = {
   // Crear lote offline
   createLote: async (loteData) => {
     try {
-      // Intentar crear online primero
       if (offlineManager.isOnline) {
-        const response = await fetch(`${API_URL}/lotes`, {
+        const response = await offlineManager.fetchWithRetry(`${API_URL}/lotes`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -21,9 +20,14 @@ export const offlineLotesOperations = {
         if (response.ok) {
           return await response.json();
         }
+        let msg = 'Error al guardar lote'
+        try {
+          const j = await response.json()
+          msg = j?.message || j?.error || msg
+        } catch {}
+        throw new Error(msg)
       }
 
-      // Si falla o está offline, agregar a queue
       const operationId = await offlineManager.addToQueue({
         type: 'CREATE_LOTE',
         data: loteData,
@@ -40,7 +44,8 @@ export const offlineLotesOperations = {
       };
 
     } catch (error) {
-      // Agregar a queue si hay error
+      if (error?.code === 'SERVER_WAKING') throw error
+      if (offlineManager.isOnline && error?.code !== 'OFFLINE') throw error
       const operationId = await offlineManager.addToQueue({
         type: 'CREATE_LOTE',
         data: loteData,
@@ -61,7 +66,7 @@ export const offlineLotesOperations = {
   updateLote: async (loteId, loteData) => {
     try {
       if (offlineManager.isOnline) {
-        const response = await fetch(`${API_URL}/lotes/${loteId}`, {
+        const response = await offlineManager.fetchWithRetry(`${API_URL}/lotes/${loteId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -73,9 +78,14 @@ export const offlineLotesOperations = {
         if (response.ok) {
           return await response.json();
         }
+        let msg = 'Error al actualizar lote'
+        try {
+          const j = await response.json()
+          msg = j?.message || j?.error || msg
+        } catch {}
+        throw new Error(msg)
       }
 
-      // Agregar a queue
       await offlineManager.addToQueue({
         type: 'UPDATE_LOTE',
         data: { ...loteData, id: loteId },
@@ -86,6 +96,8 @@ export const offlineLotesOperations = {
       return { ...loteData, id: loteId, _isOffline: true };
 
     } catch (error) {
+      if (error?.code === 'SERVER_WAKING') throw error
+      if (offlineManager.isOnline && error?.code !== 'OFFLINE') throw error
       await offlineManager.addToQueue({
         type: 'UPDATE_LOTE',
         data: { ...loteData, id: loteId },
@@ -103,7 +115,7 @@ export const offlineTurnosOperations = {
   createTurno: async (turnoData) => {
     try {
       if (offlineManager.isOnline) {
-        const response = await fetch(`${API_URL}/turnos`, {
+        const response = await offlineManager.fetchWithRetry(`${API_URL}/turnos`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -115,6 +127,12 @@ export const offlineTurnosOperations = {
         if (response.ok) {
           return await response.json();
         }
+        let msg = 'Error al solicitar turno'
+        try {
+          const j = await response.json()
+          msg = j?.message || j?.error || msg
+        } catch {}
+        throw new Error(msg)
       }
 
       const operationId = await offlineManager.addToQueue({
@@ -132,6 +150,8 @@ export const offlineTurnosOperations = {
       };
 
     } catch (error) {
+      if (error?.code === 'SERVER_WAKING') throw error
+      if (offlineManager.isOnline && error?.code !== 'OFFLINE') throw error
       const operationId = await offlineManager.addToQueue({
         type: 'CREATE_TURNO',
         data: turnoData,
@@ -162,7 +182,7 @@ export const offlineUbicacionesOperations = {
           throw new Error('Datos de ubicación incompletos');
         }
 
-        const response = await fetch(`${API_URL}/productores/${productorId}`, {
+        const response = await offlineManager.fetchWithRetry(`${API_URL}/productores/${productorId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -174,6 +194,12 @@ export const offlineUbicacionesOperations = {
         if (response.ok) {
           return await response.json();
         }
+        let msg = 'Error al actualizar ubicación'
+        try {
+          const j = await response.json()
+          msg = j?.message || j?.error || msg
+        } catch {}
+        throw new Error(msg)
       }
 
       await offlineManager.addToQueue({
@@ -186,6 +212,8 @@ export const offlineUbicacionesOperations = {
       return { ...ubicacionData, _isOffline: true };
 
     } catch (error) {
+      if (error?.code === 'SERVER_WAKING') throw error
+      if (offlineManager.isOnline && error?.code !== 'OFFLINE') throw error
       await offlineManager.addToQueue({
         type: 'UPDATE_UBICACION',
         data: ubicacionData,

@@ -102,7 +102,7 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
   if (loadError) {
     return <div style={{ color: "#b91c1c" }}>{loadError}</div>;
   }
-  return <div ref={containerRef} style={{ width: 640, height: 420, background: "#eef2ff" }} />;
+  return <div ref={containerRef} style={{ width: "100%", height: 420, minHeight: 420, background: "#eef2ff", borderRadius: 12 }} />;
 };
 
 export default MapPolygonEditor;

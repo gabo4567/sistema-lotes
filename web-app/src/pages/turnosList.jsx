@@ -98,8 +98,18 @@ const [capSaving, setCapSaving] = useState(false)
 const [cfgModalOpen, setCfgModalOpen] = useState(false)
 const [cfgLoading, setCfgLoading] = useState(false)
 const [cfgSaving, setCfgSaving] = useState(false)
+const [cfgModo, setCfgModo] = useState('manual') // 'manual' | 'rango'
 const [cfgHabilitado, setCfgHabilitado] = useState(true)
+const [cfgEstadoActual, setCfgEstadoActual] = useState(null)
 const [cfgMensaje, setCfgMensaje] = useState('')
+const [cfgDesde, setCfgDesde] = useState('')
+const [cfgHasta, setCfgHasta] = useState('')
+const [draftDesde, setDraftDesde] = useState('')
+const [draftHasta, setDraftHasta] = useState('')
+const [cfgRangoModo, setCfgRangoModo] = useState('enable') // 'enable' | 'disable'
+const [cfgRangeIntentOpen, setCfgRangeIntentOpen] = useState(false)
+const [cfgPendingDesde, setCfgPendingDesde] = useState('')
+const [cfgPendingHasta, setCfgPendingHasta] = useState('')
 
 // Estados para filtros
 const [filtros, setFiltros] = useState({
@@ -229,8 +239,20 @@ useEffect(() => {
   getTurnosConfig()
     .then((data) => {
       if (!mounted) return
+      const modoRaw = String(data?.modo || '').toLowerCase().trim()
+      const hasRange = Boolean(data?.desde || data?.hasta)
+      const modo = modoRaw === 'manual' || modoRaw === 'rango' ? modoRaw : (hasRange ? 'rango' : 'manual')
+      setCfgModo(modo)
       setCfgHabilitado(Boolean(data?.habilitado))
+      setCfgEstadoActual(typeof data?.estadoActual === 'boolean' ? data.estadoActual : null)
       setCfgMensaje(String(data?.mensaje || ''))
+      const d = String(data?.desde || '')
+      const h = String(data?.hasta || '')
+      setCfgDesde(d)
+      setCfgHasta(h)
+      setDraftDesde(d)
+      setDraftHasta(h)
+      setCfgRangoModo(String(data?.rangoModo || 'enable') === 'disable' ? 'disable' : 'enable')
     })
     .catch((e) => {
       console.error(e)
@@ -428,6 +450,30 @@ const formatDate = (d)=>{
   }catch{ return String(d) }
 }
 
+const formatFechaLarga = (ymd) => {
+  const raw = String(ymd || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return ''
+  const d = new Date(`${raw}T12:00:00.000Z`)
+  if (isNaN(d.getTime())) return ''
+  try {
+    const fmt = new Intl.DateTimeFormat('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const s = fmt.format(d)
+    if (!s) return ''
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  } catch {
+    return ''
+  }
+}
+
+const formatYmdCorto = (ymd) => {
+  const raw = String(ymd || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return ''
+  const [yyyy, mm, dd] = raw.split('-')
+  return `${dd}/${mm}/${yyyy}`
+}
+
+const formatYmdCortoOrDash = (ymd) => formatYmdCorto(ymd) || '—'
+
 const formatTime = (d)=>{
   try{
     const date = toDateSafe(d)
@@ -484,6 +530,40 @@ const getExpiredNotice = (t) => {
 
 const todayYmd = useMemo(() => toYmdLocal(new Date()), [])
 const isHoyFilterActive = filtros.desde === todayYmd && filtros.hasta === todayYmd
+const cfgHasRangoFechas = Boolean(String(cfgDesde || '').trim() || String(cfgHasta || '').trim())
+const cfgRangoInvalido = Boolean(cfgDesde && cfgHasta && cfgDesde > cfgHasta)
+const cfgRangeRelation = useMemo(() => {
+  if (!cfgHasRangoFechas) return 'none'
+  if (cfgDesde && todayYmd < cfgDesde) return 'not_started'
+  if (cfgHasta && todayYmd > cfgHasta) return 'ended'
+  const inside = (!cfgDesde || todayYmd >= cfgDesde) && (!cfgHasta || todayYmd <= cfgHasta)
+  return inside ? 'inside' : 'outside'
+}, [cfgDesde, cfgHasta, cfgHasRangoFechas, todayYmd])
+const cfgRangoPermiteHoy = useMemo(() => {
+  if (cfgModo !== 'rango') return true
+  if (!cfgHasRangoFechas) return false
+  const inside = cfgRangeRelation === 'inside'
+  return cfgRangoModo === 'disable' ? !inside : inside
+}, [cfgHasRangoFechas, cfgModo, cfgRangeRelation, cfgRangoModo])
+const cfgHabilitadoEfectivo =
+  typeof cfgEstadoActual === 'boolean'
+    ? cfgEstadoActual
+    : (cfgModo === 'manual' ? Boolean(cfgHabilitado) : cfgRangoPermiteHoy)
+const draftHasRangoFechas = Boolean(String(draftDesde || '').trim() || String(draftHasta || '').trim())
+const draftRangoInvalido = Boolean(draftDesde && draftHasta && String(draftDesde) > String(draftHasta))
+const draftRangoCompletoValido = Boolean(draftDesde && draftHasta && !draftRangoInvalido)
+const draftEsDistinto = String(draftDesde || '') !== String(cfgDesde || '') || String(draftHasta || '') !== String(cfgHasta || '')
+
+const estadoExplicacion = useMemo(() => {
+  if (cfgModo === 'manual') {
+    return cfgHabilitado ? 'Habilitación manual activada.' : 'Deshabilitados manualmente.'
+  }
+  if (!cfgHasRangoFechas) return 'Modo por rango: sin fechas configuradas.'
+  if (cfgRangeRelation === 'inside') return 'Dentro del rango configurado.'
+  if (cfgRangeRelation === 'not_started') return 'El rango aún no comenzó.'
+  if (cfgRangeRelation === 'ended') return 'El rango ya terminó.'
+  return 'Fuera del rango configurado.'
+}, [cfgHasRangoFechas, cfgHabilitado, cfgModo, cfgRangeRelation])
 const turnosHoyCount = useMemo(() => {
   return turnosFiltrados.filter(t => {
     const dt = toDateSafe(t?.fechaTurno || t?.fecha)
@@ -565,15 +645,124 @@ const openConfigModal = () => {
 
 const closeConfigModal = () => {
   if (cfgSaving) return
+  setCfgRangeIntentOpen(false)
+  setCfgPendingDesde('')
+  setCfgPendingHasta('')
+  setDraftDesde(String(cfgDesde || ''))
+  setDraftHasta(String(cfgHasta || ''))
   setCfgModalOpen(false)
 }
 
+const applyDraftRange = () => {
+  if (cfgSaving || cfgLoading) return
+  if (cfgRangeIntentOpen) return
+  const d = String(draftDesde || '').trim()
+  const h = String(draftHasta || '').trim()
+
+  if (!d && !h) {
+    if (!String(cfgDesde || '') && !String(cfgHasta || '')) return
+    setCfgDesde('')
+    setCfgHasta('')
+    setCfgRangoModo('enable')
+    setCfgModo('manual')
+    return
+  }
+
+  if (!d || !h) {
+    notify({ title: 'Para aplicar el rango, completá "Desde" y "Hasta".', icon: 'error' })
+    return
+  }
+
+  if (d > h) {
+    notify({ title: 'Rango inválido: "Desde" no puede ser mayor que "Hasta".', icon: 'error' })
+    return
+  }
+
+  if (d === String(cfgDesde || '') && h === String(cfgHasta || '')) return
+  setCfgPendingDesde(d)
+  setCfgPendingHasta(h)
+  setCfgRangeIntentOpen(true)
+}
+
+const applyRangeIntent = (mode) => {
+  const d = String(cfgPendingDesde || '')
+  const h = String(cfgPendingHasta || '')
+  if (d && h && d > h) {
+    notify({ title: 'Rango inválido: "Desde" no puede ser mayor que "Hasta".', icon: 'error' })
+    return
+  }
+  setCfgDesde(d)
+  setCfgHasta(h)
+  setDraftDesde(d)
+  setDraftHasta(h)
+  setCfgModo('rango')
+  setCfgRangoModo(mode === 'disable' ? 'disable' : 'enable')
+  setCfgPendingDesde('')
+  setCfgPendingHasta('')
+  setCfgRangeIntentOpen(false)
+}
+
+const cancelRangeIntent = () => {
+  setDraftDesde(String(cfgDesde || ''))
+  setDraftHasta(String(cfgHasta || ''))
+  setCfgPendingDesde('')
+  setCfgPendingHasta('')
+  setCfgRangeIntentOpen(false)
+}
+
+const setModoManual = () => {
+  if (cfgSaving || cfgLoading) return
+  setCfgModo('manual')
+  setCfgRangeIntentOpen(false)
+  setCfgPendingDesde('')
+  setCfgPendingHasta('')
+  setCfgDesde('')
+  setCfgHasta('')
+  setDraftDesde('')
+  setDraftHasta('')
+  setCfgRangoModo('enable')
+}
+
+const setModoRango = () => {
+  if (cfgSaving || cfgLoading) return
+  setCfgModo('rango')
+  setCfgHabilitado(true)
+}
+
 const saveConfigTurnos = async () => {
-  const habilitado = Boolean(cfgHabilitado)
   const mensaje = String(cfgMensaje || '').trim()
+  const draftD = String(draftDesde || '').trim()
+  const draftH = String(draftHasta || '').trim()
+  if ((draftD && !draftH) || (!draftD && draftH)) {
+    notify({ title: 'Para configurar un rango, completá "Desde" y "Hasta", o borrá ambas fechas.', icon: 'error' })
+    return
+  }
+  if (draftD && draftH && draftD > draftH) {
+    notify({ title: 'Rango de fechas inválido: "Desde" no puede ser mayor que "Hasta".', icon: 'error' })
+    return
+  }
+  if (draftEsDistinto) {
+    notify({ title: 'Tenés cambios sin aplicar en el rango. Tocá "Aplicar rango" o revertí las fechas.', icon: 'error' })
+    return
+  }
+  const desde = cfgModo === 'rango' ? String(cfgDesde || '').trim() : ''
+  const hasta = cfgModo === 'rango' ? String(cfgHasta || '').trim() : ''
+  if (cfgModo === 'rango' && !(desde && hasta)) {
+    notify({ title: 'Para usar el modo por rango, configurá "Desde" y "Hasta".', icon: 'error' })
+    return
+  }
+  if (cfgRangoInvalido) {
+    notify({ title: 'Rango de fechas inválido: "Desde" no puede ser mayor que "Hasta".', icon: 'error' })
+    return
+  }
   setCfgSaving(true)
   try {
-    await setTurnosConfig(habilitado, mensaje)
+    const payload =
+      cfgModo === 'manual'
+        ? { modo: 'manual', habilitado: Boolean(cfgHabilitado), mensaje, desde: null, hasta: null, rangoModo: null }
+        : { modo: 'rango', mensaje, desde, hasta, rangoModo: cfgRangoModo }
+    const saved = await setTurnosConfig(payload)
+    setCfgEstadoActual(typeof saved?.estadoActual === 'boolean' ? saved.estadoActual : null)
     notify({ title: 'Configuración guardada', icon: 'success' })
     setCfgModalOpen(false)
   } catch (e) {
@@ -701,6 +890,11 @@ return (
                 disabled={capSaving}
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
+              {formatFechaLarga(capFecha) ? (
+                <div style={{ fontSize: 13, color: '#6b7280' }}>
+                  {formatFechaLarga(capFecha)}
+                </div>
+              ) : null}
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
@@ -716,7 +910,20 @@ return (
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
               <div style={{ fontSize: 13, color: '#6b7280' }}>
-                {capLoading ? 'Cargando capacidad…' : (capInfo?.configurada ? 'Capacidad configurada para este día.' : 'Sin configuración: se usa el valor por defecto del sistema.')}
+                {capLoading
+                  ? 'Cargando capacidad…'
+                  : (() => {
+                      const n = Number(capacidad)
+                      const capTxt = Number.isFinite(n) && n > 0 ? n : null
+                      if (capTxt == null) {
+                        return capInfo?.configurada
+                          ? 'Capacidad configurada para este día.'
+                          : 'Sin configuración: se usa el valor por defecto del sistema.'
+                      }
+                      return capInfo?.configurada
+                        ? `Capacidad: ${capTxt} turnos. Configurada para este día.`
+                        : `Capacidad: ${capTxt} turnos. Sin configuración: se usa el valor por defecto del sistema.`
+                    })()}
               </div>
             </div>
           </div>
@@ -739,47 +946,300 @@ return (
           inset: 0,
           background: 'rgba(0,0,0,0.35)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
           padding: 16,
+          overflowY: 'auto',
           zIndex: 9999,
         }}
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) closeConfigModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 560, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+        <div style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 15 }}>
+          {cfgRangeIntentOpen ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.45)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                padding: 16,
+                overflowY: 'auto',
+                zIndex: 10000,
+              }}
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) cancelRangeIntent()
+              }}
+            >
+              <div style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 15 }}>
+                <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: '#111827' }}>Configuración de turnos</div>
+                  <button className="btn secondary" onClick={cancelRangeIntent} style={{ padding: '6px 10px' }}>Cancelar</button>
+                </div>
+                <div style={{ padding: 16, display: 'grid', gap: 10 }}>
+                  <div style={{ fontSize: 15, color: '#374151', lineHeight: 1.4 }}>
+                    Seleccionaste un rango de fechas para los turnos. ¿Qué querés hacer?
+                  </div>
+                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '10px 12px' }}>
+                    <strong>Rango:</strong> {formatYmdCortoOrDash(cfgPendingDesde)} → {formatYmdCortoOrDash(cfgPendingHasta)}
+                  </div>
+                  {(cfgPendingDesde && cfgPendingHasta && cfgPendingDesde > cfgPendingHasta) ? (
+                    <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '10px 12px' }}>
+                      El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
+                    </div>
+                  ) : null}
+                </div>
+                <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+                  <button
+                    className="btn secondary"
+                    onClick={() => applyRangeIntent('disable')}
+                    disabled={Boolean(cfgPendingDesde && cfgPendingHasta && cfgPendingDesde > cfgPendingHasta)}
+                  >
+                    Deshabilitar turnos en este rango
+                  </button>
+                  <button
+                    className="btn primary"
+                    onClick={() => applyRangeIntent('enable')}
+                    disabled={Boolean(cfgPendingDesde && cfgPendingHasta && cfgPendingDesde > cfgPendingHasta)}
+                  >
+                    Habilitar turnos solo en este rango
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
             <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
           </div>
           <div style={{ padding: 16, display: 'grid', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                type="checkbox"
-                checked={cfgHabilitado}
-                onChange={(e) => setCfgHabilitado(e.target.checked)}
-                disabled={cfgSaving || cfgLoading}
-              />
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                {cfgHabilitado ? 'Turnos habilitados' : 'Turnos deshabilitados'}
+            <div
+              style={{
+                borderRadius: 12,
+                border: `1px solid ${cfgHabilitadoEfectivo ? '#bbf7d0' : '#fecaca'}`,
+                background: cfgHabilitadoEfectivo ? '#f0fdf4' : '#fef2f2',
+                padding: 12,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Configuración</div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Gestioná cómo se habilitan los turnos</div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    background: '#e5e7eb',
+                    borderRadius: 999,
+                    padding: 4,
+                    border: '1px solid #d1d5db',
+                    boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.06)',
+                    gap: 4,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={setModoManual}
+                    disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                    style={{
+                      border: 'none',
+                      background: cfgModo === 'manual' ? '#dcfce7' : 'transparent',
+                      color: cfgModo === 'manual' ? '#14532d' : '#374151',
+                      fontWeight: cfgModo === 'manual' ? 800 : 700,
+                      padding: '10px 12px',
+                      borderRadius: 999,
+                      cursor: (cfgSaving || cfgLoading || cfgRangeIntentOpen) ? 'not-allowed' : 'pointer',
+                      transition: 'background-color 150ms ease, color 150ms ease, transform 150ms ease',
+                      boxShadow: cfgModo === 'manual' ? '0 6px 14px rgba(15,23,42,0.10)' : 'none',
+                    }}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={setModoRango}
+                    disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                    style={{
+                      border: 'none',
+                      background: cfgModo === 'rango' ? '#dcfce7' : 'transparent',
+                      color: cfgModo === 'rango' ? '#14532d' : '#374151',
+                      fontWeight: cfgModo === 'rango' ? 800 : 700,
+                      padding: '10px 12px',
+                      borderRadius: 999,
+                      cursor: (cfgSaving || cfgLoading || cfgRangeIntentOpen) ? 'not-allowed' : 'pointer',
+                      transition: 'background-color 150ms ease, color 150ms ease, transform 150ms ease',
+                      boxShadow: cfgModo === 'rango' ? '0 6px 14px rgba(15,23,42,0.10)' : 'none',
+                    }}
+                  >
+                    Por rango de fechas
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    borderRadius: 12,
+                    border: `1px solid ${cfgHabilitadoEfectivo ? '#bbf7d0' : '#fecaca'}`,
+                    background: '#ffffff',
+                    padding: 12,
+                    display: 'grid',
+                    gap: 8,
+                    boxShadow: '0 8px 18px rgba(15,23,42,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: cfgHabilitadoEfectivo ? '#14532d' : '#991b1b', letterSpacing: '.02em', textTransform: 'uppercase' }}>
+                        Estado actual
+                      </div>
+                      <div
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          fontSize: 13,
+                          fontWeight: 900,
+                          border: `1px solid ${cfgHabilitadoEfectivo ? '#86efac' : '#fca5a5'}`,
+                          background: '#ffffff',
+                          color: cfgHabilitadoEfectivo ? '#14532d' : '#991b1b',
+                          boxShadow: '0 6px 14px rgba(15,23,42,0.06)',
+                        }}
+                      >
+                        {cfgHabilitadoEfectivo ? 'Habilitados' : 'Deshabilitados'}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#6b7280', fontWeight: 700 }}>
+                      {cfgModo === 'manual' ? 'Modo: Manual' : 'Modo: Por rango'}
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 14, color: cfgHabilitadoEfectivo ? '#166534' : '#b91c1c', lineHeight: 1.35, display: 'grid', gap: 4 }}>
+                    <div>
+                      {cfgHabilitadoEfectivo
+                        ? 'Los usuarios pueden solicitar turnos desde la app.'
+                        : 'Los usuarios NO pueden solicitar turnos. Verán un mensaje al intentar hacerlo.'}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{estadoExplicacion}</div>
+                  </div>
+                </div>
+
+                {cfgModo === 'manual' ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Manual</div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: (cfgSaving || cfgLoading) ? 'not-allowed' : 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={cfgHabilitado}
+                        onChange={(e) => setCfgHabilitado(e.target.checked)}
+                        disabled={cfgSaving || cfgLoading}
+                      />
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>
+                        {cfgHabilitado ? 'Turnos habilitados' : 'Turnos deshabilitados'}
+                      </div>
+                    </label>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Por rango de fechas</div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
+                        <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#374151' }}>Desde</label>
+                        <input
+                          type="date"
+                          className="input-inst"
+                          value={draftDesde}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setDraftDesde(next)
+                          }}
+                          disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
+                        <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#374151' }}>Hasta</label>
+                        <input
+                          type="date"
+                          className="input-inst"
+                          value={draftHasta}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setDraftHasta(next)
+                          }}
+                          disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>
+                      Definí el rango y luego tocá “Aplicar rango” para elegir qué querés hacer.
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={applyDraftRange}
+                        disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen || (!draftHasRangoFechas && !cfgHasRangoFechas)}
+                        style={{ padding: '8px 12px' }}
+                      >
+                        Aplicar rango
+                      </button>
+                    </div>
+                    {draftRangoInvalido ? (
+                      <div style={{ fontSize: 13, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+                        El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
+                      </div>
+                    ) : draftHasRangoFechas ? (
+                      <div style={{ fontSize: 13, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
+                        <strong>Rango:</strong> {formatYmdCortoOrDash(draftDesde)} → {formatYmdCortoOrDash(draftHasta)} ·{' '}
+                        <strong>Acción:</strong> {draftEsDistinto && draftRangoCompletoValido ? 'A confirmar' : (cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango')}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Mensaje (opcional)</label>
+              <label style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Mensaje del administrador (opcional)</label>
               <input
                 type="text"
                 className="input-inst"
                 value={cfgMensaje}
                 onChange={(e) => setCfgMensaje(e.target.value)}
                 disabled={cfgSaving || cfgLoading}
-                placeholder="Ej: La solicitud de turnos estará disponible a partir del 01/06."
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                placeholder="Ej: Los turnos se habilitan nuevamente el lunes."
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 13, color: '#6b7280' }}>
-                {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se devuelve al intentar solicitar un turno cuando está deshabilitado.'}
+              <div style={{ fontSize: 14, color: '#6b7280' }}>
+                {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se muestra en la app. Si los turnos están deshabilitados, se muestra junto al mensaje por defecto. Si están habilitados, se muestra como aviso informativo.'}
               </div>
+              {cfgModo === 'manual' ? (
+                cfgHabilitado ? (
+                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
+                    <strong>Vista previa:</strong> Turnos habilitados{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
+                    <strong>Vista previa:</strong> Turnos deshabilitados hasta nuevo aviso{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+                  </div>
+                )
+              ) : (!cfgHabilitadoEfectivo) ? (
+                <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
+                  <strong>Vista previa:</strong> Turnos deshabilitados{cfgHasRangoFechas ? ` (${cfgRangoModo === 'disable' ? 'dentro' : 'fuera'} del rango configurado: ${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+                </div>
+              ) : (String(cfgMensaje || '').trim() || cfgHasRangoFechas ? (
+                <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
+                  <strong>Vista previa:</strong> Turnos habilitados{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+                </div>
+              ) : null)}
             </div>
           </div>
           <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -956,13 +1416,19 @@ return (
       </div>
     </div>
 
+    {isHoyFilterActive ? (
+      <div className="users-title" style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 800, textAlign: 'left' }}>
+        Turnos del día de hoy
+      </div>
+    ) : null}
+
     {loading ? (
       <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando turnos…</div>
     ) : (
       <>
         {turnosFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#64748b', backgroundColor: '#f8fafc', borderRadius: 12 }}>
-            No se encontraron turnos con los filtros aplicados.
+            {isHoyFilterActive ? 'No se encontraron turnos para el día de hoy' : 'No se encontraron turnos con los filtros aplicados.'}
           </div>
         ) : (
           viewStyle === 'agenda' ? (
@@ -1069,8 +1535,6 @@ return (
                                       {getExpiredNotice(t)}
                                     </div>
                                   ) : null}
-                                  <div><strong>Productor ID:</strong> {t.productorId || '-'}</div>
-                                  <div><strong>Turno ID:</strong> {t.id}</div>
                                 </div>
                               </td>
                             </tr>
@@ -1086,21 +1550,18 @@ return (
             <div className="turnos-grid">
               {turnosFiltrados.map(t=> {
                 const displayEstado = getDisplayEstado(t)
-                const isExpanded = expandedId === t.id
+                const isExpanded = false
                 const isUpdating = updatingId === t.id
                 const productorNombre = t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'
                 const ipt = t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'
                 const isInsumo = String(t.tipoTurno || '').toLowerCase() === 'insumo'
                 const insDisp = isInsumo ? insumosDispByProd[String(t.productorId || '').trim()] : null
-                const allowExpand = viewMode !== 'historial'
+                const allowExpand = false
                 return (
                   <div
                     key={t.id}
                     className={`turno-card ${isExpanded ? 'turno-card--expanded' : ''}`}
                     style={{ opacity: t.activo === false ? 0.7 : 1 }}
-                    onClick={allowExpand ? () => toggleExpand(t.id) : undefined}
-                    role={allowExpand ? 'button' : undefined}
-                    tabIndex={allowExpand ? 0 : undefined}
                   >
                     <div className="turno-header">
                       <div className="turno-date">{formatDate(t.fechaTurno || t.fecha)} · {formatTime(t.fechaTurno || t.fecha)}</div>
@@ -1195,8 +1656,6 @@ return (
                             {getExpiredNotice(t)}
                           </div>
                         ) : null}
-                        <div><strong>Productor ID:</strong> {t.productorId || '-'}</div>
-                        <div><strong>Turno ID:</strong> {t.id}</div>
                       </div>
                     )}
                     

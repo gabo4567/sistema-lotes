@@ -29,6 +29,7 @@ import { authFetch, getCurrentAuthContext } from "../api/api";
 import { offlineLotesOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
 import { auth } from "../services/firebase";
+import { usePermissionPrompt } from "../components/PermissionPromptModal";
 
 const DETAIL_MAP_HEIGHT = Math.max(240, Math.min(380, Math.round(Dimensions.get("window").height * 0.42)));
 
@@ -36,11 +37,14 @@ export default function LotesScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+  const [locationServicesDisabled, setLocationServicesDisabled] = useState(false);
+  const [locationFetchError, setLocationFetchError] = useState(null);
   const [requestingLocation, setRequestingLocation] = useState(false);
   const [mode, setMode] = useState("aereo");
   const [points, setPoints] = useState([]);
   const [saving, setSaving] = useState(false);
   const [list, setList] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
   const [selected, setSelected] = useState(null);
   const [nombre, setNombre] = useState("");
   const [observacionesProductor, setObservacionesProductor] = useState("");
@@ -60,6 +64,7 @@ export default function LotesScreen() {
   const { isWalking, route, startWalking, stopWalking, resetRoute, addManualPoint, undoLastPoint, currentLocation } = useWalkingGPS();
   const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
   const prevPendingOpsRef = useRef(pendingOperations);
+  const { ask: askPermission, Prompt: PermissionPrompt } = usePermissionPrompt();
 
   useEffect(() => {
     if (mode === "gps" && route.length > 0) {
@@ -125,75 +130,117 @@ export default function LotesScreen() {
   const requestLocationAccess = useCallback(async () => {
     try {
       setRequestingLocation(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLocationPermissionDenied(true);
-        setLocation(null);
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({});
+      setLocationFetchError(null);
+      setLocationServicesDisabled(false);
       setLocationPermissionDenied(false);
+      const servicesEnabled = await Location.hasServicesEnabledAsync().catch(() => true);
+      if (!servicesEnabled) {
+        setLocationServicesDisabled(true);
+        return false;
+      }
+      const loc = await Location.getCurrentPositionAsync({});
       setLocation({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
+      return true;
+    } catch (e) {
+      const code = e?.code ? String(e.code) : "";
+      const msg = e?.message ? String(e.message) : null;
+      if (code.includes("LOCATION_SERVICES_DISABLED") || code.includes("E_LOCATION_SERVICES_DISABLED")) {
+        setLocationServicesDisabled(true);
+        setLocationFetchError(null);
+        return false;
+      }
+      setLocationFetchError(msg || "No se pudo obtener la ubicación");
+      return false;
     } finally {
       setRequestingLocation(false);
     }
   }, []);
 
+  const ensureLocationAccess = useCallback(async () => {
+    if (location) return true;
+    const current = await Location.getForegroundPermissionsAsync();
+    if (current?.status === "granted") {
+      setLocationPermissionDenied(false);
+      return await requestLocationAccess();
+    }
+    setLocationServicesDisabled(false);
+    setLocationFetchError(null);
+
+    const accepted = await askPermission({
+      title: "Activar ubicación",
+      body: "Necesitamos tu ubicación para mostrar el mapa y permitir dibujar o medir tus lotes.",
+      acceptText: "Habilitar",
+      cancelText: "Ahora no",
+    });
+    if (!accepted) return false;
+
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      setLocationPermissionDenied(true);
+      setLocationServicesDisabled(false);
+      setLocationFetchError(null);
+      setLocation(null);
+      return false;
+    }
+    setLocationPermissionDenied(false);
+    return await requestLocationAccess();
+  }, [askPermission, location, requestLocationAccess]);
+
   const loadList = async () => {
+    setLoadingList(true);
     const uid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "unknown";
     const cacheKey = `cache_lotes_${uid}`;
 
-    if (!isOnline) {
-      try {
-        const raw = await AsyncStorage.getItem(cacheKey);
-        const parsed = raw ? JSON.parse(raw) : [];
-        const cached = Array.isArray(parsed) ? parsed : [];
-
-        let queuedCreates = [];
-        try {
-          const opsRaw = await AsyncStorage.getItem("offline_operations");
-          const ops = opsRaw ? JSON.parse(opsRaw) : [];
-          const createOps = Array.isArray(ops) ? ops.filter((op) => op?.type === "CREATE_LOTE") : [];
-          queuedCreates = createOps.map((op) => ({
-            ...(op?.data || {}),
-            id: `temp_${op.id}`,
-            estado: "Pendiente",
-            observacionesTecnico: "",
-            _isOffline: true,
-            _operationId: op.id,
-            _queuedAt: op.timestamp,
-          }));
-        } catch {}
-
-        const byId = new Map();
-        for (const item of cached) {
-          if (!item?.id) continue;
-          byId.set(String(item.id), item);
-        }
-        for (const item of queuedCreates) {
-          if (!item?.id) continue;
-          const key = String(item.id);
-          if (!byId.has(key)) byId.set(key, item);
-        }
-
-        setList(Array.from(byId.values()));
-        setErrorMsg(null);
-      } catch {
-        setList([]);
-        setErrorMsg("No se pudieron cargar los lotes guardados sin conexión");
-      } finally {
-        setShowingOfflineData(true);
-      }
-      return;
-    }
-
     try {
+      if (!isOnline) {
+        try {
+          const raw = await AsyncStorage.getItem(cacheKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          const cached = Array.isArray(parsed) ? parsed : [];
+
+          let queuedCreates = [];
+          try {
+            const opsRaw = await AsyncStorage.getItem("offline_operations");
+            const ops = opsRaw ? JSON.parse(opsRaw) : [];
+            const createOps = Array.isArray(ops) ? ops.filter((op) => op?.type === "CREATE_LOTE") : [];
+            queuedCreates = createOps.map((op) => ({
+              ...(op?.data || {}),
+              id: `temp_${op.id}`,
+              estado: "Pendiente",
+              observacionesTecnico: "",
+              _isOffline: true,
+              _operationId: op.id,
+              _queuedAt: op.timestamp,
+            }));
+          } catch {}
+
+          const byId = new Map();
+          for (const item of cached) {
+            if (!item?.id) continue;
+            byId.set(String(item.id), item);
+          }
+          for (const item of queuedCreates) {
+            if (!item?.id) continue;
+            const key = String(item.id);
+            if (!byId.has(key)) byId.set(key, item);
+          }
+
+          setList(Array.from(byId.values()));
+          setErrorMsg(null);
+        } catch {
+          setList([]);
+          setErrorMsg("No se pudieron cargar los lotes guardados sin conexión");
+        } finally {
+          setShowingOfflineData(true);
+        }
+        return;
+      }
+
       setShowingOfflineData(false);
       setErrorMsg(null);
       const { ipt } = await getCurrentAuthContext();
@@ -212,13 +259,66 @@ export default function LotesScreen() {
     } catch (error) {
       setList([]);
       setErrorMsg(error.message || "No se pudieron cargar los lotes");
+    } finally {
+      setLoadingList(false);
     }
   };
 
   useEffect(() => {
     loadList();
-    requestLocationAccess();
   }, [requestLocationAccess, isOnline]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const uid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "unknown";
+        const promptKey = `location_permission_prompted_v1_${uid}`;
+
+        const current = await Location.getForegroundPermissionsAsync();
+
+        if (current?.status === "granted") {
+          try {
+            await AsyncStorage.setItem(promptKey, "1");
+          } catch {}
+          if (!cancelled && !location && !requestingLocation) {
+            await requestLocationAccess();
+          }
+          return;
+        }
+
+        const prompted = await AsyncStorage.getItem(promptKey);
+        if (prompted) return;
+
+        const accepted = await askPermission({
+          title: "Activar ubicación",
+          body: "Necesitamos tu ubicación para mostrar el mapa y permitir dibujar o medir tus lotes.",
+          acceptText: "Habilitar",
+          cancelText: "Ahora no",
+        });
+
+        try {
+          await AsyncStorage.setItem(promptKey, "1");
+        } catch {}
+
+        if (!accepted) return;
+
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setLocationPermissionDenied(true);
+          setLocation(null);
+          return;
+        }
+
+        setLocationPermissionDenied(false);
+        if (!cancelled) await requestLocationAccess();
+      } catch {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [askPermission, location, requestLocationAccess, requestingLocation]);
 
   useEffect(() => {
     const prev = prevPendingOpsRef.current;
@@ -325,12 +425,13 @@ export default function LotesScreen() {
     cancelCreate();
   };
 
-  const goToMapView = () => {
+  const goToMapView = async () => {
     setViewMode("mapOnly");
     setCreating(false);
     setSelected(null);
     setViewingList(false);
     setViewingDetailFromList(false);
+    if (!location) await ensureLocationAccess();
   };
 
   const goToListView = () => {
@@ -347,11 +448,9 @@ export default function LotesScreen() {
     setViewMode("listOnly");
   };
 
-  const startCreate = () => {
-    if (!location) {
-      Alert.alert("Ubicación requerida", "Necesitas habilitar la ubicación para crear o editar polígonos de lotes.");
-      return;
-    }
+  const startCreate = async () => {
+    const ok = await ensureLocationAccess();
+    if (!ok) return;
     setCreating(true);
     setSelected(null);
     setPoints([]);
@@ -422,6 +521,14 @@ export default function LotesScreen() {
 
     area = Math.abs(area) / 2;
     return area / 10000;
+  };
+
+  const formatMetodoMarcado = (metodo) => {
+    if (!metodo) return "-";
+    const m = String(metodo).toLowerCase().trim();
+    if (m === "aereo" || m === "aéreo") return "Aéreo";
+    if (m === "gps") return "GPS";
+    return metodo;
   };
 
   const currentAreaHa = computeAreaHa(points);
@@ -588,6 +695,7 @@ export default function LotesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <PermissionPrompt />
       <Text style={styles.title}>Mis Lotes</Text>
 
       {showingOfflineData && (
@@ -659,7 +767,7 @@ export default function LotesScreen() {
             Para usar el mapa de lotes necesitamos acceso a tu ubicación. Puedes seguir viendo la lista de lotes y volver a habilitar el permiso cuando quieras.
           </Text>
           <View style={styles.permissionActions}>
-            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={ensureLocationAccess}>
               <Text style={styles.btnText}>Reintentar permiso</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -676,10 +784,70 @@ export default function LotesScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : (
+      ) : requestingLocation ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingLocation}>{requestingLocation ? "Cargando ubicación..." : "Cargando ubicación..."}</Text>
+          <Text style={styles.loadingLocation}>Cargando ubicación...</Text>
           <ActivityIndicator size="large" color="#1e8449" style={{ marginTop: 8 }} />
+        </View>
+      ) : locationServicesDisabled ? (
+        <View style={styles.locationCard}>
+          <Text style={styles.locationTitle}>GPS desactivado</Text>
+          <Text style={styles.locationText}>
+            El permiso está concedido, pero la ubicación del teléfono está apagada. Activá el GPS/Ubicación en el dispositivo y volvé a intentar.
+          </Text>
+          <View style={styles.permissionActions}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+              <Text style={styles.btnText}>Reintentar ubicación</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, styles.primary]}
+              onPress={async () => {
+                try {
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert("No disponible", "No se pudo abrir configuración del sistema.");
+                }
+              }}
+            >
+              <Text style={styles.btnText}>Abrir configuración</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : locationFetchError ? (
+        <View style={styles.locationCard}>
+          <Text style={styles.locationTitle}>No se pudo obtener la ubicación</Text>
+          <Text style={styles.locationText}>
+            {locationFetchError}
+          </Text>
+          <View style={styles.permissionActions}>
+            <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
+              <Text style={styles.btnText}>Reintentar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, styles.primary]}
+              onPress={async () => {
+                try {
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert("No disponible", "No se pudo abrir configuración del sistema.");
+                }
+              }}
+            >
+              <Text style={styles.btnText}>Abrir configuración</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionTitle}>Permiso de ubicación requerido</Text>
+          <Text style={styles.permissionText}>
+            Para ver el mapa y usar el modo GPS caminando, necesitamos acceder a tu ubicación.
+          </Text>
+          <View style={styles.permissionActions}>
+            <TouchableOpacity style={[styles.btn, styles.primary]} onPress={ensureLocationAccess}>
+              <Text style={styles.btnText}>Habilitar ubicación</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ))}
 
@@ -700,7 +868,7 @@ export default function LotesScreen() {
                   onPress={() => setMode("aereo")}
                 >
                   <Text style={[styles.modeBtnText, mode === "aereo" ? styles.modeBtnTextActive : styles.modeBtnTextInactive]}>
-                    ✈ Dibujo aéreo
+                    ✈ Dibujo Aéreo
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -716,13 +884,15 @@ export default function LotesScreen() {
                 </TouchableOpacity>
                 <View style={[styles.modeBadge, mode === "gps" ? styles.modeBadgeGps : styles.modeBadgeAereo]}>
                   <View style={[styles.modeDot, mode === "gps" ? styles.modeDotGps : styles.modeDotAereo]} />
-                  <Text style={styles.modeBadgeText}>Modo actual: {mode === "gps" ? "GPS caminando" : "Dibujo aéreo"}</Text>
+                  <Text style={styles.modeBadgeText}>Modo actual: {mode === "gps" ? "GPS caminando" : "Dibujo Aéreo"}</Text>
                 </View>
                 {mode === "gps" && (
                   <TouchableOpacity
                     style={[styles.gridBtn, { backgroundColor: "#2ecc71" }]}
                     onPress={async () => {
                       try {
+                        const ok = await ensureLocationAccess();
+                        if (!ok) return;
                         await startWalking();
                       } catch (error) {
                         Alert.alert("Permiso requerido", error?.message || "No se pudo iniciar el modo GPS.");
@@ -804,7 +974,7 @@ export default function LotesScreen() {
           {points.length >= 3 && (
             <View style={[styles.infoPanel, { marginBottom: 6 }]}>
               <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
-              <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
+              <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "Aéreo"}</Text>
               <View style={styles.confirmActions}>
                 <TouchableOpacity
                   style={[styles.btn, polygonConfirmed ? styles.secondary : styles.primary]}
@@ -891,7 +1061,7 @@ export default function LotesScreen() {
 
               <View style={[styles.formInfo, { backgroundColor: "#f0faf4", borderRadius: 8, marginBottom: 14 }]}>
                 <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
-                <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "aéreo"}</Text>
+                <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "Aéreo"}</Text>
                 <Text style={styles.itemText}>Estado: Pendiente</Text>
               </View>
 
@@ -916,7 +1086,7 @@ export default function LotesScreen() {
           <Text style={styles.itemText}>
             Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
           </Text>
-          <Text style={styles.itemText}>Método: {selected.metodoMarcado}</Text>
+          <Text style={styles.itemText}>Método: {formatMetodoMarcado(selected.metodoMarcado)}</Text>
           <Text style={styles.itemText}>Observaciones (prod): {selected.observacionesProductor || "-"}</Text>
           <Text style={styles.itemText}>Observaciones (técnico): {selected.observacionesTecnico || "-"}</Text>
           {selected.estado !== "Validado" && (
@@ -952,7 +1122,14 @@ export default function LotesScreen() {
               scrollEnabled={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+                  {loadingList ? (
+                    <>
+                      <ActivityIndicator size="small" color="#1e8449" style={{ marginBottom: 8 }} />
+                      <Text style={styles.emptyText}>Cargando lotes...</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+                  )}
                 </View>
               }
               renderItem={({ item }) => (
@@ -965,7 +1142,7 @@ export default function LotesScreen() {
                   <Text style={styles.itemText}>
                     Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
                   </Text>
-                  <Text style={styles.itemText}>Método: {item.metodoMarcado}</Text>
+                  <Text style={styles.itemText}>Método: {formatMetodoMarcado(item.metodoMarcado)}</Text>
                   <Text style={styles.itemText}>Observaciones (prod): {item.observacionesProductor || "-"}</Text>
                   <Text style={styles.itemText}>Observaciones (técnico): {item.observacionesTecnico || "-"}</Text>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
@@ -1014,7 +1191,7 @@ export default function LotesScreen() {
               <Text style={styles.itemText}>
                 Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
               </Text>
-              <Text style={styles.itemText}>Método: {selected.metodoMarcado}</Text>
+              <Text style={styles.itemText}>Método: {formatMetodoMarcado(selected.metodoMarcado)}</Text>
               <Text style={styles.itemText}>Observaciones (prod): {selected.observacionesProductor || "-"}</Text>
               <Text style={styles.itemText}>Observaciones (técnico): {selected.observacionesTecnico || "-"}</Text>
 
@@ -1055,7 +1232,14 @@ export default function LotesScreen() {
             keyExtractor={(item) => item.id}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+                {loadingList ? (
+                  <>
+                    <ActivityIndicator size="small" color="#1e8449" style={{ marginBottom: 8 }} />
+                    <Text style={styles.emptyText}>Cargando lotes...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.emptyText}>No tienes lotes registrados aún</Text>
+                )}
               </View>
             }
             renderItem={({ item }) => (
@@ -1068,7 +1252,7 @@ export default function LotesScreen() {
                 <Text style={styles.itemText}>
                   Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
                 </Text>
-                <Text style={styles.itemText}>Método: {item.metodoMarcado}</Text>
+                <Text style={styles.itemText}>Método: {formatMetodoMarcado(item.metodoMarcado)}</Text>
                 <Text style={styles.itemText}>Observaciones (prod): {item.observacionesProductor || "-"}</Text>
                 <Text style={styles.itemText}>Observaciones (técnico): {item.observacionesTecnico || "-"}</Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
@@ -1180,6 +1364,9 @@ const styles = StyleSheet.create({
   permissionTitle: { color: "#8b1e2d", fontWeight: "700", marginBottom: 6, textAlign: "center" },
   permissionText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
   permissionActions: { flexDirection: "row", gap: 10, justifyContent: "center" },
+  locationCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff7ed", borderWidth: 1, borderColor: "#fed7aa" },
+  locationTitle: { color: "#9a3412", fontWeight: "800", marginBottom: 6, textAlign: "center" },
+  locationText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
   gridBtn: {
     width: "46%",

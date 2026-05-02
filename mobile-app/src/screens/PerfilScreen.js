@@ -55,6 +55,7 @@ export default function PerfilScreen() {
       mounted = false;
     };
   }, []);
+
   const campos = data ? normalizeCampos(data) : [];
 
   const renderUbicaciones = (ubicaciones) => (
@@ -103,7 +104,7 @@ export default function PerfilScreen() {
             <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
             <Text style={styles.item}>Estado: {data?.estado}</Text>
             <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
-            
+
             <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
 
             <View style={styles.camposContainer}>
