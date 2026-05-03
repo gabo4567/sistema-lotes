@@ -120,7 +120,7 @@ const LotesMapaGeneral = () => {
           style: mapsApi.MapTypeControlStyle.HORIZONTAL_BAR,
           mapTypeIds: ["roadmap", "terrain", "satellite", "hybrid"],
         },
-        streetViewControl: true,
+        streetViewControl: false,
       });
 
       mapRef.current = map;

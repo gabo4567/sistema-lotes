@@ -3,6 +3,7 @@
 import { admin, db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 import { getDisponibilidadInsumos } from "./insumos.controller.js";
+import { isTurnosHabilitados } from "../utils/turnos.utils.js";
 
 const DEFAULT_TURNOS_CAPACIDAD_DIA = 50;
 const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
@@ -297,8 +298,8 @@ export const crearTurno = async (req, res) => {
     const cfg = await getTurnosConfig();
     const hoyYmd = toYmdInIptTz(new Date());
     const estadoActual = calcularEstadoTurnos(cfg, hoyYmd);
-    if (!estadoActual) {
-      return res.status(400).json({ message: cfg.mensaje || "Los turnos están deshabilitados", estadoActual: false });
+    if (!isTurnosHabilitados({ estadoActual })) {
+      return res.status(403).json({ message: cfg.mensaje || "Turnos deshabilitados hasta nuevo aviso", estadoActual: false });
     }
 
     console.log("📅 Backend - crearTurno recibido:", req.body);
@@ -805,6 +806,15 @@ export const cambiarEstadoTurno = async (req, res) => {
     };
     estado = mapEstados[estado] || estado;
 
+    const parseBool = (v) => {
+      if (typeof v === "boolean") return v;
+      const s = String(v ?? "").toLowerCase().trim();
+      if (s === "true" || s === "1" || s === "yes" || s === "y" || s === "si" || s === "sí" || s === "on") return true;
+      if (s === "false" || s === "0" || s === "no" || s === "n" || s === "off") return false;
+      return false;
+    };
+    const force = parseBool(req.body?.force) || parseBool(req.body?.confirm);
+
     const estadosPermitidos = ["pendiente", "confirmado", "cancelado", "completado", "vencido"];
     if (!estadosPermitidos.includes(estado)) {
       return res.status(400).json({ message: "Estado no válido" });
@@ -821,15 +831,63 @@ export const cambiarEstadoTurno = async (req, res) => {
       return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
     }
     const vencidoUpdate = applyVencidoIfNeeded(current, new Date());
-    if (vencidoUpdate) {
-      await ref.update(vencidoUpdate);
-      return res.status(400).json({ message: "El turno está vencido y no puede cambiar de estado" });
-    }
 
     const from = normalizeEstado(current?.estado);
     const to = normalizeEstado(estado);
-    if (!canTransitionEstado(from, to)) {
+    const allowTransition = (from === "vencido" && to === "completado") || canTransitionEstado(from, to);
+    if (!allowTransition) {
       return res.status(400).json({ message: `Transición de estado no permitida: ${from} -> ${to}` });
+    }
+
+    if (to === "completado") {
+      const now = new Date();
+      const nowYmd = toYmdInIptTz(now);
+      const turnoDate = turnoDateFromRaw(current);
+      const turnoYmd = turnoDate ? toYmdInIptTz(turnoDate) : null;
+      if (turnoYmd && nowYmd) {
+        if (turnoYmd > nowYmd) {
+          return res.status(400).json({ message: "No se puede completar un turno futuro." });
+        }
+        if (turnoYmd < nowYmd) {
+          if (!force) {
+            return res.status(409).json({
+              message: "Estás completando un turno de un día pasado. Confirmá para completar igualmente.",
+              requiresConfirmation: true,
+              reason: "past_turno",
+            });
+          }
+        } else {
+          const hm = toHmInIptTz(now);
+          if (!hm) {
+            if (!force) {
+              return res.status(409).json({
+                message: "No se pudo validar el horario actual. Confirmá para completar igualmente.",
+                requiresConfirmation: true,
+                reason: "unknown_time",
+              });
+            }
+          } else {
+            const mins = hm.hour * 60 + hm.minute;
+            const inHours = mins >= HORA_APERTURA * 60 && mins <= HORA_CIERRE * 60;
+            if (!inHours && !force) {
+              return res.status(409).json({
+                message: `Estás fuera del horario de atención (${String(HORA_APERTURA).padStart(2, "0")}:00–${String(HORA_CIERRE).padStart(2, "0")}:00). Confirmá para completar igualmente.`,
+                requiresConfirmation: true,
+                reason: "out_of_hours",
+              });
+            }
+          }
+        }
+      } else if (!force) {
+        return res.status(409).json({
+          message: "No se pudo validar la fecha del turno. Confirmá para completar igualmente.",
+          requiresConfirmation: true,
+          reason: "unknown_date",
+        });
+      }
+    } else if (vencidoUpdate) {
+      await ref.update(vencidoUpdate);
+      return res.status(400).json({ message: "El turno está vencido y no puede cambiar de estado" });
     }
 
     const update = { estado: to, updatedAt: Timestamp.now() };
@@ -1095,7 +1153,7 @@ export const disponibilidadTurno = async (req, res) => {
     const cfg = await getTurnosConfig();
     const hoyYmd = toYmdInIptTz(new Date());
     const estadoActual = calcularEstadoTurnos(cfg, hoyYmd);
-    if (!estadoActual) {
+    if (!isTurnosHabilitados({ estadoActual })) {
       const motivo = cfg.mensaje || "Los turnos están deshabilitados";
       return res.json({ disponible: false, motivo, estadoActual: false });
     }

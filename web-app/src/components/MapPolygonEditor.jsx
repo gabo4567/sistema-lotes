@@ -38,7 +38,7 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
 
     const initial = Array.isArray(points) && points.length ? points : null;
     const c = center || (initial ? { lat: initial[0].lat, lng: initial[0].lng } : { lat: -29.18, lng: -59.26 });
-    const map = new window.google.maps.Map(containerRef.current, { center: c, zoom: 15, mapTypeId: "terrain" });
+    const map = new window.google.maps.Map(containerRef.current, { center: c, zoom: 15, mapTypeId: "terrain", streetViewControl: false });
     let polygon = null;
     let polygonListeners = [];
 

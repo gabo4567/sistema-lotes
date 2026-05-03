@@ -263,25 +263,25 @@ const ProductoresList = () => {
         alignItems: 'flex-end'
       }}>
         <div className="filter-item" style={{ flex: 1, minWidth: 220 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>IPT</label>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>IPT</label>
           <input
             type="text"
             className="input-inst"
             placeholder="Filtrar por IPT..."
             value={iptFilter}
             onChange={e=>setIptFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
           />
         </div>
         <div className="filter-item" style={{ flex: 1, minWidth: 260 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
           <input
             type="text"
             className="input-inst"
             placeholder="Filtrar por nombre..."
             value={nameFilter}
             onChange={e=>setNameFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
           />
         </div>
         <button

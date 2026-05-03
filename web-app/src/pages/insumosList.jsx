@@ -126,22 +126,22 @@ const InsumosList = () => {
     return (Number(i.cantidadDisponible||0) > 0 ? 'Disponible' : 'No disponible')
   }
   const buttonStyle = { border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }
-  const miniBtnStyle = { border:'1px solid #cbd5e1', color:'#475569', background:'#fff', padding:'4px 8px', borderRadius:6, cursor:'pointer', fontSize:12 }
-  const actionBtnStyle = { border:'1px solid #e2e8f0', color:'#1e293b', background:'#f8fafc', padding:'6px 10px', borderRadius:6, cursor:'pointer', fontSize:12 }
+  const miniBtnStyle = { border:'1px solid #cbd5e1', color:'#475569', background:'#fff', padding:'4px 8px', borderRadius:6, cursor:'pointer', fontSize:13 }
+  const actionBtnStyle = { border:'1px solid #e2e8f0', color:'#1e293b', background:'#f8fafc', padding:'6px 10px', borderRadius:6, cursor:'pointer', fontSize:13 }
 
   return (
     <div className="insumos-list page-container" style={{ padding: 16 }}>
       <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
-      <div style={{ color:'#166534', marginTop: 4, marginBottom: 12 }}>Insumos disponibles del IPT</div>
+      <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Insumos disponibles del IPT</div>
       {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
       <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button style={{ ...buttonStyle }} onClick={openAdd}>Agregar insumo</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>Mostrar:</label>
+        <button className="btn secondary" onClick={openAdd} style={{ minHeight: 42, padding: '0 14px' }}>Agregar insumo</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+          <label style={{ fontSize: 15, fontWeight: 600 }}>Mostrar:</label>
           <select 
             className="select-inst" 
-            style={{ padding: '4px 8px', minWidth: 100 }}
+            style={{ padding: '8px 12px', minWidth: 120, minHeight: 40, fontSize: 16 }}
             value={filterActivo}
             onChange={e => setFilterActivo(e.target.value)}
           >

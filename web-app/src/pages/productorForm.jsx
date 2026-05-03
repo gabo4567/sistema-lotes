@@ -96,9 +96,13 @@ const ProductorForm = () => {
         <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
         <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
         <input className="input-inst" placeholder="Teléfono" value={form.telefono} onChange={e=>onTelChange(e.target.value)} />
-        <input className="input-inst" placeholder="Domicilio (casa)" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
-        <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
-        <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+        <input className="input-inst" placeholder="Localidad" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
+        {isEdit && (
+          <>
+            <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
+            <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+          </>
+        )}
         {isEdit && (
           <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
             <option value="Nuevo">Nuevo</option>
@@ -110,7 +114,9 @@ const ProductorForm = () => {
         <label className="checkbox-inst">
           <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} /> Requiere cambio de contraseña
         </label>
-        <input className="input-inst" placeholder="Plantas por hectárea" value={form.plantasPorHa} onChange={e=>onChange('plantasPorHa', e.target.value)} />
+        {isEdit && (
+          <input className="input-inst" placeholder="Plantas por hectárea" value={form.plantasPorHa} onChange={e=>onChange('plantasPorHa', e.target.value)} />
+        )}
         {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/productores')}>Cancelar</button>

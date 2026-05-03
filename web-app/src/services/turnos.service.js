@@ -9,7 +9,14 @@ export const getTurnos = async (activo)=>{
   const res = await api.get('/turnos', Object.keys(params).length ? { params } : undefined); 
   return res.data 
 }
-export const setEstadoTurno = async (id, estado, motivo)=>{ const res = await api.patch(`/turnos/${id}/estado`, { estado, motivo }); return res.data }
+export const setEstadoTurno = async (id, estado, motivo, options)=>{
+  const body = { estado, motivo }
+  if (options && typeof options === 'object' && options.force === true) {
+    body.force = true
+  }
+  const res = await api.patch(`/turnos/${id}/estado`, body)
+  return res.data
+}
 export const eliminarTurno = async (id, userId)=>{ const res = await api.delete(`/turnos/${id}`, { data: { userId } }); return res.data }
 export const restaurarTurno = async (id)=>{ const res = await api.patch(`/turnos/${id}/restaurar`); return res.data }
 export const getTurnosPorProductor = async (ipt, activo)=>{ 

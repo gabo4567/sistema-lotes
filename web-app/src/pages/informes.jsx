@@ -22,7 +22,7 @@ const Informes = () => {
       const el = document.getElementById('inf-map-container');
       if (!el || !window.google || !window.google.maps) return;
       const center = { lat: Number(mapView.lat), lng: Number(mapView.lng) };
-      const map = new window.google.maps.Map(el, { center, zoom: 15, mapTypeId: 'roadmap' });
+      const map = new window.google.maps.Map(el, { center, zoom: 15, mapTypeId: 'roadmap', streetViewControl: false });
       new window.google.maps.Marker({ position: center, map, title: mapView.title || 'Ubicación' });
     })();
   }, [mapView]);

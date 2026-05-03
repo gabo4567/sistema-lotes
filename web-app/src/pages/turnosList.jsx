@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
+import { isTurnosHabilitados } from '../utils/turnos.utils'
 import { getProductores } from '../services/productores.service'
 import HomeButton from '../components/HomeButton'
 import { db } from '../services/firebase'
@@ -65,6 +66,64 @@ const parseYmdLocal = (ymd, { endOfDay = false } = {}) => {
 const isValidYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
 
 const normalizeEstado = (e) => String(e || 'pendiente').toLowerCase().trim()
+
+const IPT_TIMEZONE = 'America/Argentina/Buenos_Aires'
+const HORA_APERTURA = 7
+const HORA_CIERRE = 13
+
+const toYmdInIptTz = (date) => {
+  try {
+    const d = date instanceof Date ? date : new Date(date)
+    if (!(d instanceof Date) || isNaN(d.getTime())) return null
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: IPT_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
+    return fmt.format(d)
+  } catch {
+    return null
+  }
+}
+
+const toHmInIptTz = (date) => {
+  try {
+    const d = date instanceof Date ? date : new Date(date)
+    if (!(d instanceof Date) || isNaN(d.getTime())) return null
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: IPT_TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    const parts = fmt.formatToParts(d)
+    const hour = Number(parts.find(p => p.type === 'hour')?.value)
+    const minute = Number(parts.find(p => p.type === 'minute')?.value)
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null
+    return { hour, minute }
+  } catch {
+    return null
+  }
+}
+
+const getCompletarPolicy = (turno) => {
+  const dt = toDateSafe(turno?.fechaTurno || turno?.fecha)
+  if (!dt) {
+    return { allowed: true, needsConfirm: true, message: 'No se pudo validar la fecha del turno. ¿Confirmás completar igualmente?' }
+  }
+  const hoyYmd = toYmdInIptTz(new Date())
+  const turnoYmd = toYmdInIptTz(dt)
+  if (!hoyYmd || !turnoYmd) {
+    return { allowed: true, needsConfirm: true, message: 'No se pudo validar la fecha del turno. ¿Confirmás completar igualmente?' }
+  }
+  if (turnoYmd > hoyYmd) {
+    return { allowed: false, needsConfirm: false, message: 'No se puede completar un turno futuro.' }
+  }
+  if (turnoYmd < hoyYmd) {
+    return { allowed: true, needsConfirm: true, message: 'Estás completando un turno de un día pasado. ¿Confirmás completar igualmente?' }
+  }
+  const hm = toHmInIptTz(new Date())
+  if (!hm) {
+    return { allowed: true, needsConfirm: true, message: 'No se pudo validar el horario actual. ¿Confirmás completar igualmente?' }
+  }
+  const mins = hm.hour * 60 + hm.minute
+  const inHours = mins >= HORA_APERTURA * 60 && mins <= HORA_CIERRE * 60
+  if (!inHours) {
+    return { allowed: true, needsConfirm: true, message: `Estás fuera del horario de atención (${String(HORA_APERTURA).padStart(2, '0')}:00–${String(HORA_CIERRE).padStart(2, '0')}:00). ¿Confirmás completar igualmente?` }
+  }
+  return { allowed: true, needsConfirm: false, message: '' }
+}
 
 const getDisplayEstado = (t) => {
   const est = normalizeEstado(t?.estado)
@@ -326,27 +385,53 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   const displayNuevo = labels[normalizedNuevo] || String(nuevo || '').trim() || labels[normalizedNuevo] || 'Pendiente'
 
   const currentTurno = turnos.find(x=>x.id===id)
-  const fromEstado = currentTurno ? getDisplayEstado(currentTurno) : null
-  if (fromEstado && !canTransitionEstado(fromEstado, normalizedNuevo)) {
-    notify({ title: `Transición no permitida: ${fromEstado} → ${normalizedNuevo}`, icon: 'error' })
+  const fromForTransition = currentTurno
+    ? (normalizedNuevo === 'completado' ? normalizeEstado(currentTurno?.estado) : getDisplayEstado(currentTurno))
+    : null
+  if (fromForTransition && !canTransitionEstado(fromForTransition, normalizedNuevo)) {
+    notify({ title: `Transición no permitida: ${fromForTransition} → ${normalizedNuevo}`, icon: 'error' })
     if (typeof onCancel === 'function') onCancel()
     return
   }
-  if (fromEstado && normalizeEstado(fromEstado) === normalizedNuevo) {
+  if (fromForTransition && normalizeEstado(fromForTransition) === normalizedNuevo) {
     if (typeof onCancel === 'function') onCancel()
     return
   }
 
-  const confirm = await confirmDialog({
-    title: 'Confirmar cambio de estado',
-    text: `¿Seguro que querés cambiar el estado a "${displayNuevo}"?`,
-    icon: 'warning',
-    confirmButtonText: 'Confirmar',
-    cancelButtonText: 'Cancelar',
-  })
-  if (!confirm) {
-    if (typeof onCancel === 'function') onCancel()
-    return
+  let force = false
+  if (normalizedNuevo === 'completado') {
+    const policy = getCompletarPolicy(currentTurno)
+    if (!policy.allowed) {
+      notify({ title: policy.message || 'No se puede completar este turno.', icon: 'error' })
+      if (typeof onCancel === 'function') onCancel()
+      return
+    }
+    if (policy.needsConfirm) {
+      const ok = await confirmDialog({
+        title: 'Confirmar completar turno',
+        text: policy.message,
+        icon: 'warning',
+        confirmButtonText: 'Completar',
+        cancelButtonText: 'Cancelar',
+      })
+      if (!ok) {
+        if (typeof onCancel === 'function') onCancel()
+        return
+      }
+      force = true
+    }
+  } else {
+    const confirm = await confirmDialog({
+      title: 'Confirmar cambio de estado',
+      text: `¿Seguro que querés cambiar el estado a "${displayNuevo}"?`,
+      icon: 'warning',
+      confirmButtonText: 'Confirmar',
+      cancelButtonText: 'Cancelar',
+    })
+    if (!confirm) {
+      if (typeof onCancel === 'function') onCancel()
+      return
+    }
   }
 
   setUpdatingId(id)
@@ -367,11 +452,26 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   }
   try {
     const motivoForAdminCancel = normalizeEstado(nuevo) === 'cancelado' ? 'Cancelado por el administrador' : undefined
-    await setEstadoTurno(id, nuevo, motivoForAdminCancel)
+    await setEstadoTurno(id, nuevo, motivoForAdminCancel, force ? { force: true } : undefined)
     setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo, ...(motivoForAdminCancel ? { motivo: motivoForAdminCancel } : {}) } : t))
     setError('')
     notify({ title: 'Estado actualizado', icon: 'success' })
   } catch (e) {
+    if (normalizedNuevo === 'completado' && e?.response?.status === 409 && e?.response?.data?.requiresConfirmation) {
+      const ok = await confirmDialog({
+        title: 'Confirmar completar turno',
+        text: e?.response?.data?.message || 'Confirmá para completar igualmente.',
+        icon: 'warning',
+        confirmButtonText: 'Completar',
+        cancelButtonText: 'Cancelar',
+      })
+      if (!ok) return
+      await setEstadoTurno(id, nuevo, undefined, { force: true })
+      setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo } : t))
+      setError('')
+      notify({ title: 'Estado actualizado', icon: 'success' })
+      return
+    }
     const message = e?.response?.data?.message || e?.message || 'No se pudo actualizar el estado.'
     setError(message)
     notify({ title: message, icon: 'error' })
@@ -532,38 +632,19 @@ const todayYmd = useMemo(() => toYmdLocal(new Date()), [])
 const isHoyFilterActive = filtros.desde === todayYmd && filtros.hasta === todayYmd
 const cfgHasRangoFechas = Boolean(String(cfgDesde || '').trim() || String(cfgHasta || '').trim())
 const cfgRangoInvalido = Boolean(cfgDesde && cfgHasta && cfgDesde > cfgHasta)
-const cfgRangeRelation = useMemo(() => {
-  if (!cfgHasRangoFechas) return 'none'
-  if (cfgDesde && todayYmd < cfgDesde) return 'not_started'
-  if (cfgHasta && todayYmd > cfgHasta) return 'ended'
-  const inside = (!cfgDesde || todayYmd >= cfgDesde) && (!cfgHasta || todayYmd <= cfgHasta)
-  return inside ? 'inside' : 'outside'
-}, [cfgDesde, cfgHasta, cfgHasRangoFechas, todayYmd])
-const cfgRangoPermiteHoy = useMemo(() => {
-  if (cfgModo !== 'rango') return true
-  if (!cfgHasRangoFechas) return false
-  const inside = cfgRangeRelation === 'inside'
-  return cfgRangoModo === 'disable' ? !inside : inside
-}, [cfgHasRangoFechas, cfgModo, cfgRangeRelation, cfgRangoModo])
-const cfgHabilitadoEfectivo =
-  typeof cfgEstadoActual === 'boolean'
-    ? cfgEstadoActual
-    : (cfgModo === 'manual' ? Boolean(cfgHabilitado) : cfgRangoPermiteHoy)
+const estadoTurnosHabilitados = isTurnosHabilitados({ estadoActual: cfgEstadoActual })
+const estadoDesconocido = cfgEstadoActual === null || cfgEstadoActual === undefined
+const mostrarAvisoEstadoDesconocido = estadoDesconocido && !cfgLoading
+const cfgEstadoBorder = estadoTurnosHabilitados ? '#bbf7d0' : '#fecaca'
+const cfgEstadoBg = estadoTurnosHabilitados ? '#f0fdf4' : '#fef2f2'
+const cfgEstadoAccent = estadoTurnosHabilitados ? '#14532d' : '#991b1b'
+const cfgEstadoText = estadoTurnosHabilitados ? '#166534' : '#b91c1c'
+const cfgEstadoChipBorder = estadoTurnosHabilitados ? '#86efac' : '#fca5a5'
+const cfgEstadoLabel = estadoTurnosHabilitados ? 'Habilitados' : 'Deshabilitados'
 const draftHasRangoFechas = Boolean(String(draftDesde || '').trim() || String(draftHasta || '').trim())
 const draftRangoInvalido = Boolean(draftDesde && draftHasta && String(draftDesde) > String(draftHasta))
 const draftRangoCompletoValido = Boolean(draftDesde && draftHasta && !draftRangoInvalido)
 const draftEsDistinto = String(draftDesde || '') !== String(cfgDesde || '') || String(draftHasta || '') !== String(cfgHasta || '')
-
-const estadoExplicacion = useMemo(() => {
-  if (cfgModo === 'manual') {
-    return cfgHabilitado ? 'Habilitación manual activada.' : 'Deshabilitados manualmente.'
-  }
-  if (!cfgHasRangoFechas) return 'Modo por rango: sin fechas configuradas.'
-  if (cfgRangeRelation === 'inside') return 'Dentro del rango configurado.'
-  if (cfgRangeRelation === 'not_started') return 'El rango aún no comenzó.'
-  if (cfgRangeRelation === 'ended') return 'El rango ya terminó.'
-  return 'Fuera del rango configurado.'
-}, [cfgHasRangoFechas, cfgHabilitado, cfgModo, cfgRangeRelation])
 const turnosHoyCount = useMemo(() => {
   return turnosFiltrados.filter(t => {
     const dt = toDateSafe(t?.fechaTurno || t?.fecha)
@@ -804,8 +885,8 @@ const canQuickConfirm = (t) => {
 }
 
 const canQuickComplete = (t) => {
-  const est = getDisplayEstado(t)
-  return est === 'confirmado'
+  const est = normalizeEstado(t?.estado)
+  return est === 'confirmado' || est === 'vencido'
 }
 
 const canQuickCancel = (t) => {
@@ -818,7 +899,8 @@ const canTransitionEstado = (fromEstado, toEstado) => {
   const to = normalizeEstado(toEstado)
   if (from === to) return true
   if (to === 'vencido') return false
-  if (from === 'cancelado' || from === 'completado' || from === 'vencido') return false
+  if (from === 'vencido') return to === 'completado'
+  if (from === 'cancelado' || from === 'completado') return false
   if (from === 'pendiente') return to === 'confirmado' || to === 'cancelado'
   if (from === 'confirmado') return to === 'cancelado' || to === 'completado'
   return false
@@ -834,17 +916,17 @@ return (
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'activos' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('activos')}
-          style={{ padding: '6px 12px', fontSize: 14 }}
+          style={{ padding: '6px 12px', fontSize: 15 }}
         >Activos</button>
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'historial' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('historial')}
-          style={{ padding: '6px 12px', fontSize: 14 }}
+          style={{ padding: '6px 12px', fontSize: 15 }}
         >Historial</button>
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'todos' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('todos')}
-          style={{ padding: '6px 12px', fontSize: 14 }}
+          style={{ padding: '6px 12px', fontSize: 15 }}
         >Todos</button>
       </div>
     </div>
@@ -876,29 +958,29 @@ return (
       >
         <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
           <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Capacidad de turnos por día</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Capacidad de turnos por día</div>
             <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
           </div>
           <div style={{ padding: 16, display: 'grid', gap: 12 }}>
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Fecha</label>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Fecha</label>
               <input
                 type="date"
                 className="input-inst"
                 value={capFecha}
                 onChange={(e) => setCapFecha(e.target.value)}
                 disabled={capSaving}
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
               {formatFechaLarga(capFecha) ? (
-                <div style={{ fontSize: 13, color: '#6b7280' }}>
+                <div style={{ fontSize: 14, color: '#6b7280' }}>
                   {formatFechaLarga(capFecha)}
                 </div>
               ) : null}
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Capacidad</label>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Capacidad</label>
               <input
                 type="number"
                 min={1}
@@ -907,9 +989,9 @@ return (
                 value={capacidad}
                 onChange={(e) => setCapacidad(e.target.value)}
                 disabled={capSaving}
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 13, color: '#6b7280' }}>
+              <div style={{ fontSize: 14, color: '#6b7280' }}>
                 {capLoading
                   ? 'Cargando capacidad…'
                   : (() => {
@@ -956,7 +1038,7 @@ return (
           if (e.target === e.currentTarget) closeConfigModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 15 }}>
+        <div style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 16 }}>
           {cfgRangeIntentOpen ? (
             <div
               role="dialog"
@@ -976,20 +1058,20 @@ return (
                 if (e.target === e.currentTarget) cancelRangeIntent()
               }}
             >
-              <div style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 15 }}>
+              <div style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 16 }}>
                 <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: '#111827' }}>Configuración de turnos</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>Configuración de turnos</div>
                   <button className="btn secondary" onClick={cancelRangeIntent} style={{ padding: '6px 10px' }}>Cancelar</button>
                 </div>
                 <div style={{ padding: 16, display: 'grid', gap: 10 }}>
-                  <div style={{ fontSize: 15, color: '#374151', lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 16, color: '#374151', lineHeight: 1.4 }}>
                     Seleccionaste un rango de fechas para los turnos. ¿Qué querés hacer?
                   </div>
-                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '10px 12px' }}>
                     <strong>Rango:</strong> {formatYmdCortoOrDash(cfgPendingDesde)} → {formatYmdCortoOrDash(cfgPendingHasta)}
                   </div>
                   {(cfgPendingDesde && cfgPendingHasta && cfgPendingDesde > cfgPendingHasta) ? (
-                    <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '10px 12px' }}>
+                    <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '10px 12px' }}>
                       El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
                     </div>
                   ) : null}
@@ -1014,15 +1096,15 @@ return (
             </div>
           ) : null}
           <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
             <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
           </div>
           <div style={{ padding: 16, display: 'grid', gap: 12 }}>
             <div
               style={{
                 borderRadius: 12,
-                border: `1px solid ${cfgHabilitadoEfectivo ? '#bbf7d0' : '#fecaca'}`,
-                background: cfgHabilitadoEfectivo ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${cfgEstadoBorder}`,
+                background: cfgEstadoBg,
                 padding: 12,
                 display: 'grid',
                 gap: 10,
@@ -1030,8 +1112,8 @@ return (
             >
               <div style={{ display: 'grid', gap: 12 }}>
                 <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Configuración</div>
-                  <div style={{ fontSize: 13, color: '#6b7280' }}>Gestioná cómo se habilitan los turnos</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>Configuración</div>
+                  <div style={{ fontSize: 14, color: '#6b7280' }}>Gestioná cómo se habilitan los turnos</div>
                 </div>
 
                 <div
@@ -1087,7 +1169,7 @@ return (
                 <div
                   style={{
                     borderRadius: 12,
-                    border: `1px solid ${cfgHabilitadoEfectivo ? '#bbf7d0' : '#fecaca'}`,
+                    border: `1px solid ${cfgEstadoBorder}`,
                     background: '#ffffff',
                     padding: 12,
                     display: 'grid',
@@ -1097,42 +1179,46 @@ return (
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: cfgHabilitadoEfectivo ? '#14532d' : '#991b1b', letterSpacing: '.02em', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: cfgEstadoAccent, letterSpacing: '.02em', textTransform: 'uppercase' }}>
                         Estado actual
                       </div>
                       <div
                         style={{
                           padding: '4px 10px',
                           borderRadius: 999,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 900,
-                          border: `1px solid ${cfgHabilitadoEfectivo ? '#86efac' : '#fca5a5'}`,
+                          border: `1px solid ${cfgEstadoChipBorder}`,
                           background: '#ffffff',
-                          color: cfgHabilitadoEfectivo ? '#14532d' : '#991b1b',
+                          color: cfgEstadoAccent,
                           boxShadow: '0 6px 14px rgba(15,23,42,0.06)',
                         }}
                       >
-                        {cfgHabilitadoEfectivo ? 'Habilitados' : 'Deshabilitados'}
+                        {cfgEstadoLabel}
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, color: '#6b7280', fontWeight: 700 }}>
+                    <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 700 }}>
                       {cfgModo === 'manual' ? 'Modo: Manual' : 'Modo: Por rango'}
                     </div>
                   </div>
 
-                  <div style={{ fontSize: 14, color: cfgHabilitadoEfectivo ? '#166534' : '#b91c1c', lineHeight: 1.35, display: 'grid', gap: 4 }}>
+                  <div style={{ fontSize: 15, color: cfgEstadoText, lineHeight: 1.35, display: 'grid', gap: 4 }}>
                     <div>
-                      {cfgHabilitadoEfectivo
+                      {estadoTurnosHabilitados
                         ? 'Los usuarios pueden solicitar turnos desde la app.'
                         : 'Los usuarios NO pueden solicitar turnos. Verán un mensaje al intentar hacerlo.'}
                     </div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{estadoExplicacion}</div>
+                    {mostrarAvisoEstadoDesconocido ? (
+                      <div style={{ fontSize: 14, color: '#64748b' }}>
+                        No se pudo verificar el estado actual. Verificá tu conexión.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
                 {cfgModo === 'manual' ? (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Manual</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Manual</div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: (cfgSaving || cfgLoading) ? 'not-allowed' : 'pointer' }}>
                       <input
                         type="checkbox"
@@ -1140,17 +1226,17 @@ return (
                         onChange={(e) => setCfgHabilitado(e.target.checked)}
                         disabled={cfgSaving || cfgLoading}
                       />
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
                         {cfgHabilitado ? 'Turnos habilitados' : 'Turnos deshabilitados'}
                       </div>
                     </label>
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Por rango de fechas</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Por rango de fechas</div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
-                        <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#374151' }}>Desde</label>
+                        <label style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#374151' }}>Desde</label>
                         <input
                           type="date"
                           className="input-inst"
@@ -1160,11 +1246,11 @@ return (
                             setDraftDesde(next)
                           }}
                           disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
                         />
                       </div>
                       <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
-                        <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#374151' }}>Hasta</label>
+                        <label style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#374151' }}>Hasta</label>
                         <input
                           type="date"
                           className="input-inst"
@@ -1174,11 +1260,11 @@ return (
                             setDraftHasta(next)
                           }}
                           disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
                         />
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>
+                    <div style={{ fontSize: 14, color: '#6b7280' }}>
                       Definí el rango y luego tocá “Aplicar rango” para elegir qué querés hacer.
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1193,11 +1279,11 @@ return (
                       </button>
                     </div>
                     {draftRangoInvalido ? (
-                      <div style={{ fontSize: 13, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
                         El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
                       </div>
                     ) : draftHasRangoFechas ? (
-                      <div style={{ fontSize: 13, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
+                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
                         <strong>Rango:</strong> {formatYmdCortoOrDash(draftDesde)} → {formatYmdCortoOrDash(draftHasta)} ·{' '}
                         <strong>Acción:</strong> {draftEsDistinto && draftRangoCompletoValido ? 'A confirmar' : (cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango')}
                       </div>
@@ -1208,7 +1294,7 @@ return (
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Mensaje del administrador (opcional)</label>
+              <label style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Mensaje del administrador (opcional)</label>
               <input
                 type="text"
                 className="input-inst"
@@ -1216,30 +1302,25 @@ return (
                 onChange={(e) => setCfgMensaje(e.target.value)}
                 disabled={cfgSaving || cfgLoading}
                 placeholder="Ej: Los turnos se habilitan nuevamente el lunes."
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 14, color: '#6b7280' }}>
+              <div style={{ fontSize: 15, color: '#6b7280' }}>
                 {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se muestra en la app. Si los turnos están deshabilitados, se muestra junto al mensaje por defecto. Si están habilitados, se muestra como aviso informativo.'}
               </div>
-              {cfgModo === 'manual' ? (
-                cfgHabilitado ? (
-                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
-                    <strong>Vista previa:</strong> Turnos habilitados{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
-                    <strong>Vista previa:</strong> Turnos deshabilitados hasta nuevo aviso{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
-                  </div>
-                )
-              ) : (!cfgHabilitadoEfectivo) ? (
-                <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
-                  <strong>Vista previa:</strong> Turnos deshabilitados{cfgHasRangoFechas ? ` (${cfgRangoModo === 'disable' ? 'dentro' : 'fuera'} del rango configurado: ${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+              {estadoTurnosHabilitados ? (
+                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
+                  <strong>Estado (backend):</strong> Turnos habilitados{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
                 </div>
-              ) : (String(cfgMensaje || '').trim() || cfgHasRangoFechas ? (
-                <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
-                  <strong>Vista previa:</strong> Turnos habilitados{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+              ) : (
+                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
+                  <strong>Estado (backend):</strong> Turnos deshabilitados hasta nuevo aviso{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
+                  {mostrarAvisoEstadoDesconocido ? (
+                    <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
+                      No se pudo verificar el estado actual. Verificá tu conexión.
+                    </div>
+                  ) : null}
                 </div>
-              ) : null)}
+              )}
             </div>
           </div>
           <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -1356,12 +1437,12 @@ return (
       width: '100%'
     }}>
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Ordenar</label>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Ordenar</label>
         <select 
           className="select-inst" 
           value={filtros.orden}
           onChange={e => setFiltros({ ...filtros, orden: e.target.value })}
-          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
           <option value="proximos">Más próximos</option>
           <option value="lejanos">Más lejanos</option>
@@ -1369,12 +1450,12 @@ return (
       </div>
 
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Estado</label>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Estado</label>
         <select 
           className="select-inst" 
           value={filtros.estado}
           onChange={e => setFiltros({ ...filtros, estado: e.target.value })}
-          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
           <option value="todos">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
@@ -1386,24 +1467,24 @@ return (
       </div>
       
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Desde</label>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Desde</label>
         <input 
           type="date" 
           className="input-inst" 
           value={filtros.desde}
           onChange={e => setFiltros({ ...filtros, desde: e.target.value })}
-          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
         />
       </div>
 
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Hasta</label>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Hasta</label>
         <input 
           type="date" 
           className="input-inst" 
           value={filtros.hasta}
           onChange={e => setFiltros({ ...filtros, hasta: e.target.value })}
-          style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
         />
       </div>
 
@@ -1411,13 +1492,13 @@ return (
         <button 
           className="btn secondary" 
           onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '' })}
-          style={{ padding: '8px 18px', fontSize: 15, height: 40, borderRadius: 8 }}
+          style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8 }}
         >Limpiar</button>
       </div>
     </div>
 
     {isHoyFilterActive ? (
-      <div className="users-title" style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 800, textAlign: 'left' }}>
+      <div className="users-title" style={{ margin: '0 0 12px 0', fontSize: 19, fontWeight: 800, textAlign: 'left' }}>
         Turnos del día de hoy
       </div>
     ) : null}
@@ -1471,13 +1552,15 @@ return (
                               {t.activo !== false ? (
                                 <div className="turnos-quick-actions">
                                   {isUpdating ? <span className="turnos-updating">Actualizando…</span> : null}
-                                  {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
+                                  {displayEstado === 'pendiente' || displayEstado === 'confirmado' || displayEstado === 'vencido' ? (
                                     <>
                                       {displayEstado === 'pendiente' ? (
                                         <button className="btn secondary" disabled={isUpdating || !canQuickConfirm(t)} onClick={() => handleCambioEstado(t.id, 'confirmado')}>Confirmar</button>
                                       ) : null}
-                                      <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
-                                      {displayEstado === 'confirmado' ? (
+                                      {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
+                                        <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
+                                      ) : null}
+                                      {displayEstado === 'confirmado' || displayEstado === 'vencido' ? (
                                         <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
                                       ) : null}
                                     </>
@@ -1511,7 +1594,7 @@ return (
                                         color: '#92400e',
                                         padding: '6px 10px',
                                         borderRadius: 10,
-                                        fontSize: 13,
+                                      fontSize: 14,
                                         fontWeight: 600,
                                       }}
                                     >
@@ -1528,7 +1611,7 @@ return (
                                         color: '#334155',
                                         padding: '6px 10px',
                                         borderRadius: 10,
-                                        fontSize: 13,
+                                      fontSize: 14,
                                         fontWeight: 600,
                                       }}
                                     >
@@ -1585,7 +1668,7 @@ return (
                           color: '#92400e',
                           padding: '8px 10px',
                           borderRadius: 12,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 600,
                         }}
                       >
@@ -1601,7 +1684,7 @@ return (
                           color: '#334155',
                           padding: '8px 10px',
                           borderRadius: 12,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 600,
                         }}
                       >
@@ -1632,7 +1715,7 @@ return (
                               color: '#92400e',
                               padding: '6px 10px',
                               borderRadius: 10,
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: 600,
                             }}
                           >
@@ -1649,7 +1732,7 @@ return (
                               color: '#334155',
                               padding: '6px 10px',
                               borderRadius: 10,
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: 600,
                             }}
                           >
@@ -1670,7 +1753,7 @@ return (
                             {displayEstado === 'pendiente' || displayEstado === 'confirmado' ? (
                               <button className="btn secondary" disabled={isUpdating || !canQuickCancel(t)} onClick={() => handleCambioEstado(t.id, 'cancelado')}>Cancelar</button>
                             ) : null}
-                            {displayEstado === 'confirmado' ? (
+                            {displayEstado === 'confirmado' || displayEstado === 'vencido' ? (
                               <button className="btn secondary" disabled={isUpdating || !canQuickComplete(t)} onClick={() => handleCambioEstado(t.id, 'completado')}>Completar</button>
                             ) : null}
                           </div>

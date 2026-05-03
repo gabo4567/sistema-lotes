@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { getUsers, deactivateUser, resetPasswordUser, activateUser } from "../services/users.service";
 import { notify } from "../utils/alerts";
-import { getProductorByIpt, resetPasswordProductor } from "../services/productores.service";
 import HomeButton from "../components/HomeButton";
 import { confirmDialog } from "../utils/alerts";
 
@@ -15,7 +14,6 @@ const UsersList = () => {
   // Estados para filtros
   const [filtros, setFiltros] = useState({
     nombre: "",
-    rol: "todos"
   });
 
   const load = async () => {
@@ -56,10 +54,6 @@ const UsersList = () => {
         const matchEmail = (u.email || '').toLowerCase().includes(search);
         if (!matchNombre && !matchEmail) return false;
       }
-      // Filtro por rol
-      if (filtros.rol !== 'todos') {
-        if (String(u.role || '').toLowerCase() !== filtros.rol.toLowerCase()) return false;
-      }
       return true;
     });
   }, [items, filtros]);
@@ -83,27 +77,6 @@ const UsersList = () => {
 
   const onResetPassword = async (uid) => {
     const u = items.find(x=>x.id===uid);
-    const roleNorm = String(u?.role||'').toLowerCase();
-    const iptUse = u?.ipt || u?.productorIpt;
-    if (roleNorm === 'productor') {
-      if (!iptUse) { await notify({ title: 'Este productor no tiene IPT asociado', icon: 'warning' }); return; }
-      try {
-        const { data } = await getProductorByIpt(iptUse);
-        if (data && (data.requiereCambioContrasena === true)) {
-          await notify({ title: 'La contraseña ya está establecida a su CUIL', icon: 'info' });
-          return;
-        }
-      } catch { null }
-      const ok = await confirmDialog({ title: "¿Estás seguro?", text: `¿Restablecer la contraseña del productor ${u?.nombre || u?.email || uid} a su CUIL?`, icon: "warning", confirmButtonText: "Restablecer", cancelButtonText: "Cancelar" });
-      if (!ok) return;
-      try {
-        await resetPasswordProductor(iptUse);
-        await notify({ title: 'Contraseña del productor establecida a su CUIL', icon: 'success' });
-      } catch {
-        setError("No se pudo restablecer contraseña del productor");
-      }
-      return;
-    }
     const ok = await confirmDialog({ title: "¿Estás seguro?", text: `¿Restablecer la contraseña del usuario ${u?.nombre || u?.email || uid}?`, icon: "warning", confirmButtonText: "Restablecer", cancelButtonText: "Cancelar" });
     if (!ok) return;
     try {
@@ -169,34 +142,20 @@ const UsersList = () => {
         alignItems: 'flex-end'
       }}>
         <div className="filter-item" style={{ flex: 1, minWidth: 250 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
           <input 
             type="text" 
             className="input-inst" 
             placeholder="Buscar por nombre o email..."
             value={filtros.nombre}
             onChange={e => setFiltros({ ...filtros, nombre: e.target.value })}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
           />
-        </div>
-
-        <div className="filter-item" style={{ width: 200 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Rol</label>
-          <select 
-            className="select-inst" 
-            value={filtros.rol}
-            onChange={e => setFiltros({ ...filtros, rol: e.target.value })}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16 }}
-          >
-            <option value="todos">Todos los roles</option>
-            <option value="Administrador">Administrador</option>
-            <option value="Productor">Productor</option>
-          </select>
         </div>
 
         <button 
           className="btn secondary" 
-          onClick={() => setFiltros({ nombre: '', rol: 'todos' })}
+          onClick={() => setFiltros({ nombre: '' })}
           style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
         >
           Limpiar Filtros
@@ -229,11 +188,7 @@ const UsersList = () => {
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.ipt || u.productorIpt || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.email}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
-                    {String(u.role || '').toLowerCase() === 'productor' ? (
-                      <span>{u.role || '-'}</span>
-                    ) : (
-                      <span>Administrador</span>
-                    )}
+                    <span>Administrador</span>
                   </td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.activo !== false ? 'Activo' : 'Inactivo'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{formatTimestamp(u.ultimoAcceso)}</td>

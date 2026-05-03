@@ -11,6 +11,7 @@ import { offlineTurnosOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isTurnosHabilitados } from "../utils/turnos.utils";
 
 export default function TurnosScreen() {
   const [fechaInput, setFechaInput] = useState("");
@@ -48,7 +49,7 @@ export default function TurnosScreen() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const turnosDisabled = turnosConfig?.estadoActual !== true;
+  const turnosDisabled = !isTurnosHabilitados(turnosConfig);
   const turnosStatusUnknown = turnosConfig?.estadoActual == null;
 
   const loadTurnosConfig = useCallback(async ({ forceRefresh = false } = {}) => {
