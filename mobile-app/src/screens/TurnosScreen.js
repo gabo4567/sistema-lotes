@@ -1146,11 +1146,15 @@ export default function TurnosScreen() {
       }
       
       console.log("✅ Turno cancelado exitosamente");
-      setSuccess("Turno cancelado exitosamente");
+      const msg = "Turno cancelado exitosamente";
+      setSuccess(msg);
+      Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       await loadList();
     } catch (error) {
       console.error("❌ Error cancelando turno:", error);
-      setError(error.message || "Error al cancelar turno");
+      const msg = error.message || "Error al cancelar turno";
+      setError(msg);
+      Alert.alert("Error", msg, [{ text: "Aceptar" }]);
     } finally {
       setActionLoading(false);
     }
@@ -1197,11 +1201,15 @@ export default function TurnosScreen() {
         } catch {}
         throw new Error(msg);
       }
-      setSuccess("Turno archivado");
+      const msg = "Turno archivado exitosamente";
+      setSuccess(msg);
+      Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       await loadList();
     } catch (error) {
       console.error("❌ Error archivando turno:", error);
-      setError(error.message || "Error al archivar turno");
+      const msg = error.message || "Error al archivar turno";
+      setError(msg);
+      Alert.alert("Error", msg, [{ text: "Aceptar" }]);
     } finally {
       setActionLoading(false);
     }
@@ -1688,10 +1696,11 @@ const styles = StyleSheet.create({
 });
   const getEstadoColor = (estado) => {
     switch (estado?.toLowerCase()) {
-      case 'pendiente': return '#f39c12';
-      case 'confirmado': return '#27ae60';
-      case 'cancelado': return '#e74c3c';
-      case 'completado': return '#3498db';
+      case 'pendiente': return '#f59e0b';
+      case 'confirmado': return '#2563eb';
+      case 'cancelado': return '#dc2626';
+      case 'completado': return '#16a34a';
+      case 'vencido': return '#6b7280';
       default: return '#95a5a6';
     }
   };
