@@ -319,6 +319,7 @@ body {
   text-decoration: none;
   font-weight: 600;
   font-size: 1rem;
+  font-family: inherit;
   transition: box-shadow 180ms ease, transform 140ms ease, background-color 180ms ease;
 }
 .menu-btn:hover{
@@ -364,6 +365,7 @@ body {
   color: var(--inst-text);
   font-weight: 600;
   font-size: 1rem;
+  font-family: inherit;
   text-decoration: none;
   transition: box-shadow 160ms ease, transform 140ms ease, background-color 160ms ease;
 }
