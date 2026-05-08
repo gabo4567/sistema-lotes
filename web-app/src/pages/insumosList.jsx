@@ -10,7 +10,7 @@ const InsumosList = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modal, setModal] = useState(null)
-  const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible' })
+  const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'', descripcion:'', estado:'disponible' })
   const [productores, setProductores] = useState([])
   const [asignar, setAsignar] = useState({ productorId:'', cantidadAsignada:'' })
   const [iptSearch, setIptSearch] = useState('')
@@ -81,7 +81,7 @@ const InsumosList = () => {
     setShowProducerResults(false);
   };
 
-  const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible', activo: true }); setModal({ type:'add' }) }
+  const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'', descripcion:'', estado:'disponible', activo: true }); setModal({ type:'add' }) }
   const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:insumo.unidad||'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
   const openAssign = async (insumo)=>{
     try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null }
@@ -145,8 +145,15 @@ const InsumosList = () => {
   const actionBtnStyle = { border:'1px solid #e2e8f0', color:'#1e293b', background:'#f8fafc', padding:'6px 10px', borderRadius:6, cursor:'pointer', fontSize:13 }
 
   return (
-    <div className="insumos-list page-container" style={{ padding: 16 }}>
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
+    <div className="insumos-list insumos-page page-container">
+      <div className="insumos-page__top"><HomeButton /></div>
+      <div className="insumos-hero">
+        <div>
+          <h2>Gestion de Insumos</h2>
+          <p>Stock disponible, asignaciones y seguimiento por productor.</p>
+        </div>
+        <button className="btn insumos-primary-action" onClick={openAdd}>Agregar insumo</button>
+      </div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
       <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Insumos disponibles del IPT</div>
       {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
@@ -474,8 +481,8 @@ const InsumosList = () => {
       )}
 
       {modal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'#fff', padding:16, borderRadius:12, width:420 }}>
+        <div className="insumos-modal-backdrop" onMouseDown={(e)=>{ if (e.target === e.currentTarget) setModal(null) }}>
+          <div className="insumos-modal" role="dialog" aria-modal="true">
             {modal.type==='add' && (
               <div>
                 <h3 style={{ marginTop:0 }}>Agregar insumo</h3>
@@ -483,7 +490,7 @@ const InsumosList = () => {
                   {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
-                <input className="input-inst" placeholder="Unidad de medida (ej: bolsas, kg, plantas)" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
+                <input className="input-inst" placeholder="Unidad de medida" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
                 <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
                   <option value="disponible">Disponible</option>
@@ -506,7 +513,7 @@ const InsumosList = () => {
                   {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
-                <input className="input-inst" placeholder="Unidad de medida (ej: bolsas, kg, plantas)" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
+                <input className="input-inst" placeholder="Unidad de medida" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
                 <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
                   <option value="disponible">Disponible</option>

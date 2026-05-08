@@ -678,7 +678,21 @@ const summary = useMemo(() => {
   return counts
 }, [turnosFiltrados, todayYmd])
 
-const exportarCSV = useCallback(() => {
+const exportarCSV = useCallback(async () => {
+  const total = turnosFiltrados.length
+  if (total === 0) {
+    await notify({ title: 'No hay turnos para exportar', icon: 'info' })
+    return
+  }
+  const ok = await confirmDialog({
+    title: 'Exportar turnos a CSV',
+    text: `Se exportaran ${total} turno${total === 1 ? '' : 's'} segun los filtros actuales. Queres continuar?`,
+    icon: 'question',
+    confirmButtonText: 'Exportar',
+    cancelButtonText: 'Cancelar',
+  })
+  if (!ok) return
+
   const TIPO_LABELS = { insumo: 'Insumos', carnet: 'Renovación de Carnet', otro: 'Otro' }
   const ESTADO_LABELS = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido' }
   const rows = turnosFiltrados.map(t => {

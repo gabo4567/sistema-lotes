@@ -59,6 +59,7 @@ export const createProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
+      estado: estado || "Nuevo",
       requiereCambioContrasena: true,
       historialIngresos: 0,
       fechaRegistro: new Date(),
