@@ -35,6 +35,8 @@ export default function TurnosScreen() {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [orden, setOrden] = useState("proximos"); // "proximos" | "lejanos"
   const [turnoEditando, setTurnoEditando] = useState(null);
+  const [categoriaInsumo, setCategoriaInsumo] = useState("");
+  const [historialModal, setHistorialModal] = useState({ visible: false, turnoId: null, data: [], loading: false, error: '' });
   const insets = useSafeAreaInsets();
   const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
   const [showingOfflineData, setShowingOfflineData] = useState(false);
@@ -475,22 +477,10 @@ export default function TurnosScreen() {
   };
 
   const toIso = (s) => {
-    console.log("🔄 Convirtiendo fecha:", s);
     const m = String(s).trim().match(/^([0-3][0-9])[-/]([0-1][0-9])[-/](\d{4})$/);
-    console.log("📅 Match regex:", m);
     if (!m) return null;
     const dd = m[1], mm = m[2], yyyy = m[3];
-    
-    // ⚠️ CRÍTICO: Crear fecha en UTC para evitar problemas de zona horaria
-    const result = `${yyyy}-${mm}-${dd}`;
-    console.log("📍 Fecha formateada (sin zona horaria):", result);
-    
-    // Crear objeto Date en UTC explícitamente
-    const fechaUTC = new Date(Date.UTC(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd)));
-    console.log("🌍 Fecha UTC completa:", fechaUTC.toISOString());
-    console.log("🌎 Fecha local:", fechaUTC.toLocaleDateString('es-AR'));
-    
-    return result;
+    return `${yyyy}-${mm}-${dd}`;
   };
 
   const minSelectableDate = () => {
@@ -561,7 +551,17 @@ export default function TurnosScreen() {
       "2026-04-03": "Viernes Santo",
       "2026-06-15": "Paso a la Inmortalidad del Gral. Martín Miguel de Güemes",
       "2026-08-17": "Paso a la Inmortalidad del Gral. José de San Martín",
+      "2026-10-12": "Día del Respeto a la Diversidad Cultural",
       "2026-11-23": "Día de la Soberanía Nacional",
+    },
+    2027: {
+      "2027-02-15": "Carnaval",
+      "2027-02-16": "Carnaval",
+      "2027-03-26": "Viernes Santo",
+      "2027-06-21": "Paso a la Inmortalidad del Gral. Martín Miguel de Güemes",
+      "2027-08-16": "Paso a la Inmortalidad del Gral. José de San Martín",
+      "2027-10-11": "Día del Respeto a la Diversidad Cultural",
+      "2027-11-22": "Día de la Soberanía Nacional",
     },
   };
 
@@ -678,7 +678,7 @@ export default function TurnosScreen() {
     setShowDatePicker(true);
   };
 
-  const recalcularDisponibilidad = async (fechaValue, tipoValue, requestId) => {
+  const recalcularDisponibilidad = async (fechaValue, tipoValue, requestId, categoriaInsumoValue) => {
     const isStale = () => dispReqRef.current !== requestId;
 
     const fechaIso = toIso(fechaValue);
@@ -735,7 +735,8 @@ export default function TurnosScreen() {
           : "otra";
       const query =
         `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` +
-        (tipoParam === "insumo" && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "");
+        (tipoParam === "insumo" && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "") +
+        (tipoParam === "insumo" && categoriaInsumoValue ? `&categoriaInsumo=${encodeURIComponent(categoriaInsumoValue)}` : "");
       const resp = await apiFetch(`${API_URL}/turnos/disponibilidad?${query}`);
       const responseText = await resp.text();
       let j;
@@ -775,10 +776,16 @@ export default function TurnosScreen() {
       return;
     }
 
+    // Para insumo, esperar a que se seleccione la categoría antes de verificar
+    if (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo) {
+      setDispLoading(false);
+      return;
+    }
+
     const requestId = ++dispReqRef.current;
     setDispLoading(true);
     dispTimerRef.current = setTimeout(() => {
-      Promise.resolve(recalcularDisponibilidad(fechaInput, tipo, requestId))
+      Promise.resolve(recalcularDisponibilidad(fechaInput, tipo, requestId, categoriaInsumo))
         .catch(() => {})
         .finally(() => {
           if (dispReqRef.current === requestId) setDispLoading(false);
@@ -791,7 +798,7 @@ export default function TurnosScreen() {
         dispTimerRef.current = null;
       }
     };
-  }, [view, fechaInput, tipo, isOnline, turnosDisabled]);
+  }, [view, fechaInput, tipo, categoriaInsumo, isOnline, turnosDisabled]);
 
   useEffect(() => {
     if (view !== "form") return;
@@ -806,53 +813,32 @@ export default function TurnosScreen() {
     setSuccess("");
     setActionLoading(true);
     try {
-      console.log("🚀 Iniciando solicitud de turno...");
-      console.log("📅 Fecha input:", fechaInput);
-      console.log("🏷️ Tipo ORIGINAL:", JSON.stringify(tipo));
-      console.log("💬 Motivo:", motivo);
-      
       const tokenResult = await auth.currentUser?.getIdTokenResult();
       const ipt = tokenResult?.claims?.ipt;
       const idToken = await auth.currentUser?.getIdToken();
-      
-      console.log("🔑 Token obtenido:", idToken ? "Sí" : "No");
-      console.log("📋 IPT obtenido:", ipt);
-      
+
       if (!idToken) { setError("No estás autenticado"); return; }
-      
+
       const fechaIso = toIso(fechaInput);
-      console.log("📅 Fecha ISO convertida:", fechaIso);
       if (!fechaIso) { setError("Fecha inválida. Formato DD-MM-YYYY"); return; }
       const now = new Date();
       const todayIso = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
       if (fechaIso < todayIso) { setError("Fecha ya pasada"); return; }
-      
+
       // Validar fin de semana
       const diaSemana = getUTCDayFromIsoDate(fechaIso);
       if (diaSemana === null) { setError("Fecha inválida"); return; }
-      console.log("📆 Día de la semana:", diaSemana, "(0=domingo, 6=sábado)");
       if (diaSemana === 0 || diaSemana === 6) { setError("No se permiten turnos sábado o domingo"); return; }
       const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
       if (feriadoLabel) { setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`); return; }
-      
-      // 🔍 DEBUG: Análisis detallado del tipo
-      console.log("🔍 DEBUG - Análisis de tipo:");
-      console.log("  - Valor original:", JSON.stringify(tipo));
-      console.log("  - toLowerCase():", tipo.toLowerCase());
-      console.log("  - includes('insumo'):", tipo.toLowerCase().includes('insumo'));
-      console.log("  - includes('renovación'):", tipo.toLowerCase().includes('renovación'));
-      console.log("  - includes('renov'):", tipo.toLowerCase().includes('renov'));
-      
+
       let tipoNormalizado;
       if (tipo.toLowerCase().includes('insumo')) {
         tipoNormalizado = 'insumo';
-        console.log("✅ Detectado como: insumo");
       } else if (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) {
         tipoNormalizado = 'carnet';
-        console.log("✅ Detectado como: carnet");
       } else {
         tipoNormalizado = 'otro';
-        console.log("⚠️ No detectado, usando: otro");
       }
 
       const motivoTrim = String(motivo || '').trim();
@@ -919,11 +905,12 @@ export default function TurnosScreen() {
         return;
       }
       
-      const body = { 
-        ipt, 
-        fechaSolicitada: fechaIso, 
+      const body = {
+        ipt,
+        fechaSolicitada: fechaIso,
         tipoTurno: tipoNormalizado,
-        motivo: motivoTrim
+        motivo: motivoTrim,
+        ...(tipoNormalizado === 'insumo' && categoriaInsumo ? { categoriaInsumo } : {}),
       };
       
       console.log("📝 Body preparado:", body);
@@ -956,6 +943,7 @@ export default function TurnosScreen() {
 
       setFechaInput("");
       setTipo("");
+      setCategoriaInsumo("");
       setDisp(null);
       setMotivo("");
       if (isOnline && !wasOffline) {
@@ -971,7 +959,6 @@ export default function TurnosScreen() {
   };
 
   const editarTurno = (turno) => {
-    console.log("✏️ Editando turno:", turno);
     const st = getDisplayEstado(turno);
     if (st !== 'pendiente') {
       Alert.alert('No permitido', `No puedes editar un turno ${st}.`);
@@ -1011,6 +998,10 @@ export default function TurnosScreen() {
       const motivoTrim = String(motivo || '').trim();
       if (tipoNormalizado === 'otro' && !motivoTrim) {
         setError('Si el tipo es "Otro", el motivo es obligatorio.');
+        return;
+      }
+      if (tipoNormalizado === 'insumo' && !categoriaInsumo) {
+        setError('Seleccioná la categoría de insumo que vas a retirar.');
         return;
       }
 
@@ -1076,7 +1067,6 @@ export default function TurnosScreen() {
       }
 
       const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivoTrim };
-      console.log("📤 Actualizando turno:", body);
       const resp = await authFetch(`${API_URL}/turnos/${turnoEditando.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1087,7 +1077,6 @@ export default function TurnosScreen() {
         throw new Error(errorData?.message || "Error al actualizar turno");
       }
       const data = await resp.json();
-      console.log("✅ Turno actualizado:", data);
       const msg = data?.message || "Turno actualizado exitosamente";
       setSuccess(msg);
       Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
@@ -1128,8 +1117,7 @@ export default function TurnosScreen() {
     try {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
-      console.log("🚫 Cancelando turno:", turno.id);
-      
+
       const body = { estado: 'cancelado', motivo: 'Cancelado por el productor' };
       
       const resp = await authFetch(`${API_URL}/turnos/${turno.id}/estado`, {
@@ -1145,7 +1133,6 @@ export default function TurnosScreen() {
         throw new Error(errorData?.message || "Error al cancelar turno");
       }
       
-      console.log("✅ Turno cancelado exitosamente");
       const msg = "Turno cancelado exitosamente";
       setSuccess(msg);
       Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
@@ -1223,6 +1210,22 @@ export default function TurnosScreen() {
     setError("");
     setSuccess("");
     setView("list");
+  };
+
+  const abrirHistorial = async (turno) => {
+    setHistorialModal({ visible: true, turnoId: turno.id, data: [], loading: true, error: '' });
+    try {
+      const resp = await authFetch(`${API_URL}/turnos/${turno.id}/timeline`);
+      const json = await resp.json().catch(() => ({}));
+      const data = Array.isArray(json?.timeline) ? json.timeline : [];
+      setHistorialModal(prev => ({ ...prev, loading: false, data }));
+    } catch (e) {
+      setHistorialModal(prev => ({ ...prev, loading: false, error: e?.message || 'No se pudo cargar el historial.' }));
+    }
+  };
+
+  const cerrarHistorial = () => {
+    setHistorialModal({ visible: false, turnoId: null, data: [], loading: false, error: '' });
   };
 
   const isSolicitarTabActive = view === "form";
@@ -1440,7 +1443,9 @@ export default function TurnosScreen() {
                           ) : null}
                         </View>
                       </View>
-                      <Text style={styles.turnoTipo}>Tipo: {getTipoLabel(item.tipoTurno)}</Text>
+                      <Text style={styles.turnoTipo}>
+                        Tipo: {getTipoLabel(item.tipoTurno)}{item.categoriaInsumo ? ` · ${item.categoriaInsumo}` : ''}
+                      </Text>
                       <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
                       {getCancelNotice(item) ? (
                         <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
@@ -1467,6 +1472,12 @@ export default function TurnosScreen() {
                           ) : null}
                         </View>
                       ) : null}
+                      <TouchableOpacity
+                        onPress={() => abrirHistorial(item)}
+                        style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600' }}>Ver seguimiento</Text>
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 }} 
@@ -1509,23 +1520,34 @@ export default function TurnosScreen() {
             <Text style={{ color: tipo ? "#2c3e50" : "#95a5a6" }}>{tipo || "Tipo de turno"}</Text>
           </TouchableOpacity>
           {!fechaInput ? <Text style={styles.helperText}>Seleccioná primero la fecha</Text> : null}
-          {tipo ? (
-            <Text style={{ fontSize: 12, color: '#7f8c8d', marginBottom: 8 }}>
-              🔍 Tipo detectado: {(() => {
-                const tipoLower = tipo.toLowerCase();
-                const esInsumo = tipoLower.includes('insumo');
-                const esRenovacion = tipoLower.includes('renovación') || tipoLower.includes('renov');
-                return esInsumo ? 'insumo' : esRenovacion ? 'carnet' : 'otro';
-              })()}
-            </Text>
-          ) : null}
           {mostrarTipos && (
             <View style={styles.dropdown}>
               {tipoOptions.map(opt => (
-                <TouchableOpacity key={opt} style={styles.option} onPress={() => { setTipo(opt); setMostrarTipos(false); }}>
+                <TouchableOpacity key={opt} style={styles.option} onPress={() => {
+                  setTipo(opt);
+                  setMostrarTipos(false);
+                  if (!opt.toLowerCase().includes('insumo')) setCategoriaInsumo('');
+                }}>
                   <Text>{opt}</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          )}
+          {normalizeTipoFromLabel(tipo) === "insumo" && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: '600' }}>Categoría de insumo a retirar</Text>
+              <View style={styles.dropdown}>
+                {["Arada", "Almácigo", "Transplante", "Cosecha"].map(cat => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.option, categoriaInsumo === cat && { backgroundColor: '#f0fdf4' }]}
+                    onPress={() => setCategoriaInsumo(cat)}
+                  >
+                    <Text style={[{ color: '#2c3e50' }, categoriaInsumo === cat && { color: '#166534', fontWeight: '700' }]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!categoriaInsumo && <Text style={styles.helperText}>Seleccioná la categoría a retirar</Text>}
             </View>
           )}
           {normalizeTipoFromLabel(tipo) === "otro" ? (
@@ -1553,7 +1575,7 @@ export default function TurnosScreen() {
             <TouchableOpacity
               style={[
                 styles.btn,
-                (turnosDisabled || !fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())) && styles.btnDisabled,
+                (turnosDisabled || !fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim()) || (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo)) && styles.btnDisabled,
               ]}
               onPress={solicitarTurno}
               disabled={
@@ -1563,7 +1585,8 @@ export default function TurnosScreen() {
                 !fechaInput ||
                 !tipo ||
                 disp !== true ||
-                (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim())
+                (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim()) ||
+                (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo)
               }
             >
               <Text style={styles.btnText}>{actionLoading ? "Solicitando..." : "Solicitar"}</Text>
@@ -1611,6 +1634,69 @@ export default function TurnosScreen() {
           </View>
         </View>
       )}
+      {/* Modal historial de turno */}
+      <Modal
+        visible={historialModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={cerrarHistorial}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>Historial del turno</Text>
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Auditoría de cambios</Text>
+              </View>
+              <TouchableOpacity onPress={cerrarHistorial} style={{ padding: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+              {historialModal.loading ? (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color="#1e8449" />
+                  <Text style={{ marginTop: 12, color: '#9ca3af', fontSize: 14 }}>Cargando historial…</Text>
+                </View>
+              ) : historialModal.error ? (
+                <View style={{ padding: 16, backgroundColor: '#fef2f2', borderRadius: 10, borderWidth: 1, borderColor: '#fecaca' }}>
+                  <Text style={{ color: '#991b1b', fontSize: 14, marginBottom: 8 }}>{historialModal.error}</Text>
+                  <TouchableOpacity onPress={() => abrirHistorial({ id: historialModal.turnoId })} style={{ alignSelf: 'flex-start', backgroundColor: '#fff', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 13 }}>Reintentar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : historialModal.data.length === 0 ? (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <Text style={{ color: '#9ca3af', fontSize: 14 }}>Aún no hay actividad registrada para este turno.</Text>
+                </View>
+              ) : (
+                historialModal.data.map((item, idx) => {
+                  const to = String(item?.estadoNuevo || '').toLowerCase();
+                  const dotColor = to === 'confirmado' ? '#16a34a' : to === 'cancelado' ? '#dc2626' : to === 'completado' ? '#2563eb' : to === 'vencido' ? '#6b7280' : item?.accion === 'turno_creado' ? '#3b82f6' : '#9ca3af';
+                  const fechaStr = (() => { try { const d = new Date(item?.createdAt); if (isNaN(d.getTime())) return '-'; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } catch { return '-'; } })();
+                  return (
+                    <View key={item.id || idx} style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                      <View style={{ alignItems: 'center', width: 28 }}>
+                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: dotColor, alignItems: 'center', justifyContent: 'center' }} />
+                        {idx < historialModal.data.length - 1 && <View style={{ width: 2, flex: 1, backgroundColor: '#e5e7eb', marginTop: 4 }} />}
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#f9fafb', borderRadius: 10, padding: 10, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '600', marginBottom: 4 }}>{fechaStr}</Text>
+                        <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600' }}>{item?.descripcion || item?.accion}</Text>
+                        {item?.motivo ? (
+                          <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4, fontStyle: 'italic' }}>"{item.motivo}"</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1717,29 +1803,12 @@ const styles = StyleSheet.create({
 
   const formatDDMMYYYY = (isoOrDdmm) => {
     if (!isoOrDdmm) return "-";
-    
-    console.log("📅 formatDDMMYYYY - Input:", JSON.stringify(isoOrDdmm));
-    
-    // Si ya está en formato dd-mm-yyyy, devolverlo directamente
     const mdd = String(isoOrDdmm).match(/^([0-3][0-9])[-/]([0-1][0-9])[-/](\d{4})$/);
-    if (mdd) {
-      console.log("📅 Ya está en formato dd-mm-yyyy:", `${mdd[1]}-${mdd[2]}-${mdd[3]}`);
-      return `${mdd[1]}-${mdd[2]}-${mdd[3]}`;
-    }
-    
-    // Para fechas ISO, usar UTC para evitar problemas de zona horaria
+    if (mdd) return `${mdd[1]}-${mdd[2]}-${mdd[3]}`;
     const d = new Date(isoOrDdmm);
-    if (isNaN(d.getTime())) {
-      console.log("📅 Fecha inválida, devolviendo original:", String(isoOrDdmm));
-      return String(isoOrDdmm);
-    }
-    
-    // Usar métodos UTC para evitar problemas de zona horaria
+    if (isNaN(d.getTime())) return String(isoOrDdmm);
     const dd = String(d.getUTCDate()).padStart(2, '0');
     const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
     const yyyy = d.getUTCFullYear();
-    
-    const resultado = `${dd}-${mm}-${yyyy}`;
-    console.log("📅 Convertido a dd-mm-yyyy (UTC):", resultado);
-    return resultado;
+    return `${dd}-${mm}-${yyyy}`;
   };

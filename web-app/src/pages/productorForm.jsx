@@ -7,7 +7,7 @@ const ProductorForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const [form, setForm] = useState({ ipt:"", nombreCompleto:"", cuil:"", email:"", telefono:"", domicilioCasa:"", domicilioIngresoCampoLat:"", domicilioIngresoCampoLng:"", estado:"Nuevo", requiereCambioContrasena:true, plantasPorHa:"" });
+  const [form, setForm] = useState({ ipt:"", nombreCompleto:"", cuil:"", email:"", telefono:"", domicilioCasa:"", domicilioIngresoCampoLat:"", domicilioIngresoCampoLng:"", estado:"Nuevo", requiereCambioContrasena:true });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,7 +26,6 @@ const ProductorForm = () => {
           domicilioIngresoCampoLng: data.domicilioIngresoCampo?.lng ?? "",
           estado: data.estado || "Nuevo",
           requiereCambioContrasena: Boolean(data.requiereCambioContrasena),
-          plantasPorHa: data.plantasPorHa ?? "",
         });
       } catch {
         setError("No se pudo cargar productor");
@@ -74,7 +73,6 @@ const ProductorForm = () => {
         domicilioIngresoCampo: (form.domicilioIngresoCampoLat && form.domicilioIngresoCampoLng) ? { lat: Number(form.domicilioIngresoCampoLat), lng: Number(form.domicilioIngresoCampoLng) } : null,
         estado: form.estado,
         requiereCambioContrasena: Boolean(form.requiereCambioContrasena),
-        plantasPorHa: form.plantasPorHa ? Number(form.plantasPorHa) : null,
       };
       if (isEdit) {
         await updateProductor(id, payload);
@@ -114,9 +112,6 @@ const ProductorForm = () => {
         <label className="checkbox-inst">
           <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} /> Requiere cambio de contraseña
         </label>
-        {isEdit && (
-          <input className="input-inst" placeholder="Plantas por hectárea" value={form.plantasPorHa} onChange={e=>onChange('plantasPorHa', e.target.value)} />
-        )}
         {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/productores')}>Cancelar</button>

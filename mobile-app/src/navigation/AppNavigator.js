@@ -1,7 +1,8 @@
 // src/navigation/AppNavigator.js
 
-import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
+import { navigationRef } from "./navigationRef";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
@@ -10,6 +11,7 @@ import TurnosScreen from "../screens/TurnosScreen";
 import PerfilScreen from "../screens/PerfilScreen";
 import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import MisUbicacionesScreen from "../screens/MisUbicacionesScreen";
+import MisInsumosScreen from "../screens/MisInsumosScreen";
 import EditarUbicacionScreen from "../screens/EditarUbicacionScreen";
 import ConfiguracionScreen from "../screens/ConfiguracionScreen";
 import { AuthContext } from "../context/AuthContext";
@@ -23,14 +25,14 @@ const Stack = createNativeStackNavigator();
 export default function AppNavigator() {
   const { user, loading } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
-  const navRef = useRef(null);
   const [routeName, setRouteName] = useState(null);
   const gearTop = useMemo(() => Math.max(insets.top, 8), [insets.top]);
   const showGear = Boolean(user) && routeName === "Home";
+  // navRef local ya no se usa — se usa navigationRef compartido
 
   const syncRouteName = useCallback(() => {
     try {
-      const current = navRef.current?.getCurrentRoute?.()?.name || null;
+      const current = navigationRef.current?.getCurrentRoute?.()?.name || null;
       setRouteName(current);
     } catch {
       setRouteName(null);
@@ -39,7 +41,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer
-      ref={navRef}
+      ref={navigationRef}
       onReady={syncRouteName}
       onStateChange={syncRouteName}
     >
@@ -57,7 +59,7 @@ export default function AppNavigator() {
                 style={[styles.gearBtn, { top: gearTop + 6 }]}
                 onPress={() => {
                   try {
-                    navRef.current?.navigate?.("Configuracion");
+                    navigationRef.current?.navigate?.("Configuracion");
                   } catch {}
                 }}
               >
@@ -69,6 +71,7 @@ export default function AppNavigator() {
               <Stack.Screen name="Lotes" component={LotesScreen} />
               <Stack.Screen name="Turnos" component={TurnosScreen} />
               <Stack.Screen name="MisUbicaciones" component={MisUbicacionesScreen} />
+              <Stack.Screen name="MisInsumos" component={MisInsumosScreen} />
               <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
               <Stack.Screen name="Perfil" component={PerfilScreen} />
               <Stack.Screen name="Configuracion" component={ConfiguracionScreen} />

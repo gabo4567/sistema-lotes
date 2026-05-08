@@ -101,7 +101,6 @@ export default function PerfilScreen() {
             <Text style={styles.item}>Email: {data?.email || "-"}</Text>
             <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
             <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
-            <Text style={styles.item}>Plantas/ha: {data?.plantasPorHa ?? "-"}</Text>
             <Text style={styles.item}>Estado: {data?.estado}</Text>
             <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
 

@@ -7,6 +7,7 @@ import { isTurnosHabilitados } from '../utils/turnos.utils'
 import { getProductores } from '../services/productores.service'
 import HomeButton from '../components/HomeButton'
 import { db } from '../services/firebase'
+import TurnoHistorial from '../components/turnos/TurnoHistorial'
 
 const toDateSafe = (raw) => {
   if (!raw) return null
@@ -147,6 +148,8 @@ const [updatingId, setUpdatingId] = useState(null)
 const [expandedId, setExpandedId] = useState(null)
 const [insumosDispByProd, setInsumosDispByProd] = useState({})
 
+const [historialModal, setHistorialModal] = useState({ open: false, turnoId: null })
+
 const [capModalOpen, setCapModalOpen] = useState(false)
 const [capFecha, setCapFecha] = useState(toYmdLocal(new Date()))
 const [capacidad, setCapacidad] = useState('')
@@ -183,9 +186,11 @@ const loadData = useCallback(async ({ showLoading = true } = {}) => {
   if (showLoading) setLoading(true)
   setError('')
   try {
-    // Si es historial, pedimos activo=false, si es activos pedimos activo=true, si es todos no pasamos parámetro
     const activoParam = viewMode === 'activos' ? true : (viewMode === 'historial' ? false : null)
-    const ts = await getTurnos(activoParam)
+    const ts = await getTurnos(activoParam, {
+      fechaDesde: filtros.desde || undefined,
+      fechaHasta: filtros.hasta || undefined,
+    })
     setTurnos(ts)
     
     if (prodMap.size === 0) {
@@ -208,7 +213,7 @@ const loadData = useCallback(async ({ showLoading = true } = {}) => {
     setError(e?.response?.data?.message || e?.message || 'No se pudieron cargar los turnos.')
   }
   finally { if (showLoading) setLoading(false) }
-}, [viewMode, prodMap.size])
+}, [viewMode, prodMap.size, filtros.desde, filtros.hasta])
 
 useEffect(() => {
   loadData()
@@ -654,7 +659,7 @@ const turnosHoyCount = useMemo(() => {
 }, [turnosFiltrados, todayYmd])
 
 const summary = useMemo(() => {
-  const counts = { total: 0, hoy: 0, pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0 }
+  const counts = { total: 0, hoy: 0, pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0, insumo: 0, carnet: 0, otro: 0 }
   turnosFiltrados.forEach(t => {
     counts.total += 1
     const dt = toDateSafe(t?.fechaTurno || t?.fecha)
@@ -665,9 +670,47 @@ const summary = useMemo(() => {
     if (est === 'cancelado') counts.cancelado += 1
     if (est === 'completado') counts.completado += 1
     if (est === 'vencido') counts.vencido += 1
+    const tipo = String(t.tipoTurno || '').toLowerCase().trim()
+    if (tipo === 'insumo') counts.insumo += 1
+    else if (tipo === 'carnet') counts.carnet += 1
+    else counts.otro += 1
   })
   return counts
 }, [turnosFiltrados, todayYmd])
+
+const exportarCSV = useCallback(() => {
+  const TIPO_LABELS = { insumo: 'Insumos', carnet: 'Renovación de Carnet', otro: 'Otro' }
+  const ESTADO_LABELS = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido' }
+  const rows = turnosFiltrados.map(t => {
+    const dt = toDateSafe(t?.fechaTurno || t?.fecha)
+    const fecha = dt ? toYmdLocal(dt).split('-').reverse().join('/') : '-'
+    const pInfo = prodMap.get(String(t.productorId || ''))
+    const est = getDisplayEstado(t)
+    return [
+      fecha,
+      TIPO_LABELS[String(t.tipoTurno || '').toLowerCase()] || t.tipoTurno || '-',
+      String(t.categoriaInsumo || '-'),
+      ESTADO_LABELS[est] || est,
+      pInfo?.nombre || t.productorNombre || '-',
+      pInfo?.ipt || t.ipt || '-',
+      String(t.motivo || '-'),
+    ]
+  })
+  const escape = (v) => `"${String(v).replace(/"/g, '""')}"`
+  const csv = [
+    ['Fecha', 'Tipo', 'Categoría', 'Estado', 'Productor', 'IPT', 'Motivo'].map(escape).join(','),
+    ...rows.map(r => r.map(escape).join(',')),
+  ].join('\r\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `turnos_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}, [turnosFiltrados, prodMap])
 
 const agendaItems = turnosFiltrados
 
@@ -936,6 +979,13 @@ return (
         <span>{error}</span>
         <button className="btn secondary" onClick={loadData} style={{ padding: '6px 12px' }}>Reintentar</button>
       </div>
+    ) : null}
+
+    {historialModal.open && historialModal.turnoId ? (
+      <TurnoHistorial
+        turnoId={historialModal.turnoId}
+        onClose={() => setHistorialModal({ open: false, turnoId: null })}
+      />
     ) : null}
 
     {capModalOpen ? (
@@ -1420,6 +1470,19 @@ return (
         <span className="turnos-summary__label">Total</span>
         <span className={`estado-badge expired`}>{summary.total}</span>
       </div>
+      <div style={{ width: '100%', height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+      <div className="turnos-summary__chip" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+        <span className="turnos-summary__label" style={{ color: '#1d4ed8' }}>Insumos</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#1d4ed8' }}>{summary.insumo}</span>
+      </div>
+      <div className="turnos-summary__chip" style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+        <span className="turnos-summary__label" style={{ color: '#15803d' }}>Carnet</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#15803d' }}>{summary.carnet}</span>
+      </div>
+      <div className="turnos-summary__chip" style={{ backgroundColor: '#fafafa', border: '1px solid #e5e7eb' }}>
+        <span className="turnos-summary__label" style={{ color: '#6b7280' }}>Otros</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#6b7280' }}>{summary.otro}</span>
+      </div>
     </div>
 
     {/* Barra de Filtros */}
@@ -1488,12 +1551,21 @@ return (
         />
       </div>
 
-      <div className="filter-item" style={{ flex: '0 0 auto' }}>
-        <button 
-          className="btn secondary" 
+      <div className="filter-item" style={{ flex: '0 0 auto', display: 'flex', gap: 8 }}>
+        <button
+          className="btn secondary"
           onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '' })}
           style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8 }}
         >Limpiar</button>
+        <button
+          className="btn secondary"
+          onClick={exportarCSV}
+          disabled={turnosFiltrados.length === 0}
+          style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}
+          title={`Exportar ${turnosFiltrados.length} turnos a CSV`}
+        >
+          ↓ CSV
+        </button>
       </div>
     </div>
 
@@ -1544,7 +1616,14 @@ return (
                             <td className="turnos-agenda__cell">{formatTime(t.fechaTurno || t.fecha)}</td>
                             <td className="turnos-agenda__cell">{productorNombre}</td>
                             <td className="turnos-agenda__cell">{ipt}</td>
-                            <td className="turnos-agenda__cell">{tipoLabel(t.tipoTurno)}</td>
+                            <td className="turnos-agenda__cell">
+                              {tipoLabel(t.tipoTurno)}
+                              {t.categoriaInsumo ? (
+                                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#dcfce7', color: '#166534', borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                  {t.categoriaInsumo}
+                                </span>
+                              ) : null}
+                            </td>
                             <td className="turnos-agenda__cell">
                               <span className={estadoClass(displayEstado)}>{estadoLabel(displayEstado)}</span>
                             </td>
@@ -1570,11 +1649,23 @@ return (
                                       {isUpdating ? 'Actualizando…' : 'Archivar'}
                                     </button>
                                   ) : null}
+                                  <button
+                                    className="btn"
+                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                                  >Historial</button>
                                 </div>
                               ) : (
-                                <button className="btn primary" disabled={isUpdating} onClick={() => handleRestaurar(t.id)}>
-                                  {isUpdating ? 'Actualizando…' : 'Restaurar'}
-                                </button>
+                                <div className="turnos-quick-actions">
+                                  <button className="btn primary" disabled={isUpdating} onClick={() => handleRestaurar(t.id)}>
+                                    {isUpdating ? 'Actualizando…' : 'Restaurar'}
+                                  </button>
+                                  <button
+                                    className="btn"
+                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                                  >Historial</button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -1652,11 +1743,29 @@ return (
                     </div>
                     <div className="turno-item"><span className="turno-label">Productor:</span> {productorNombre}</div>
                     <div className="turno-item"><span className="turno-label">IPT:</span> {ipt}</div>
-                    <div className="turno-item"><span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}</div>
+                    <div className="turno-item">
+                      <span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}
+                      {t.categoriaInsumo ? (
+                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#dcfce7', color: '#166534', borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                          {t.categoriaInsumo}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
                     {isInsumo && insDisp ? (
-                      <div className="turno-item">
-                        <span className="turno-label">Insumos:</span> Asignado {Number(insDisp.totalAsignado ?? 0)} · Entregado {Number(insDisp.totalEntregado ?? 0)} · Disponible {Number(insDisp.totalDisponible ?? 0)}
+                      <div className="turno-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                        <span className="turno-label">Insumos:</span>
+                        {insDisp.porCategoria && Object.keys(insDisp.porCategoria).length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+                            {Object.entries(insDisp.porCategoria).map(([cat, v]) => (
+                              <div key={cat} style={{ fontSize: 12, color: '#374151' }}>
+                                <span style={{ fontWeight: 600 }}>{cat}:</span> Asig {v.asignado} · Ent {v.entregado} · <span style={{ color: v.disponible > 0 ? '#166534' : '#6b7280', fontWeight: v.disponible > 0 ? 700 : 400 }}>Disp {v.disponible}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span>Asignado {Number(insDisp.totalAsignado ?? 0)} · Entregado {Number(insDisp.totalEntregado ?? 0)} · Disponible {Number(insDisp.totalDisponible ?? 0)}</span>
+                        )}
                       </div>
                     ) : null}
                     {getCancelNotice(t) ? (
@@ -1760,22 +1869,34 @@ return (
 
                           <div className="turnos-actions-row">
                             {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
-                              <button 
-                                className="btn" 
+                              <button
+                                className="btn"
                                 disabled={isUpdating}
                                 style={{ backgroundColor: 'transparent', color: '#374151', border: '1px solid #9ca3af', padding: '6px 12px' }}
                                 onClick={() => handleArchivar(t.id)}
                               >{isUpdating ? 'Actualizando…' : 'Archivar'}</button>
                             ) : null}
+                            <button
+                              className="btn"
+                              style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                              onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                            >Ver historial</button>
                           </div>
                         </>
                       ) : (
-                        <button 
-                          className="btn primary" 
-                          style={{ width: '100%' }}
-                          disabled={isUpdating}
-                          onClick={() => handleRestaurar(t.id)}
-                        >{isUpdating ? 'Actualizando…' : 'Restaurar Turno'}</button>
+                        <>
+                          <button
+                            className="btn primary"
+                            style={{ width: '100%' }}
+                            disabled={isUpdating}
+                            onClick={() => handleRestaurar(t.id)}
+                          >{isUpdating ? 'Actualizando…' : 'Restaurar Turno'}</button>
+                          <button
+                            className="btn"
+                            style={{ width: '100%', marginTop: 6, backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                            onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                          >Ver historial</button>
+                        </>
                       )}
                     </div>
                   </div>

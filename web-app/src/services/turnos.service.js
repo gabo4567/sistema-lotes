@@ -1,13 +1,16 @@
 import api from '../api/axios'
-export const getTurnos = async (activo)=>{ 
+export const getTurnos = async (activo, { fechaDesde, fechaHasta, limit } = {})=>{
   const params = {}
   if (activo === true || activo === false) {
     params.activo = activo
   } else if (activo === undefined) {
     params.activo = true
   }
-  const res = await api.get('/turnos', Object.keys(params).length ? { params } : undefined); 
-  return res.data 
+  if (fechaDesde) params.fechaDesde = fechaDesde
+  if (fechaHasta) params.fechaHasta = fechaHasta
+  if (limit) params.limit = limit
+  const res = await api.get('/turnos', Object.keys(params).length ? { params } : undefined);
+  return res.data
 }
 export const setEstadoTurno = async (id, estado, motivo, options)=>{
   const body = { estado, motivo }
@@ -60,5 +63,10 @@ export const getCapacidadTurnoDia = async (fecha)=>{
 
 export const setCapacidadTurnoDia = async (fecha, capacidad)=>{
   const res = await api.put(`/turnos/capacidad/${fecha}`, { capacidad })
+  return res.data
+}
+
+export const getTurnoHistorial = async (id, limit = 50) => {
+  const res = await api.get(`/turnos/${id}/historial`, { params: { limit } })
   return res.data
 }

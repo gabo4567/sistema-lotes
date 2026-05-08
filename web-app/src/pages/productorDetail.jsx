@@ -43,7 +43,6 @@ const ProductorDetail = () => {
             }</div>
             <div className="detail-item"><span className="detail-label">Estado:</span> {prod.estado}</div>
             <div className="detail-item"><span className="detail-label">Requiere cambio de contraseña:</span> {String(prod.requiereCambioContrasena)}</div>
-            <div className="detail-item"><span className="detail-label">Plantas/ha:</span> {prod.plantasPorHa ?? '-'}</div>
           </div>
           <h3 className="users-title" style={{ marginTop: 16 }}>Historial de ingresos</h3>
           {Array.isArray(hist) && hist.length > 0 ? (

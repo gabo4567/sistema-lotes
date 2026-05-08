@@ -3,7 +3,13 @@
 import { admin, db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 import { getDisponibilidadInsumos } from "./insumos.controller.js";
-import { isTurnosHabilitados } from "../utils/turnos.utils.js";
+import { isTurnosHabilitados, getArgentinaHolidayLabel } from "../utils/turnos.utils.js";
+import {
+  registrarAuditoriaTurno,
+  buildRealizadoPor,
+  buildOrigen,
+} from "../services/auditoriaTurnos.service.js";
+import { sendExpoPush } from "../utils/expoPush.js";
 
 const DEFAULT_TURNOS_CAPACIDAD_DIA = 50;
 const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
@@ -302,46 +308,32 @@ export const crearTurno = async (req, res) => {
       return res.status(403).json({ message: cfg.mensaje || "Turnos deshabilitados hasta nuevo aviso", estadoActual: false });
     }
 
-    console.log("📅 Backend - crearTurno recibido:", req.body);
-    console.log("👤 Usuario autenticado:", req.user?.uid);
-    console.log("🔑 Headers:", req.headers);
-    
-    let { tipoTurno, fechaSolicitada, fecha, ipt } = req.body;
-    
-    // 🔍 DEBUG EXHAUSTIVO DE TIPOS
-    console.log("🔍 DEBUG TIPO - VALORES CRUDOS RECIBIDOS:");
-    console.log("  - tipoTurno crudo:", JSON.stringify(tipoTurno));
-    console.log("  - tipoTurno tipo:", typeof tipoTurno);
-    console.log("  - fechaSolicitada cruda:", JSON.stringify(fechaSolicitada));
-    console.log("  - fecha cruda:", JSON.stringify(fecha));
-    console.log("  - ipt crudo:", JSON.stringify(ipt));
-    
+    let { tipoTurno, fechaSolicitada, fecha, ipt, categoriaInsumo } = req.body;
+
     // Obtener el productorId correcto - primero de los claims, luego del UID
     let productorId = req.user.uid;
     if (req.user.firebaseClaims?.productorId) {
       productorId = req.user.firebaseClaims.productorId;
-      console.log("🆔 ProductorId obtenido de Firebase claims:", productorId);
-    } else {
-      console.log("🆔 ProductorId usando UID de Firebase:", productorId);
     }
     
     // Si no hay IPT en el body, intentar obtenerlo de los claims de Firebase
     if (!ipt && req.user.firebaseClaims) {
       ipt = req.user.firebaseClaims.ipt;
-      console.log("📋 IPT obtenido de Firebase claims:", ipt);
     }
 
-    // Normalizar tipoTurno - SOLUCIÓN DRÁSTICA Y ULTRA-ROBUSTA
-    console.log("🔍 DEBUG - tipoTurno recibido:", JSON.stringify(tipoTurno));
-    
-    // Guardar valor original para debugging
-    const tipoOriginal = tipoTurno;
-    
-    // Convertir a string y limpiar
+    // Validar que el productor existe y está activo
+    const prodSnap = await db.collection("productores").doc(productorId).get();
+    if (!prodSnap.exists) {
+      return res.status(403).json({ message: "Productor no encontrado.", estadoActual });
+    }
+    if (prodSnap.data()?.activo === false) {
+      return res.status(403).json({ message: "El productor no está activo.", estadoActual });
+    }
+
+    // Normalizar tipoTurno
     let t = String(tipoTurno).toLowerCase().trim();
-    console.log("🔍 DEBUG - tipoTurno limpio:", JSON.stringify(t));
-    
-    // DICCIONARIO COMPLETO DE MAPEO
+
+    // Diccionario de mapeo
     const mapeoTipos = {
       // Insumo
       'insumo': 'insumo',
@@ -367,10 +359,7 @@ export const crearTurno = async (req, res) => {
       'vario': 'otro'
     };
     
-    // Buscar coincidencia exacta primero
     let tipoNormalizado = mapeoTipos[t];
-    
-    // Si no hay coincidencia exacta, buscar por includes
     if (!tipoNormalizado) {
       if (t.includes('insumo')) tipoNormalizado = 'insumo';
       else if (t.includes('renovación') || t.includes('renovacion') || t.includes('renov') || t.includes('carnet')) {
@@ -379,39 +368,17 @@ export const crearTurno = async (req, res) => {
         tipoNormalizado = 'otra';
       }
     }
-    
-    console.log("🔍 DEBUG - MAPEO RESULTADO:");
-    console.log("  - Original:", JSON.stringify(tipoOriginal));
-    console.log("  - Procesado:", JSON.stringify(t));
-    console.log("  - Resultado:", JSON.stringify(tipoNormalizado));
-    
     tipoTurno = normalizeTipoTurno(tipoNormalizado);
 
-    // Validar fecha (soporta tanto 'fecha' como 'fechaSolicitada')
     const fechaFinal = fecha || fechaSolicitada;
-    console.log("📅 Fecha a procesar:", fechaFinal);
-    
-    // 🕐 DEBUG EXHAUSTIVO DE FECHA
-    console.log("🕐 DEBUG FECHA - INICIO");
-    console.log("  - Valor crudo:", JSON.stringify(fechaFinal));
-    console.log("  - Tipo:", typeof fechaFinal);
-    console.log("  - Longitud:", fechaFinal?.length);
-    
     if (!fechaFinal) {
       return res.status(400).json({ message: "Fecha es requerida", estadoActual });
     }
-    
     const ts = toTurnoTimestamp(fechaFinal);
     if (!ts) {
       return res.status(400).json({ message: "Fecha inválida", estadoActual });
     }
     const date = ts.toDate();
-    
-    console.log("  - Día de semana (0=dom):", date.getDay());
-    console.log("  - Día del mes:", date.getDate());
-    console.log("  - Mes:", date.getMonth());
-    console.log("  - Año:", date.getFullYear());
-    console.log("🕐 DEBUG FECHA - FIN");
 
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -445,6 +412,11 @@ export const crearTurno = async (req, res) => {
     const day = date.getDay();
     if (day === 0 || day === 6) {
       return res.status(400).json({ message: "No se permiten turnos sábado o domingo", estadoActual });
+    }
+
+    const feriadoLabelCrear = getArgentinaHolidayLabel(toYmdUtc(date));
+    if (feriadoLabelCrear) {
+      return res.status(400).json({ message: `No se permiten turnos en feriados nacionales (${feriadoLabelCrear}).`, estadoActual });
     }
 
     const motivoTrim = String(req.body.motivo || "").trim();
@@ -567,15 +539,44 @@ export const crearTurno = async (req, res) => {
 
     // Si es turno de insumo → verificar asignaciones en ProductorInsumos
     if (tipoTurno === "insumo") {
+      const CATEGORIAS_INSUMO = ["Arada", "Almácigo", "Transplante", "Cosecha"];
+      if (categoriaInsumo !== undefined && categoriaInsumo !== null && categoriaInsumo !== "") {
+        const cat = String(categoriaInsumo).trim();
+        if (!CATEGORIAS_INSUMO.includes(cat)) {
+          return res.status(400).json({ message: `Categoría de insumo inválida. Opciones: ${CATEGORIAS_INSUMO.join(", ")}.`, estadoActual });
+        }
+        categoriaInsumo = cat;
+      } else {
+        categoriaInsumo = null;
+      }
       const disp = await getDisponibilidadInsumos(productorId);
       if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "Usted no tiene insumos disponibles.", estadoActual });
       }
+      // Si se especificó categoría, verificar que esa categoría tiene stock disponible
+      if (categoriaInsumo) {
+        const insumoSnap = await db.collection("insumos").where("nombre", "==", categoriaInsumo).limit(1).get();
+        if (!insumoSnap.empty) {
+          const insumoId = insumoSnap.docs[0].id;
+          const asigSnap = await db.collection("productorInsumos")
+            .where("productorId", "==", String(productorId))
+            .where("insumoId", "==", insumoId)
+            .get();
+          const tieneCategoria = asigSnap.docs.some((d) => {
+            const r = d.data() || {};
+            if (r.activo === false) return false;
+            const asig = Number(r.cantidadAsignada || 0);
+            const ent = Number(r.cantidadEntregada || 0);
+            return asig > 0 && (asig - ent) > 0;
+          });
+          if (!tieneCategoria) {
+            return res.status(400).json({ message: `No tenés insumos disponibles de la categoría "${categoriaInsumo}".`, estadoActual });
+          }
+        }
+      }
     }
 
     const fechaIso = date.toISOString();
-    console.log("💾 Guardando turno con fecha:", fechaIso);
-    
     const turno = {
       productorId,
       tipoTurno,
@@ -585,19 +586,22 @@ export const crearTurno = async (req, res) => {
       creadoEn: new Date().toISOString(),
       updatedAt: Timestamp.now(),
       activo: true,
-      ...(req.body.motivo ? { motivo: req.body.motivo } : {})
+      ...(req.body.motivo ? { motivo: req.body.motivo } : {}),
+      ...(tipoTurno === "insumo" && categoriaInsumo ? { categoriaInsumo } : {}),
     };
 
-    console.log("💾 GUARDANDO EN FIRESTORE:");
-    console.log("  - Documento a guardar:", JSON.stringify(turno, null, 2));
-    
     const docRef = await db.collection("turnos").add(turno);
-    
-    console.log("✅ Documento guardado con ID:", docRef.id);
-    
-    // Verificar qué se guardó realmente
-    const docGuardado = await docRef.get();
-    console.log("📖 Datos guardados en Firestore:", JSON.stringify(docGuardado.data(), null, 2));
+
+    registrarAuditoriaTurno({
+      turnoId: docRef.id,
+      accion: "turno_creado",
+      estadoAnterior: null,
+      estadoNuevo: "pendiente",
+      motivo: req.body.motivo || null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
 
     return res.json({ message: "Turno creado exitosamente", turno: { id: docRef.id, ...convertirTimestamps(turno) }, estadoActual: true });
 
@@ -608,12 +612,15 @@ export const crearTurno = async (req, res) => {
 };
 
 
-// 📋 Obtener todos los turnos (con filtros de activo/inactivo)
+// 📋 Obtener todos los turnos (con filtros de activo/inactivo y paginación)
 export const obtenerTurnos = async (req, res) => {
   try {
-    const { activo } = req.query;
+    const { activo, fechaDesde, fechaHasta, limit: limitParam } = req.query;
+    const limit = Math.min(Math.max(1, Number(limitParam) || 300), 1000);
+    const desde = normalizeYmdOrNull(fechaDesde);
+    const hasta = normalizeYmdOrNull(fechaHasta);
+
     let query = db.collection("turnos");
-    
     if (activo !== undefined) {
       query = query.where("activo", "==", activo === "true");
     }
@@ -621,7 +628,17 @@ export const obtenerTurnos = async (req, res) => {
     const snapshot = await query.get();
     const now = new Date();
     const batch = db.batch(); let writes = 0;
-    const raws = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
+    const vencidoAudits = [];
+    const raws = snapshot.docs
+      .map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
+      .filter(({ data }) => {
+        if (!desde && !hasta) return true;
+        const ymd = toYmdUtc(turnoDateFromRaw(data));
+        if (!ymd) return true;
+        if (desde && ymd < desde) return false;
+        if (hasta && ymd > hasta) return false;
+        return true;
+      });
     const turnos = raws.map(({ id, ref, data }) => {
       const raw = { ...data };
       const rawTipoStr = String(raw.tipoTurno || "").toLowerCase().trim();
@@ -641,14 +658,34 @@ export const obtenerTurnos = async (req, res) => {
           raw.fecha = iso;
         }
       }
+      const prevEstado = normalizeEstado(raw.estado);
       const vencidoUpdate = applyVencidoIfNeeded(raw, now);
       if (vencidoUpdate) {
         batch.update(ref, vencidoUpdate);
         writes++;
+        vencidoAudits.push({ turnoId: id, prevEstado });
       }
       return { id, ref, ...convertirTimestamps(raw) };
     });
-    if (writes > 0) await batch.commit();
+    if (writes > 0) {
+      await batch.commit();
+      if (vencidoAudits.length > 0) {
+        Promise.allSettled(
+          vencidoAudits.map(({ turnoId, prevEstado }) =>
+            registrarAuditoriaTurno({
+              turnoId,
+              accion: "estado_cambiado",
+              estadoAnterior: prevEstado,
+              estadoNuevo: "vencido",
+              motivo: "Vencido automáticamente por fecha",
+              realizadoPor: { uid: "sistema", nombre: "Sistema", rol: "sistema" },
+              origen: { tipo: "backend", dispositivo: null },
+              automatico: true,
+            })
+          )
+        );
+      }
+    }
 
     // Enriquecer con nombre e IPT del productor
     const prodInfo = new Map();
@@ -663,12 +700,14 @@ export const obtenerTurnos = async (req, res) => {
         }
       } catch {}
     }
-    const enriched = turnos.map(t => ({
-      ...t,
-      productorNombre: t.productorNombre || prodInfo.get(String(t.productorId || ''))?.nombre || '',
-      ipt: t.ipt || prodInfo.get(String(t.productorId || ''))?.ipt || '',
-      motivo: t.motivo || '-',
-    }));
+    const enriched = turnos
+      .map(t => ({
+        ...t,
+        productorNombre: t.productorNombre || prodInfo.get(String(t.productorId || ''))?.nombre || '',
+        ipt: t.ipt || prodInfo.get(String(t.productorId || ''))?.ipt || '',
+        motivo: t.motivo || '-',
+      }))
+      .slice(0, limit);
 
     res.json(enriched);
   } catch (error) {
@@ -748,6 +787,10 @@ export const actualizarTurno = async (req, res) => {
       if (dow === 0 || dow === 6) {
         return res.status(400).json({ message: "No se permiten turnos sábado o domingo" });
       }
+      const feriadoLabelEditar = getArgentinaHolidayLabel(toYmdUtc(d));
+      if (feriadoLabelEditar) {
+        return res.status(400).json({ message: `No se permiten turnos en feriados nacionales (${feriadoLabelEditar}).` });
+      }
     }
 
     if (data.tipoTurno !== undefined) {
@@ -786,6 +829,18 @@ export const actualizarTurno = async (req, res) => {
     }
 
     await db.collection("turnos").doc(id).update(data);
+
+    registrarAuditoriaTurno({
+      turnoId: id,
+      accion: "turno_actualizado",
+      estadoAnterior: normalizeEstado(current.estado),
+      estadoNuevo: normalizeEstado(current.estado),
+      motivo: data.motivo ?? current.motivo ?? null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
     res.json({ message: "Turno actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar el turno:", error);
@@ -896,39 +951,116 @@ export const cambiarEstadoTurno = async (req, res) => {
     }
     await ref.update(update);
 
-    // Si se confirma/completa turno de insumo, actualizar entrega de forma segura (sin asumir que se entrega todo)
+    registrarAuditoriaTurno({
+      turnoId: id,
+      accion: "estado_cambiado",
+      estadoAnterior: from,
+      estadoNuevo: to,
+      motivo: typeof motivo === "string" ? motivo : null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
+    // Notificación push al productor cuando admin confirma, cancela o completa
+    if (to === "confirmado" || to === "cancelado" || to === "completado") {
+      try {
+        const prodDoc = await db.collection("productores").doc(String(current.productorId || "")).get();
+        const prodData = prodDoc.exists ? (prodDoc.data() || {}) : {};
+        const expoTokens = [
+          ...(Array.isArray(prodData.expoPushTokens) ? prodData.expoPushTokens : []),
+          ...(Array.isArray(prodData.pushTokens) ? prodData.pushTokens : []),
+          ...(Array.isArray(prodData.fcmTokens) ? prodData.fcmTokens : []),
+        ]
+          .map((t) => String(t || "").trim())
+          .filter((t) => t.startsWith("ExponentPushToken"));
+
+        if (expoTokens.length > 0) {
+          const turnoDate = turnoDateFromRaw(current);
+          const turnoYmd = turnoDate ? toYmdInIptTz(turnoDate) : null;
+          const fechaFmt = turnoYmd ? turnoYmd.split("-").reverse().join("/") : "fecha desconocida";
+          const notifTitle =
+            to === "confirmado" ? "Turno confirmado" :
+            to === "cancelado"  ? "Turno cancelado"  : "Turno completado";
+          const notifBody =
+            to === "confirmado" ? `Tu turno del ${fechaFmt} fue confirmado.` :
+            to === "cancelado"  ? `Tu turno del ${fechaFmt} fue cancelado${typeof motivo === "string" && motivo ? `: ${motivo}` : "."}` :
+            `Tu turno del ${fechaFmt} fue completado. ¡Gracias!`;
+
+          await sendExpoPush(
+            Array.from(new Set(expoTokens)),
+            notifTitle,
+            notifBody,
+            { event: "turno_estado", turnoId: id, estado: to }
+          );
+        }
+      } catch (e) {
+        console.error("Error enviando notificación push de turno:", e?.message || e);
+      }
+    }
+
+    // Si se confirma/completa turno de insumo → marcar entrega de la categoría correspondiente
     try {
       const turno = current;
       if (turno?.tipoTurno === "insumo" && (estado === "confirmado" || estado === "completado")) {
-        const snap = await db
-          .collection("productorInsumos")
-          .where("productorId", "==", String(turno.productorId))
-          .where("estado", "==", "pendiente")
-          .get();
-        const pendientes = snap.docs
-          .map((d) => ({ ref: d.ref, data: d.data() || {} }))
-          .map(({ ref, data }) => {
-            const asignada = Number(data?.cantidadAsignada || 0);
-            const entregadaRaw = data?.cantidadEntregada;
-            const entregada = Number.isFinite(Number(entregadaRaw))
-              ? Number(entregadaRaw)
-              : (String(data?.estado || "").toLowerCase().trim() === "entregado" ? asignada : 0);
-            const disponible = Math.max(0, asignada - entregada);
-            return { ref, data, asignada, entregada, disponible };
-          })
-          .filter((x) => x.asignada > 0 && x.disponible > 0);
+        const now = new Date();
+        let entregaRef = null;
+        let entregaData = null;
 
-        if (pendientes.length === 1) {
-          const now = new Date();
-          const p = pendientes[0];
-          const nuevaEntregada = p.entregada + p.disponible;
-          await p.ref.update({
-            cantidadAsignada: p.asignada,
+        if (turno.categoriaInsumo) {
+          // Ruta preferida: buscar la asignación que corresponde a la categoría del turno
+          const insumoSnap = await db.collection("insumos")
+            .where("nombre", "==", String(turno.categoriaInsumo))
+            .limit(1)
+            .get();
+          if (!insumoSnap.empty) {
+            const insumoId = insumoSnap.docs[0].id;
+            const asigSnap = await db.collection("productorInsumos")
+              .where("productorId", "==", String(turno.productorId))
+              .where("insumoId", "==", insumoId)
+              .where("estado", "==", "pendiente")
+              .get();
+            for (const d of asigSnap.docs) {
+              const r = d.data() || {};
+              const asig = Number(r.cantidadAsignada || 0);
+              const ent = Number.isFinite(Number(r.cantidadEntregada)) ? Number(r.cantidadEntregada) : 0;
+              if (asig > 0 && (asig - ent) > 0) {
+                entregaRef = d.ref;
+                entregaData = { asig, ent, raw: r };
+                break;
+              }
+            }
+          }
+        } else {
+          // Fallback: si no hay categoría, aplicar solo cuando hay exactamente 1 pendiente
+          const snap = await db.collection("productorInsumos")
+            .where("productorId", "==", String(turno.productorId))
+            .where("estado", "==", "pendiente")
+            .get();
+          const pendientes = snap.docs
+            .map((d) => {
+              const r = d.data() || {};
+              const asig = Number(r.cantidadAsignada || 0);
+              const ent = Number.isFinite(Number(r.cantidadEntregada)) ? Number(r.cantidadEntregada)
+                : (String(r.estado || "").toLowerCase() === "entregado" ? asig : 0);
+              return { ref: d.ref, raw: r, asig, ent, disp: Math.max(0, asig - ent) };
+            })
+            .filter((x) => x.asig > 0 && x.disp > 0);
+          if (pendientes.length === 1) {
+            entregaRef = pendientes[0].ref;
+            entregaData = { asig: pendientes[0].asig, ent: pendientes[0].ent, raw: pendientes[0].raw };
+          }
+        }
+
+        if (entregaRef && entregaData) {
+          const nuevaEntregada = entregaData.ent + (entregaData.asig - entregaData.ent);
+          await entregaRef.update({
+            cantidadAsignada: entregaData.asig,
             cantidadEntregada: nuevaEntregada,
             estado: "entregado",
             fechaEntrega: now,
             updatedAt: now,
-            ...(p.data?.createdAt === undefined ? { createdAt: p.data?.fechaAsignacion || now } : {}),
+            ...(entregaData.raw?.createdAt === undefined ? { createdAt: entregaData.raw?.fechaAsignacion || now } : {}),
           });
         }
       }
@@ -954,14 +1086,26 @@ export const eliminarTurno = async (req, res) => {
       return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
     }
     
-    const updateData = { 
-      activo: false, 
+    const updateData = {
+      activo: false,
       desactivadoEn: Timestamp.now(),
       desactivadoPor: userId || req.user?.uid || 'sistema',
-      updatedAt: Timestamp.now() 
+      updatedAt: Timestamp.now()
     };
-    
+
     await db.collection("turnos").doc(id).update(updateData);
+
+    registrarAuditoriaTurno({
+      turnoId: id,
+      accion: "turno_archivado",
+      estadoAnterior: normalizeEstado(turno.estado),
+      estadoNuevo: null,
+      motivo: null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
     res.json({ message: "Turno desactivado correctamente", id });
   } catch (error) {
     console.error("Error al desactivar el turno:", error);
@@ -975,12 +1119,25 @@ export const restaurarTurno = async (req, res) => {
     const { id } = req.params;
     const doc = await db.collection("turnos").doc(id).get();
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
-    
-    await db.collection("turnos").doc(id).update({ 
-      activo: true, 
+    const turnoRestaurado = doc.data();
+
+    await db.collection("turnos").doc(id).update({
+      activo: true,
       restauradoEn: Timestamp.now(),
-      updatedAt: Timestamp.now() 
+      updatedAt: Timestamp.now()
     });
+
+    registrarAuditoriaTurno({
+      turnoId: id,
+      accion: "turno_restaurado",
+      estadoAnterior: null,
+      estadoNuevo: normalizeEstado(turnoRestaurado?.estado),
+      motivo: null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
     res.json({ message: "Turno restaurado correctamente", id });
   } catch (error) {
     console.error("Error al restaurar el turno:", error);
@@ -1097,16 +1254,9 @@ export const obtenerTurnosPorRangoFechas = async (req, res) => {
     const inicio = new Date(`${fechaInicio}T00:00:00.000Z`);
     const fin = new Date(`${fechaFin}T23:59:59.999Z`);
 
-    console.log("DEBUG RANGO:",
-      "inicio =", inicio.toISOString(),
-      "| fin =", fin.toISOString()
-    );
-
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       return res.status(400).json({ message: "Formato de fecha inválido" });
     }
-
-    console.log("📅 Consultando rango:", inicio.toISOString(), "->", fin.toISOString());
 
     const snapshot = await db
       .collection("turnos")
@@ -1158,51 +1308,42 @@ export const disponibilidadTurno = async (req, res) => {
       return res.json({ disponible: false, motivo, estadoActual: false });
     }
 
-    const { fechaSolicitada, tipoTurno, ipt } = req.query;
-    console.log("📅 Backend - disponibilidadTurno recibido:", { fechaSolicitada, tipoTurno, ipt });
-    
+    const { fechaSolicitada, tipoTurno, ipt, categoriaInsumo } = req.query;
     if (!fechaSolicitada || !tipoTurno) {
-      console.log("❌ Faltan parámetros");
       return res.status(400).json({ message: "Faltan parámetros", estadoActual: true });
     }
-    
-    console.log("🔍 Procesando fecha:", fechaSolicitada, "tipo:", typeof fechaSolicitada);
+
     const m = String(fechaSolicitada).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    console.log("📅 Match regex:", m);
-    
     let fecha;
     if (m) {
       fecha = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      console.log("✅ Fecha creada desde match:", fecha);
     } else {
       fecha = new Date(`${fechaSolicitada}T00:00:00.000Z`);
-      console.log("⚠️ Fecha creada desde string:", fecha);
     }
-    
-    console.log("📆 Fecha final:", fecha, "isValid:", !isNaN(fecha.getTime()));
-    
+
     if (isNaN(fecha.getTime())) {
-      console.log("❌ Fecha inválida - retornando error");
       return res.json({ disponible: false, motivo: "Fecha inválida", estadoActual: true });
     }
-    
+
     const hoy = new Date();
     hoy.setHours(0,0,0,0);
     const soloDia = new Date(fecha);
     soloDia.setHours(0,0,0,0);
-    
+
     if (soloDia.getTime() < hoy.getTime()) {
-      console.log("❌ Fecha ya pasada");
       return res.json({ disponible: false, motivo: "Fecha ya pasada", estadoActual: true });
     }
     
     const dow = fecha.getDay();
     if (dow === 0 || dow === 6) {
-      console.log("❌ Fin de semana");
       return res.json({ disponible: false, motivo: "Fin de semana", estadoActual: true });
     }
 
     const ymd = toYmdUtc(new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0, 0)));
+    const feriadoLabelDisp = getArgentinaHolidayLabel(ymd);
+    if (feriadoLabelDisp) {
+      return res.json({ disponible: false, motivo: `Feriado nacional: ${feriadoLabelDisp}`, estadoActual: true });
+    }
     const capacidadDia = await resolveCapacidadDia(ymd);
     const turnosDia = await countTurnosActivosEnDia(ymd);
     if (turnosDia >= capacidadDia) {
@@ -1218,6 +1359,28 @@ export const disponibilidadTurno = async (req, res) => {
             const disp = await getDisponibilidadInsumos(productorId);
             if (!disp?.tieneDisponible) {
               return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles.", estadoActual: true });
+            }
+            // Si se especificó categoría, verificar disponibilidad de esa categoría en particular
+            if (categoriaInsumo) {
+              const cat = String(categoriaInsumo).trim();
+              const insumoSnap = await db.collection("insumos").where("nombre", "==", cat).limit(1).get();
+              if (!insumoSnap.empty) {
+                const insumoId = insumoSnap.docs[0].id;
+                const asigSnap = await db.collection("productorInsumos")
+                  .where("productorId", "==", String(productorId))
+                  .where("insumoId", "==", insumoId)
+                  .get();
+                const tieneCategoria = asigSnap.docs.some((d) => {
+                  const r = d.data() || {};
+                  if (r.activo === false) return false;
+                  const asig = Number(r.cantidadAsignada || 0);
+                  const ent = Number(r.cantidadEntregada || 0);
+                  return asig > 0 && (asig - ent) > 0;
+                });
+                if (!tieneCategoria) {
+                  return res.json({ disponible: false, motivo: `No tenés insumos disponibles de la categoría "${cat}".`, estadoActual: true });
+                }
+              }
             }
           }
         } catch {}
@@ -1338,6 +1501,21 @@ export const upsertConfigTurnos = async (req, res) => {
       globalThis.console.log("ESTADO ACTUAL:", estadoActual);
     }
 
+    const prevDesc = prevRaw.modo
+      ? `${prevRaw.modo}${prevRaw.modo === "manual" ? (prevHabilitado ? "/habilitado" : "/deshabilitado") : `/rango:${prevRaw.desde||"?"}-${prevRaw.hasta||"?"}`}`
+      : null;
+    const nextDesc = `${payload.modo}${payload.modo === "manual" ? (payload.habilitado ? "/habilitado" : "/deshabilitado") : `/rango:${payload.desde||"?"}-${payload.hasta||"?"}`}`;
+    registrarAuditoriaTurno({
+      turnoId: "config",
+      accion: "config_cambiada",
+      estadoAnterior: prevDesc,
+      estadoNuevo: nextDesc,
+      motivo: payload.mensaje || null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
     if (payload.modo === "manual" && prevHabilitado !== payload.habilitado) {
       const title = payload.habilitado ? "Turnos habilitados" : "Turnos deshabilitados";
       const body = payload.habilitado
@@ -1428,7 +1606,20 @@ export const upsertCapacidadTurnoDia = async (req, res) => {
       updatedAt: Timestamp.now(),
       ...(snap.exists ? {} : { createdAt: Timestamp.now() }),
     };
+    const prevCapacidad = snap.exists ? (snap.data()?.capacidad ?? null) : null;
     await ref.set(payload, { merge: true });
+
+    registrarAuditoriaTurno({
+      turnoId: `capacidad:${ymd}`,
+      accion: "capacidad_cambiada",
+      estadoAnterior: prevCapacidad !== null ? String(prevCapacidad) : null,
+      estadoNuevo: String(capacidad),
+      motivo: null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
     return res.json({ message: "Capacidad guardada", fecha: ymd, capacidad });
   } catch (error) {
     console.error("Error al guardar capacidad de turnos:", error);
@@ -1446,4 +1637,118 @@ const convertirTimestamps = (data) => {
     }
   }
   return nuevo;
+};
+
+const tsToMs = (ts) => {
+  if (!ts) return 0;
+  if (typeof ts?.toDate === "function") return ts.toDate().getTime();
+  if (typeof ts?._seconds === "number") return ts._seconds * 1000;
+  return 0;
+};
+
+const tsToIso = (ts) => {
+  if (!ts) return null;
+  if (typeof ts?.toDate === "function") return ts.toDate().toISOString();
+  if (typeof ts?._seconds === "number") return new Date(ts._seconds * 1000).toISOString();
+  return null;
+};
+
+// 📋 Obtener historial de auditoría completo de un turno (solo admin)
+export const obtenerHistorialTurno = async (req, res) => {
+  try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ message: "Acceso denegado. Solo administradores pueden ver el historial completo." });
+    }
+
+    const { id } = req.params;
+    const limitParam = Number(req.query.limit) || 50;
+    const limit = Math.min(limitParam, 100);
+
+    const snap = await db
+      .collection("turnosHistorial")
+      .where("turnoId", "==", id)
+      .get();
+
+    const historial = snap.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          _sortMs: tsToMs(data.createdAt),
+          createdAt: tsToIso(data.createdAt),
+        };
+      })
+      .sort((a, b) => b._sortMs - a._sortMs)
+      .slice(0, limit)
+      .map(({ _sortMs, ...rest }) => rest);
+
+    return res.json({ historial, total: historial.length });
+  } catch (error) {
+    console.error("Error al obtener historial de turno:", error);
+    return res.status(500).json({ message: "Error al obtener el historial" });
+  }
+};
+
+const TIMELINE_ACCIONES = new Set(["turno_creado", "estado_cambiado"]);
+
+const buildTimelineDescripcion = (accion, estadoNuevo) => {
+  if (accion === "turno_creado") return "Solicitaste el turno";
+  if (accion === "estado_cambiado") {
+    const to = normalizeEstado(estadoNuevo);
+    if (to === "confirmado") return "Tu turno fue confirmado";
+    if (to === "cancelado") return "Tu turno fue cancelado";
+    if (to === "completado") return "Tu turno fue completado";
+    if (to === "vencido") return "El turno venció";
+  }
+  return null;
+};
+
+// 📅 Obtener timeline del turno para el productor (solo campos públicos)
+export const obtenerTimelineTurno = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const turnoDoc = await db.collection("turnos").doc(id).get();
+    if (!turnoDoc.exists) return res.status(404).json({ message: "Turno no encontrado" });
+
+    const turno = turnoDoc.data();
+    const ownerIds = getAuthOwnershipIds(req);
+    const pid = String(turno?.productorId || "");
+    if (!isAdminRequest(req) && pid && !ownerIds.has(pid)) {
+      return res.status(403).json({ message: "No tenés permiso para ver este turno" });
+    }
+
+    const snap = await db
+      .collection("turnosHistorial")
+      .where("turnoId", "==", id)
+      .get();
+
+    const timeline = snap.docs
+      .map((doc) => {
+        const data = doc.data();
+        const accion = String(data.accion || "");
+        if (!TIMELINE_ACCIONES.has(accion)) return null;
+        const descripcion = buildTimelineDescripcion(accion, data.estadoNuevo);
+        if (!descripcion) return null;
+        return {
+          id: doc.id,
+          accion,
+          descripcion,
+          estadoAnterior: data.estadoAnterior ?? null,
+          estadoNuevo: data.estadoNuevo ?? null,
+          motivo: data.motivo ?? null,
+          createdAt: tsToIso(data.createdAt),
+          _sortMs: tsToMs(data.createdAt),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a._sortMs - b._sortMs)
+      .map(({ _sortMs, ...rest }) => rest);
+
+    return res.json({ timeline, total: timeline.length });
+  } catch (error) {
+    console.error("Error al obtener timeline de turno:", error);
+    return res.status(500).json({ message: "Error al obtener el timeline" });
+  }
 };

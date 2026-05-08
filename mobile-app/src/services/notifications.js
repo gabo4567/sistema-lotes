@@ -3,6 +3,7 @@ import { API_URL } from "../utils/constants";
 import { authFetch, getCurrentAuthContext } from "../api/api";
 import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { navigateTo } from "../navigation/navigationRef";
 
 let NotificationsMod = null;
 const loadNotifications = async () => {
@@ -65,6 +66,8 @@ export async function setupNotifications() {
 
     if (!didInitListeners) {
       didInitListeners = true;
+
+      // Notificación recibida en foreground → mostrar Alert
       Notifications.addNotificationReceivedListener((notification) => {
         try {
           const title = notification?.request?.content?.title || "Notificación";
@@ -73,6 +76,21 @@ export async function setupNotifications() {
           if (lastForegroundKey === key) return;
           lastForegroundKey = key;
           Alert.alert(String(title), String(body));
+        } catch {}
+      });
+
+      // Tap en notificación desde background/killed → navegar a Turnos
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        try {
+          const data = response?.notification?.request?.content?.data || {};
+          const event = String(data?.event || "");
+          if (
+            event === "turno_estado" ||
+            event === "turno_recordatorio" ||
+            event === "turnos_config"
+          ) {
+            navigateTo("Turnos");
+          }
         } catch {}
       });
     }

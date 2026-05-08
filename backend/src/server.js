@@ -461,14 +461,93 @@ app.use((err, req, res, next) => {
   sendInternalError(res, "Error interno del servidor");
 });
 
+let isVencidoJobRunning = false;
+const runVencidoJob = async () => {
+  if (isVencidoJobRunning) return;
+  isVencidoJobRunning = true;
+  try {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Sin filtro de fechaTurno en Firestore para evitar índice compuesto.
+    // El filtro de fecha se aplica en JS después de traer los docs.
+    const snap = await db
+      .collection("turnos")
+      .where("activo", "==", true)
+      .where("estado", "in", ["pendiente", "confirmado"])
+      .get();
+
+    const batch = db.batch();
+    let writes = 0;
+    const auditRows = [];
+
+    snap.docs.forEach((doc) => {
+      const raw = doc.data() || {};
+      // Descartar turnos futuros y turnos demasiado viejos (> 7 días)
+      const fechaMs = raw.fechaTurno?._seconds != null
+        ? raw.fechaTurno._seconds * 1000
+        : (raw.fecha ? new Date(raw.fecha).getTime() : 0);
+      if (!fechaMs || fechaMs > now.getTime()) return;
+      if (fechaMs < cutoff.getTime()) return;
+      const dt = turnoDateFromRaw(raw);
+      if (!dt) return;
+      const turnoYmd = formatYmdInIptTz(dt);
+      const todayYmd = formatYmdInIptTz(now);
+      if (!turnoYmd || !todayYmd) return;
+      if (turnoYmd >= todayYmd) return;
+      const prevEstado = String(raw.estado || "pendiente").toLowerCase();
+      batch.update(doc.ref, {
+        estado: "vencido",
+        motivo: raw.motivo || "Vencido automáticamente por fecha",
+        updatedAt: Timestamp.now(),
+      });
+      writes++;
+      auditRows.push({ turnoId: doc.id, prevEstado });
+    });
+
+    if (writes > 0) {
+      await batch.commit();
+      const { registrarAuditoriaTurno } = await import("./services/auditoriaTurnos.service.js");
+      await Promise.allSettled(
+        auditRows.map(({ turnoId, prevEstado }) =>
+          registrarAuditoriaTurno({
+            turnoId,
+            accion: "estado_cambiado",
+            estadoAnterior: prevEstado,
+            estadoNuevo: "vencido",
+            motivo: "Vencido automáticamente por fecha",
+            realizadoPor: { uid: "sistema", nombre: "Sistema", rol: "sistema" },
+            origen: { tipo: "backend_job", dispositivo: null },
+            automatico: true,
+          })
+        )
+      );
+      console.log(`VencidoJob: ${writes} turnos marcados como vencidos`);
+    }
+  } catch (e) {
+    console.error("VencidoJob error:", e?.message || e);
+  } finally {
+    isVencidoJobRunning = false;
+  }
+};
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Servidor backend escuchando en puerto ${PORT}`);
 
-  const intervalMs = 10 * 60 * 1000;
+  const reminderIntervalMs = 10 * 60 * 1000;
+  const vencidoIntervalMs = 30 * 60 * 1000;
+
   setTimeout(() => {
     runTurnosReminderJob().catch(() => {});
     setInterval(() => {
       runTurnosReminderJob().catch(() => {});
-    }, intervalMs);
+    }, reminderIntervalMs);
   }, 20 * 1000);
+
+  setTimeout(() => {
+    runVencidoJob().catch(() => {});
+    setInterval(() => {
+      runVencidoJob().catch(() => {});
+    }, vencidoIntervalMs);
+  }, 60 * 1000);
 });

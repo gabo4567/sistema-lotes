@@ -1,6 +1,6 @@
 import { db } from "../utils/firebase.js";
 
-const NOMBRES_PERMITIDOS = ["Arada", "Almácigo", "Transplante", "Cosecha", "Almácigo"];
+const NOMBRES_PERMITIDOS = ["Arada", "Almácigo", "Transplante", "Cosecha"];
 
 const toNumber = (v, fallback = 0) => {
   const n = Number(v);
@@ -109,7 +109,8 @@ export const crearInsumo = async (req, res) => {
       const ref = existingSnap.docs[0].ref;
       const data = existingSnap.docs[0].data();
       const nuevoStock = Number(data.cantidadDisponible || 0) + cant;
-      const update = { cantidadDisponible: nuevoStock, unidad: "bolsas", updatedAt: new Date() };
+      const update = { cantidadDisponible: nuevoStock, updatedAt: new Date() };
+      if (unidad) update.unidad = String(unidad);
       if (descripcion) update.descripcion = String(descripcion);
       await ref.update(update);
       const updatedDoc = await ref.get();
@@ -119,7 +120,7 @@ export const crearInsumo = async (req, res) => {
     const insumo = {
       nombre: nom,
       cantidadDisponible: cant,
-      unidad: "bolsas",
+      unidad: unidad ? String(unidad) : "bolsas",
       descripcion: descripcion ? String(descripcion) : "",
       estado: (estado && ["disponible","no_disponible"].includes(String(estado))) ? String(estado) : "disponible",
       activo: true,
@@ -171,7 +172,7 @@ export const actualizarInsumo = async (req, res) => {
       if (!valid.includes(est)) return res.status(400).json({ error: "Estado inválido" });
       data.estado = est;
     }
-    data.unidad = "bolsas";
+    if (data.unidad !== undefined) data.unidad = String(data.unidad);
     data.updatedAt = new Date();
     await db.collection("insumos").doc(id).update(data);
     res.json({ message: "Insumo actualizado" });
@@ -351,7 +352,15 @@ export const obtenerDisponibilidadInsumosProductor = async (req, res) => {
   try {
     const { productorId } = req.params;
     const pid = String(productorId || "").trim();
-    const snap = await db.collection("productorInsumos").where("productorId", "==", pid).get();
+
+    const [snap, insumosSnap] = await Promise.all([
+      db.collection("productorInsumos").where("productorId", "==", pid).get(),
+      db.collection("insumos").get(),
+    ]);
+
+    const insumoMap = {};
+    insumosSnap.docs.forEach(d => { insumoMap[d.id] = d.data()?.nombre || d.id; });
+
     const batch = db.batch();
     let writes = 0;
 
@@ -359,6 +368,7 @@ export const obtenerDisponibilidadInsumosProductor = async (req, res) => {
     let totalEntregado = 0;
     let totalDisponible = 0;
     let asignaciones = 0;
+    const porCategoria = {};
 
     snap.docs.forEach((d) => {
       const raw = d.data() || {};
@@ -377,6 +387,14 @@ export const obtenerDisponibilidadInsumosProductor = async (req, res) => {
       const disp = Math.max(0, asig - ent);
       totalDisponible += disp;
       if (disp > 0) asignaciones++;
+
+      const categoria = insumoMap[normalized.insumoId] || null;
+      if (categoria) {
+        if (!porCategoria[categoria]) porCategoria[categoria] = { asignado: 0, entregado: 0, disponible: 0 };
+        porCategoria[categoria].asignado += asig;
+        porCategoria[categoria].entregado += ent;
+        porCategoria[categoria].disponible += disp;
+      }
     });
 
     if (writes > 0) await batch.commit();
@@ -389,6 +407,7 @@ export const obtenerDisponibilidadInsumosProductor = async (req, res) => {
       totalEntregado,
       totalDisponible,
       tieneDisponible,
+      porCategoria,
     });
   } catch (e) {
     res.status(500).json({ error: "Error al verificar disponibilidad" });

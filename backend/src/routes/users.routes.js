@@ -30,6 +30,22 @@ router.get("/", async (req, res) => {
     const snapshot = await db.collection("users").get();
     const batch = db.batch();
     let hasWrites = false;
+
+    // Traer displayName de Firebase Auth para los UIDs que no tienen nombre en Firestore
+    const uidsWithoutNombre = snapshot.docs
+      .filter((doc) => !doc.data()?.nombre)
+      .map((doc) => doc.id);
+
+    const authDisplayNames = {};
+    if (uidsWithoutNombre.length > 0) {
+      try {
+        const authUsers = await admin.auth().getUsers(uidsWithoutNombre.map((uid) => ({ uid })));
+        authUsers.users.forEach((u) => {
+          if (u.displayName) authDisplayNames[u.uid] = u.displayName;
+        });
+      } catch {}
+    }
+
     const all = snapshot.docs.map((doc) => {
       const data = doc.data();
       const roleResolved = resolveRole(data, doc.id);
@@ -37,7 +53,8 @@ router.get("/", async (req, res) => {
         batch.update(doc.ref, { role: roleResolved, updatedAt: new Date() });
         hasWrites = true;
       }
-      return { id: doc.id, ...data, role: roleResolved };
+      const nombre = data?.nombre || authDisplayNames[doc.id] || null;
+      return { id: doc.id, ...data, nombre, role: roleResolved };
     });
     if (hasWrites) {
       await batch.commit();

@@ -135,7 +135,6 @@ export const registerProductor = async (req, res) => {
       domicilioCasa,
       domicilioIngresoCoord,
       estado,
-      plantasPorHa,
     } = req.body;
 
     if (!ipt || !nombreCompleto || !cuil) {
@@ -197,7 +196,6 @@ export const registerProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
-      plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
       requiereCambioContrasena: true, // Primer login con CUIL
       historialIngresos: 0,
       fechaRegistro: new Date(),

@@ -82,7 +82,7 @@ const InsumosList = () => {
   };
 
   const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'bolsas', descripcion:'', estado:'disponible', activo: true }); setModal({ type:'add' }) }
-  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
+  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:insumo.unidad||'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
   const openAssign = async (insumo)=>{
     try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null }
     setAsignar({ productorId:'', cantidadAsignada:'' })
@@ -90,11 +90,11 @@ const InsumosList = () => {
   }
 
   const onSubmitAdd = async ()=>{
-    try{ await insumosService.createInsumo({ nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
+    try{ await insumosService.createInsumo({ nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:form.unidad||'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al agregar insumo') }
   }
   const onSubmitEdit = async ()=>{
-    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
+    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:form.unidad||'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al modificar insumo') }
   }
   const onDelete = async (insumo)=>{
@@ -117,6 +117,21 @@ const InsumosList = () => {
   const onSubmitEditAsign = async ()=>{
     try{ const nueva = Number(modal.asign.cantidadAsignadaEdit || 0) ; await insumosService.updateAsignacion(modal.asign.id, { cantidadAsignada: nueva }); setModal(null); load(); if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) } }
     catch(e){ setError(e?.response?.data?.error||'Error al modificar asignación') }
+  }
+
+  const onEliminarAsignaciones = async ()=>{
+    const prod = productores.find(p => p.id === selectedProd)
+    const ipt = prod?.ipt
+    if (!ipt) { await notify({ title: 'El productor no tiene IPT registrado', icon: 'error' }); return }
+    const nombre = prod?.nombreCompleto || prod?.nombre || 'este productor'
+    const ok = await confirmDialog({ title: `¿Eliminar todas las asignaciones de ${nombre}?`, text: 'Esta acción no se puede deshacer. Los insumos disponibles serán restituidos al stock del IPT si corresponde.', icon: 'warning', confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar' })
+    if (!ok) return
+    try{
+      const res = await insumosService.eliminarAsignacionesPorIpt(ipt)
+      await notify({ title: `Listo. Se eliminaron ${res?.eliminadas ?? 0} asignación/es.`, icon: 'success' })
+      setAsignacionesProd([])
+      load()
+    } catch(e){ await notify({ title: e?.response?.data?.error || 'Error al eliminar asignaciones', icon: 'error' }) }
   }
 
   const estadoLabel = (i)=> {
@@ -176,8 +191,8 @@ const InsumosList = () => {
               ) : itemsFiltrados.map(i=> (
                 <tr key={i.id}>
                   <td style={{ textAlign:'center' }}>{i.nombre}</td>
-                  <td style={{ textAlign:'center' }}>{i.cantidadDisponible ?? 0} bolsas</td>
-                  <td style={{ textAlign:'center' }}><InsumoAsignadoCell insumoId={i.id} /></td>
+                  <td style={{ textAlign:'center' }}>{i.cantidadDisponible ?? 0} {i.unidad || 'bolsas'}</td>
+                  <td style={{ textAlign:'center' }}><InsumoAsignadoCell insumoId={i.id} unidad={i.unidad} /></td>
                   <td style={{ textAlign:'center' }}>{estadoLabel(i)}</td>
                   <td style={{ textAlign:'center' }}>{i.descripcion || '-'}</td>
                   <td style={{ textAlign:'center' }}>
@@ -297,9 +312,17 @@ const InsumosList = () => {
             <span style={{ color: '#166534', fontWeight: 600 }}>
               Asignaciones para: {productores.find(p => p.id === selectedProd)?.nombreCompleto || 'Productor'}
             </span>
-            <span style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
-              IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
+                IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
+              </span>
+              <button
+                onClick={onEliminarAsignaciones}
+                style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+              >
+                Eliminar todas las asignaciones
+              </button>
+            </div>
           </div>
 
           <div style={{
@@ -390,6 +413,7 @@ const InsumosList = () => {
                   {asignacionesProd.map(a=> {
                     const ins = items.find(i=> i.id === a.insumoId) || {}
                     const nombreInsumo = ins.nombre || insumoNames[a.insumoId] || ''
+                    const unidadIns = ins.unidad || 'bolsas'
                     const asignado = Number(a?.cantidadAsignada ?? 0)
                     const entregado = Number(a?.cantidadEntregada ?? (String(a?.estado || '').toLowerCase() === 'entregado' ? asignado : 0))
                     const disponible = Math.max(0, asignado - entregado)
@@ -397,14 +421,14 @@ const InsumosList = () => {
                       <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '12px 16px', fontWeight: 500 }}>{nombreInsumo || '-'}</td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <span style={{ 
-                            backgroundColor: '#f1f5f9', 
-                            padding: '4px 10px', 
-                            borderRadius: 6, 
+                          <span style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '4px 10px',
+                            borderRadius: 6,
                             fontWeight: 600,
                             color: '#475569'
                           }}>
-                            {asignado}
+                            {asignado} {unidadIns}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -415,7 +439,7 @@ const InsumosList = () => {
                             fontWeight: 600,
                             color: '#475569'
                           }}>
-                            {entregado}
+                            {entregado} {unidadIns}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -427,7 +451,7 @@ const InsumosList = () => {
                             fontWeight: 700,
                             color: disponible > 0 ? '#166534' : '#991b1b'
                           }}>
-                            {disponible}
+                            {disponible} {unidadIns}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', color: '#64748b', fontSize: 13 }}>{a.descripcion || '-'}</td>
@@ -459,6 +483,7 @@ const InsumosList = () => {
                   {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
+                <input className="input-inst" placeholder="Unidad de medida (ej: bolsas, kg, plantas)" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
                 <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
                   <option value="disponible">Disponible</option>
@@ -481,6 +506,7 @@ const InsumosList = () => {
                   {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
                 <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
+                <input className="input-inst" placeholder="Unidad de medida (ej: bolsas, kg, plantas)" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
                 <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
                   <option value="disponible">Disponible</option>
@@ -508,7 +534,7 @@ const InsumosList = () => {
                     ))}
                   </select>
                 </div>
-                <input className="input-inst" placeholder="Cantidad a asignar (bolsas)" value={asignar.cantidadAsignada} onChange={e=>setAsignar({ ...asignar, cantidadAsignada:e.target.value })} />
+                <input className="input-inst" placeholder={`Cantidad a asignar (${modal?.insumo?.unidad || 'bolsas'})`} value={asignar.cantidadAsignada} onChange={e=>setAsignar({ ...asignar, cantidadAsignada:e.target.value })} />
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitAssign}>Asignar</button>
@@ -518,8 +544,8 @@ const InsumosList = () => {
             {modal.type==='assign-edit' && (
               <div>
                 <h3 style={{ marginTop:0 }}>Modificar cantidad</h3>
-                <div style={{ marginBottom: 8 }}>Cantidad actual: {modal.asign.cantidadAsignada ?? 0} bolsas</div>
-                <input className="input-inst" placeholder="Nueva cantidad (bolsas)" value={modal.asign.cantidadAsignadaEdit ?? ''} onChange={e=>setModal(m=>({ ...m, asign: { ...m.asign, cantidadAsignadaEdit: e.target.value } }))} />
+                <div style={{ marginBottom: 8 }}>Cantidad actual: {modal.asign.cantidadAsignada ?? 0} {items.find(i=>i.id===modal.asign.insumoId)?.unidad || 'bolsas'}</div>
+                <input className="input-inst" placeholder={`Nueva cantidad (${items.find(i=>i.id===modal.asign.insumoId)?.unidad || 'bolsas'})`} value={modal.asign.cantidadAsignadaEdit ?? ''} onChange={e=>setModal(m=>({ ...m, asign: { ...m.asign, cantidadAsignadaEdit: e.target.value } }))} />
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitEditAsign}>Guardar</button>
@@ -570,12 +596,12 @@ const InsumosList = () => {
   )
 }
 
-const InsumoAsignadoCell = ({ insumoId }) => {
+const InsumoAsignadoCell = ({ insumoId, unidad }) => {
   const [total, setTotal] = useState('-')
   useEffect(()=>{ (async()=>{
     try{ const asigs = await insumosService.asignacionesPorInsumo(insumoId); const sum = Array.isArray(asigs)? asigs.reduce((acc,x)=> acc + Number(x.cantidadAsignada||0), 0) : 0; setTotal(sum) }catch{ setTotal('-') }
   })() },[insumoId])
-  return <span>{total === '-' ? '-' : `${total} bolsas`}</span>
+  return <span>{total === '-' ? '-' : `${total} ${unidad || 'bolsas'}`}</span>
 }
 
 

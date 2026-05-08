@@ -14,7 +14,6 @@ export const createProductor = async (req, res) => {
       domicilioCasa,
       domicilioIngresoCoord,
       estado,
-      plantasPorHa,
     } = req.body;
     if (!ipt || !nombreCompleto || !cuil) {
       return res.status(400).json({ error: "Faltan campos requeridos" });
@@ -60,7 +59,6 @@ export const createProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
-      plantasPorHa: plantasPorHa ? Number(plantasPorHa) : null,
       requiereCambioContrasena: true,
       historialIngresos: 0,
       fechaRegistro: new Date(),

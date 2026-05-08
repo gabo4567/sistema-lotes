@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { getUsers, deactivateUser, resetPasswordUser, activateUser } from "../services/users.service";
+import { getUsers, updateUser, deactivateUser, resetPasswordUser, activateUser } from "../services/users.service";
 import { notify } from "../utils/alerts";
 import HomeButton from "../components/HomeButton";
 import { confirmDialog } from "../utils/alerts";
@@ -10,6 +10,7 @@ const UsersList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [editingNombre, setEditingNombre] = useState({ uid: null, value: '' });
 
   // Estados para filtros
   const [filtros, setFiltros] = useState({
@@ -85,6 +86,19 @@ const UsersList = () => {
       window.open(link, "_blank");
     } catch {
       setError("No se pudo generar enlace de reseteo");
+    }
+  };
+
+  const onSaveNombre = async (uid) => {
+    const nombre = editingNombre.value.trim();
+    if (!nombre) { setError('El nombre no puede estar vacío'); return; }
+    try {
+      await updateUser(uid, { nombre });
+      setItems(items.map(u => u.id === uid ? { ...u, nombre } : u));
+      setEditingNombre({ uid: null, value: '' });
+      setMsg('Nombre actualizado');
+    } catch (e) {
+      setError(e?.message || 'No se pudo actualizar el nombre');
     }
   };
 
@@ -173,7 +187,6 @@ const UsersList = () => {
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Email</th>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Rol</th>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
@@ -184,8 +197,26 @@ const UsersList = () => {
             <tbody>
               {itemsFiltrados.map(u => (
                 <tr key={u.id}>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.nombre || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.ipt || u.productorIpt || '-'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '8px 12px', textAlign: 'center' }}>
+                    {editingNombre.uid === u.id ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+                        <input
+                          autoFocus
+                          value={editingNombre.value}
+                          onChange={e => setEditingNombre({ uid: u.id, value: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') onSaveNombre(u.id); if (e.key === 'Escape') setEditingNombre({ uid: null, value: '' }); }}
+                          style={{ border: '1px solid #86efac', borderRadius: 6, padding: '4px 8px', fontSize: 14, width: 160 }}
+                        />
+                        <button onClick={() => onSaveNombre(u.id)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>✓</button>
+                        <button onClick={() => setEditingNombre({ uid: null, value: '' })} style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        <span>{u.nombre || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Sin nombre</span>}</span>
+                        <button onClick={() => setEditingNombre({ uid: u.id, value: u.nombre || '' })} title="Editar nombre" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 13, padding: '2px 4px', lineHeight: 1 }}>✏️</button>
+                      </div>
+                    )}
+                  </td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{u.email}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
                     <span>Administrador</span>
