@@ -75,6 +75,21 @@ const InsumosList = () => {
 
   useEffect(()=>{ (async()=>{ if(!selectedProd) { setAsignacionesProd([]); return } ; setLoadingAsign(true); try{ const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }catch{ setAsignacionesProd([]) } finally{ setLoadingAsign(false) } })() }, [selectedProd])
 
+  const refreshAsignacionesProductor = async () => {
+    if (!selectedProd || loadingAsign) return;
+    setLoadingAsign(true);
+    try {
+      const list = await insumosService.asignacionesPorProductor(selectedProd);
+      setAsignacionesProd(Array.isArray(list) ? list : []);
+      await load();
+    } catch {
+      setAsignacionesProd([]);
+      await notify({ title: 'No se pudieron recargar los insumos', icon: 'error' });
+    } finally {
+      setLoadingAsign(false);
+    }
+  };
+
   const selectProducer = (p) => {
     setSelectedProd(p.id);
     setProducerSearchTerm(p.ipt ? `IPT: ${p.ipt} - ${p.nombreCompleto || p.nombre || ''}` : (p.nombreCompleto || p.nombre || p.id));
@@ -292,16 +307,27 @@ const InsumosList = () => {
           )}
         </div>
         {selectedProd && (
-          <button 
-            className="btn secondary" 
-            onClick={() => {
-              setSelectedProd('');
-              setProducerSearchTerm('');
-            }}
-            style={{ height: 40, whiteSpace: 'nowrap', borderRadius: 8 }}
-          >
-            Limpiar
-          </button>
+          <>
+            <button
+              className="btn secondary"
+              onClick={refreshAsignacionesProductor}
+              disabled={loadingAsign}
+              title="Recargar insumos del productor"
+              style={{ height: 40, minWidth: 44, whiteSpace: 'nowrap', borderRadius: 8, fontSize: 18, padding: '0 12px' }}
+            >
+              {loadingAsign ? '...' : '↻'}
+            </button>
+            <button 
+              className="btn secondary" 
+              onClick={() => {
+                setSelectedProd('');
+                setProducerSearchTerm('');
+              }}
+              style={{ height: 40, whiteSpace: 'nowrap', borderRadius: 8 }}
+            >
+              Limpiar
+            </button>
+          </>
         )}
       </div>
       {selectedProd && (
@@ -323,6 +349,14 @@ const InsumosList = () => {
               <span style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
                 IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
               </span>
+              <button
+                onClick={refreshAsignacionesProductor}
+                disabled={loadingAsign}
+                title="Recargar insumos del productor"
+                style={{ fontSize: 18, fontWeight: 800, color: '#166534', background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, width: 34, height: 30, cursor: loadingAsign ? 'default' : 'pointer', lineHeight: 1 }}
+              >
+                {loadingAsign ? '...' : '↻'}
+              </button>
               <button
                 onClick={onEliminarAsignaciones}
                 style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}

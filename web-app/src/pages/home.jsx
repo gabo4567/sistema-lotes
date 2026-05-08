@@ -12,10 +12,10 @@ const Home = () => {
   const options = [
     { type: "link", to: "/home", label: "Home", className: "menu-btn menu-btn--home" },
     { type: "link", to: "/turnos", label: "Turnos", className: "menu-btn" },
+    { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
     { type: "link", to: "/lotes", label: "Lotes", className: "menu-btn" },
     { type: "link", to: "/users", label: "Usuarios", className: "menu-btn" },
     { type: "link", to: "/productores", label: "Productores", className: "menu-btn" },
-    { type: "link", to: "/insumos", label: "Insumos", className: "menu-btn" },
     { type: "link", to: "/informes", label: "Informes", className: "menu-btn" },
     { type: "button", onClick: handleLogout, label: "Cerrar Sesión", className: "menu-btn menu-btn--danger" },
   ];

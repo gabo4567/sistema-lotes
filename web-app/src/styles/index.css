@@ -488,7 +488,7 @@ body {
 @media (max-width: 1200px){ .turnos-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px){ .turnos-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px){ .turnos-grid{ grid-template-columns: 1fr; } }
-.turno-card{ background: #fff; border: 1px solid var(--inst-border); border-radius: 12px; padding: 14px; box-shadow: 0 8px 18px rgba(46,125,50,0.06); display: flex; flex-direction: column; gap: 8px; }
+.turno-card{ background: #fff; border: 1px solid var(--inst-border); border-radius: 12px; padding: 16px 18px; box-shadow: 0 8px 18px rgba(46,125,50,0.06); display: flex; flex-direction: column; gap: 10px; }
 .turno-card[role="button"]{ cursor: pointer; }
 .turno-card.turno-card--expanded{ border-color: #bbf7d0; box-shadow: 0 10px 22px rgba(34,197,94,0.12); }
 .turno-header{ display: flex; justify-content: space-between; align-items: center; }
@@ -499,12 +499,14 @@ body {
 .estado-badge.completed{ background: #16a34a; }
 .estado-badge.canceled{ background: #dc2626; }
 .estado-badge.expired{ background: #6b7280; }
-.turno-item{ color: var(--inst-text); }
+.turno-item{ color: var(--inst-text); font-size: 1.12rem; line-height: 1.35; }
 .turno-label{ font-weight: 600; margin-right: 6px; }
-.turno-actions{ margin-top: 6px; }
+.turno-insumo-chip{ display: inline-flex; align-items: center; margin-left: 8px; min-height: 26px; padding: 3px 12px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 0.92rem; font-weight: 800; line-height: 1; vertical-align: middle; white-space: nowrap; }
+.turno-actions{ margin-top: 8px; }
 .turnos-actions-row{ margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .turnos-quick-actions{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.turnos-quick-actions .btn{ padding: 6px 10px; font-size: 14px; }
+.turnos-quick-actions .btn,
+.turnos-actions-row .btn{ min-height: 44px; padding: 0 14px; font-size: 1rem; }
 .turnos-updating{ font-size: 13px; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 999px; }
 
 .turnos-toolbar{ display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 10px 0 12px; }

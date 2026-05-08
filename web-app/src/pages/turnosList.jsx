@@ -1760,7 +1760,7 @@ return (
                     <div className="turno-item">
                       <span className="turno-label">Tipo:</span> {tipoLabel(t.tipoTurno)}
                       {t.categoriaInsumo ? (
-                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#dcfce7', color: '#166534', borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                        <span className="turno-insumo-chip">
                           {t.categoriaInsumo}
                         </span>
                       ) : null}
@@ -1892,7 +1892,7 @@ return (
                             ) : null}
                             <button
                               className="btn"
-                              style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                              style={{ backgroundColor: 'transparent', color: '#475569', border: '1px solid #cbd5e1' }}
                               onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                             >Ver historial</button>
                           </div>
