@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getProductorById, getHistorialIngresos } from "../services/productores.service";
-import Layout from "../components/Layout";
+
+const DetailField = ({ label, value, wide = false }) => (
+  <div className={`producer-field ${wide ? "producer-field--wide" : ""}`}>
+    <div className="producer-field__label">{label}</div>
+    <div className="producer-field__value">{value === 0 || value ? value : "-"}</div>
+  </div>
+);
 
 const ProductorDetail = () => {
   const { id } = useParams();
@@ -9,57 +15,59 @@ const ProductorDetail = () => {
   const [hist, setHist] = useState(null);
   const [error, setError] = useState("");
 
-  useEffect(()=>{ (async ()=>{
-    try {
-      const { data } = await getProductorById(id);
-      setProd(data);
-      if (data?.ipt) {
-        const { data: h } = await getHistorialIngresos(data.ipt);
-        setHist(typeof h === 'object' && h !== null && 'historialIngresos' in h ? h.historialIngresos : h);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await getProductorById(id);
+        setProd(data);
+        if (data?.ipt) {
+          const { data: h } = await getHistorialIngresos(data.ipt);
+          setHist(typeof h === "object" && h !== null && "historialIngresos" in h ? h.historialIngresos : h);
+        }
+      } catch {
+        setError("No se pudo cargar productor");
       }
-    } catch {
-      setError("No se pudo cargar productor");
-    }
-  })() }, [id]);
+    })();
+  }, [id]);
+
+  const entradaCampo = (() => {
+    const c = prod?.domicilioIngresoCoord || prod?.domicilioIngresoCampo || prod?.ubicaciones?.entradaCampo;
+    return c && typeof c.lat === "number" && typeof c.lng === "number" ? `${c.lat}, ${c.lng}` : "-";
+  })();
 
   return (
     <div className="section-card prod-detail page-container">
       {!prod ? (
-        <div>Cargando…</div>
+        <div>Cargando...</div>
       ) : (
         <>
-          <h2 className="users-title">{prod.nombreCompleto || 'Productor'}</h2>
-          <div className="detail-grid">
-            <div className="detail-item"><span className="detail-label">IPT:</span> {prod.ipt}</div>
-            <div className="detail-item"><span className="detail-label">CUIL:</span> {prod.cuil}</div>
-            <div className="detail-item"><span className="detail-label">Email:</span> {prod.email || '-'}</div>
-            <div className="detail-item"><span className="detail-label">Teléfono:</span> {prod.telefono || '-'}</div>
-            <div className="detail-item"><span className="detail-label">Domicilio:</span> {prod.domicilioCasa || '-'}</div>
-            <div className="detail-item"><span className="detail-label">Ingreso al campo:</span> {
-              (()=>{
-                const c = prod.domicilioIngresoCoord || prod.domicilioIngresoCampo || (prod.ubicaciones && prod.ubicaciones.entradaCampo);
-                return (c && typeof c.lat === 'number' && typeof c.lng === 'number') ? `${c.lat}, ${c.lng}` : '-';
-              })()
-            }</div>
-            <div className="detail-item"><span className="detail-label">Estado:</span> {prod.estado}</div>
-            <div className="detail-item"><span className="detail-label">Requiere cambio de contraseña:</span> {String(prod.requiereCambioContrasena)}</div>
+          <h2 className="users-title">{prod.nombreCompleto || "Productor"}</h2>
+
+          <div className="producer-detail-grid">
+            <DetailField label="IPT" value={prod.ipt} />
+            <DetailField label="CUIL" value={prod.cuil} />
+            <DetailField label="Email" value={prod.email} wide />
+            <DetailField label={"Tel\u00e9fono"} value={prod.telefono} />
+            <DetailField label="Localidad" value={prod.domicilioCasa} />
+            <DetailField label="Ingreso al campo" value={entradaCampo} wide />
+            <DetailField label="Estado" value={prod.estado} />
+            <DetailField label={"Cambio de contrase\u00f1a"} value={prod.requiereCambioContrasena ? "Requerido" : "No requerido"} />
           </div>
-          <h3 className="users-title" style={{ marginTop: 16 }}>Historial de ingresos</h3>
+
+          <h3 className="producer-section-title">Historial de ingresos</h3>
           {Array.isArray(hist) && hist.length > 0 ? (
-            <div className="hist-grid">
+            <div className="producer-detail-grid">
               {hist.map((h, idx) => (
-                <div key={idx} className="hist-card">
-                  <div className="hist-row"><span className="hist-label">Fecha:</span> {h.fecha ? new Date(h.fecha).toLocaleDateString() : '-'}</div>
-                  <div className="hist-row"><span className="hist-label">Acción:</span> {h.accion || '-'}</div>
-                  <div className="hist-row"><span className="hist-label">Observación:</span> {h.observacion || '-'}</div>
-                </div>
+                <React.Fragment key={idx}>
+                  <DetailField label="Fecha" value={h.fecha ? new Date(h.fecha).toLocaleDateString() : "-"} />
+                  <DetailField label={"Acci\u00f3n"} value={h.accion || "-"} />
+                  <DetailField label={"Observaci\u00f3n"} value={h.observacion || "-"} wide />
+                </React.Fragment>
               ))}
             </div>
-          ) : typeof hist === 'number' ? (
-            <div className="hist-grid">
-              <div className="hist-card">
-                <div className="hist-row"><span className="hist-label">Ingresos totales:</span> {hist}</div>
-              </div>
+          ) : typeof hist === "number" ? (
+            <div className="producer-detail-grid">
+              <DetailField label="Ingresos totales" value={hist} wide />
             </div>
           ) : (
             <div className="users-msg err" style={{ marginTop: 8 }}>Sin datos</div>

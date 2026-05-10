@@ -68,6 +68,21 @@ const isValidYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
 
 const normalizeEstado = (e) => String(e || 'pendiente').toLowerCase().trim()
 
+const temporadaFromDate = (date) => {
+  const d = date instanceof Date ? date : new Date(date)
+  if (!(d instanceof Date) || isNaN(d.getTime())) return null
+  const year = d.getFullYear()
+  const month = d.getMonth() + 1
+  const start = month >= 7 ? year : year - 1
+  return `${start}-${start + 1}`
+}
+
+const getTurnoTemporada = (turno) => {
+  const stored = String(turno?.temporada || '').trim()
+  if (/^\d{4}-\d{4}$/.test(stored)) return stored
+  return temporadaFromDate(toDateSafe(turno?.fechaTurno || turno?.fecha))
+}
+
 const IPT_TIMEZONE = 'America/Argentina/Buenos_Aires'
 const HORA_APERTURA = 7
 const HORA_CIERRE = 13
@@ -179,7 +194,8 @@ const [filtros, setFiltros] = useState({
   estado: 'todos',
   productor: '',
   desde: '',
-  hasta: ''
+  hasta: '',
+  temporada: 'todas'
 })
 
 const loadData = useCallback(async ({ showLoading = true } = {}) => {
@@ -221,6 +237,10 @@ useEffect(() => {
 
 useEffect(() => {
   if (viewMode === 'historial') setExpandedId(null)
+}, [viewMode])
+
+useEffect(() => {
+  setFiltros((cur) => ({ ...cur, temporada: 'todas' }))
 }, [viewMode])
 
 useEffect(() => {
@@ -326,6 +346,10 @@ useEffect(() => {
 
   const turnosFiltrados = useMemo(() => {
     return turnos.filter(t => {
+      if (viewMode === 'historial' && filtros.temporada !== 'todas') {
+        if (getTurnoTemporada(t) !== filtros.temporada) return false
+      }
+
       // Filtro por estado
       if (filtros.estado !== 'todos' && getDisplayEstado(t) !== filtros.estado) return false
       
@@ -375,7 +399,12 @@ useEffect(() => {
       if (bMs === null) return -1
       return filtros.orden === 'lejanos' ? bMs - aMs : aMs - bMs
     })
-  }, [turnos, filtros, prodMap])
+  }, [turnos, filtros, prodMap, viewMode])
+
+const temporadasArchivadas = useMemo(() => {
+  const list = Array.from(new Set(turnos.map(getTurnoTemporada).filter(Boolean)))
+  return list.sort((a, b) => b.localeCompare(a))
+}, [turnos])
 
 const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   if (updatingId === id) {
@@ -977,7 +1006,7 @@ return (
           className={`btn turnos-toggle-btn ${viewMode === 'historial' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('historial')}
           style={{ padding: '6px 12px', fontSize: 15 }}
-        >Historial</button>
+        >Archivados</button>
       </div>
     </div>
 
@@ -1535,6 +1564,23 @@ return (
           <option value="vencido">Vencido</option>
         </select>
       </div>
+
+      {viewMode === 'historial' ? (
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Temporada</label>
+          <select
+            className="select-inst"
+            value={filtros.temporada}
+            onChange={e => setFiltros({ ...filtros, temporada: e.target.value })}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
+          >
+            <option value="todas">Todas las temporadas</option>
+            {temporadasArchivadas.map((temporada) => (
+              <option key={temporada} value={temporada}>{temporada}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
         <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Desde</label>
@@ -1561,7 +1607,7 @@ return (
       <div className="filter-item" style={{ flex: '0 0 auto', display: 'flex', gap: 8 }}>
         <button
           className="btn secondary"
-          onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '' })}
+          onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '', temporada: 'todas' })}
           style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8 }}
         >Limpiar</button>
         <button
@@ -1614,6 +1660,7 @@ return (
                       const productorNombre = t.productorNombre || prodMap.get(String(t.productorId))?.nombre || 'No especificado'
                       const ipt = t.ipt || prodMap.get(String(t.productorId))?.ipt || '-'
                       const allowExpand = viewMode !== 'historial'
+                      const isAutoArchived = viewMode === 'historial' && t.archivadoPorTemporada
                       return (
                         <React.Fragment key={t.id}>
                           <tr
@@ -1637,7 +1684,7 @@ return (
                               <span className={estadoClass(displayEstado)}>{estadoLabel(displayEstado)}</span>
                             </td>
                             <td className="turnos-agenda__cell" onClick={(e) => e.stopPropagation()}>
-                              {t.activo !== false ? (
+                              {t.activo !== false && !isAutoArchived ? (
                                 <div className="turnos-quick-actions">
                                   {isUpdating ? <span className="turnos-updating">Actualizando…</span> : null}
                                   {displayEstado === 'pendiente' || displayEstado === 'confirmado' || displayEstado === 'vencido' ? (
@@ -1658,6 +1705,15 @@ return (
                                       {isUpdating ? 'Actualizando…' : 'Archivar'}
                                     </button>
                                   ) : null}
+                                  <button
+                                    className="btn"
+                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                                  >Historial</button>
+                                </div>
+                              ) : isAutoArchived ? (
+                                <div className="turnos-quick-actions">
+                                  <span style={{ color: '#64748b', fontSize: 13, fontWeight: 700 }}>Archivado por temporada</span>
                                   <button
                                     className="btn"
                                     style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
@@ -1740,6 +1796,7 @@ return (
                 const isInsumo = String(t.tipoTurno || '').toLowerCase() === 'insumo'
                 const insDisp = isInsumo ? insumosDispByProd[String(t.productorId || '').trim()] : null
                 const allowExpand = false
+                const isAutoArchived = viewMode === 'historial' && t.archivadoPorTemporada
                 return (
                   <div
                     key={t.id}
@@ -1861,7 +1918,7 @@ return (
                     )}
                     
                     <div className="turno-actions" onClick={(e) => e.stopPropagation()}>
-                      {t.activo !== false ? (
+                      {t.activo !== false && !isAutoArchived ? (
                         <>
                           <div className="turnos-quick-actions">
                             {isUpdating ? <span className="turnos-updating">Actualizando…</span> : null}
@@ -1891,6 +1948,17 @@ return (
                               onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                             >Ver historial</button>
                           </div>
+                        </>
+                      ) : isAutoArchived ? (
+                        <>
+                          <div style={{ width: '100%', padding: '8px 10px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', fontSize: 13, fontWeight: 700, textAlign: 'center' }}>
+                            Archivado por temporada
+                          </div>
+                          <button
+                            className="btn"
+                            style={{ width: '100%', marginTop: 6, backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                            onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
+                          >Ver historial</button>
                         </>
                       ) : (
                         <>

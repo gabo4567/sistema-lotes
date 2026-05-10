@@ -7,6 +7,7 @@ import { API_URL } from "../utils/constants";
 import { signInWithCustomToken } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { apiFetch } from "../api/api";
+import { getIngresoMetadata } from "../utils/clientMetadata";
 
 export default function LoginScreen({ navigation }) {
   const { setUser } = useContext(AuthContext);
@@ -37,7 +38,7 @@ export default function LoginScreen({ navigation }) {
       const resp = await apiFetch(`${API_URL}/auth/login-productor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ipt: String(ipt).trim(), password }),
+        body: JSON.stringify({ ipt: String(ipt).trim(), password, ...getIngresoMetadata() }),
       });
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));

@@ -6,6 +6,7 @@ import { auth } from "../services/firebase";
 import { signInWithCustomToken } from "firebase/auth";
 import { AuthContext } from "../context/AuthContext";
 import { apiFetch } from "../api/api";
+import { getIngresoMetadata } from "../utils/clientMetadata";
 
 export default function ChangePasswordScreen({ route, navigation }) {
   const { ipt } = route.params || {};
@@ -38,7 +39,7 @@ export default function ChangePasswordScreen({ route, navigation }) {
       const resp = await apiFetch(`${API_URL}/auth/productor/cambiar-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ipt, oldPassword, newPassword }),
+        body: JSON.stringify({ ipt, oldPassword, newPassword, ...getIngresoMetadata() }),
       });
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));

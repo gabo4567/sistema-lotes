@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createProductor, getProductorById, updateProductor } from "../services/productores.service";
-import Layout from "../components/Layout";
+
+const FormField = ({ label, children }) => (
+  <label className="producer-field">
+    <span className="producer-field__label">{label}</span>
+    {children}
+  </label>
+);
 
 const ProductorForm = () => {
   const { id } = useParams();
@@ -36,9 +42,7 @@ const ProductorForm = () => {
   const onChange = (k, v) => setForm({ ...form, [k]: v });
 
   const onTelChange = (v) => {
-    // Solo permitir números
     const onlyNums = v.replace(/\D/g, "");
-    // Limitar a 13 dígitos
     if (onlyNums.length <= 13) {
       onChange("telefono", onlyNums);
     }
@@ -47,17 +51,16 @@ const ProductorForm = () => {
   const onSubmit = async (e) => {
     e.preventDefault(); setError(""); setLoading(true);
 
-    // Validaciones de formato en frontend
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (form.email && !emailRegex.test(form.email)) {
-      setError("Ingrese un correo electrónico válido.");
+      setError("Ingrese un correo electr\u00f3nico v\u00e1lido.");
       setLoading(false);
       return;
     }
 
     const telRegex = /^\d{10,13}$/;
     if (form.telefono && !telRegex.test(form.telefono)) {
-      setError("El número debe contener solo dígitos (10 a 13 números).");
+      setError("El n\u00famero debe contener solo d\u00edgitos (10 a 13 n\u00fameros).");
       setLoading(false);
       return;
     }
@@ -89,33 +92,65 @@ const ProductorForm = () => {
     <div className="section-card prod-form page-container">
       <h2 className="users-title">{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
       <form onSubmit={onSubmit} className="form-grid">
-        <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
-        <input className="input-inst" placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
-        <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
-        <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
-        <input className="input-inst" placeholder="Teléfono" value={form.telefono} onChange={e=>onTelChange(e.target.value)} />
-        <input className="input-inst" placeholder="Localidad" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
+        <FormField label="IPT">
+          <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
+        </FormField>
+
+        <FormField label="Nombre completo">
+          <input className="input-inst" placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
+        </FormField>
+
+        <FormField label="CUIL">
+          <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
+        </FormField>
+
+        <FormField label="Email">
+          <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
+        </FormField>
+
+        <FormField label={"Tel\u00e9fono"}>
+          <input className="input-inst" placeholder={"Tel\u00e9fono"} value={form.telefono} onChange={e=>onTelChange(e.target.value)} />
+        </FormField>
+
+        <FormField label="Localidad">
+          <input className="input-inst" placeholder="Localidad" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
+        </FormField>
+
         {isEdit && (
           <>
-            <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
-            <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+            <FormField label="Ingreso campo latitud">
+              <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
+            </FormField>
+
+            <FormField label="Ingreso campo longitud">
+              <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+            </FormField>
           </>
         )}
+
         {isEdit && (
-          <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
-            <option value="Nuevo">Nuevo</option>
-            <option value="Vigente">Vigente</option>
-            <option value="Vencido">Vencido</option>
-            <option value="Re-empadronado">Re-empadronado</option>
-          </select>
+          <FormField label="Estado">
+            <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
+              <option value="Nuevo">Nuevo</option>
+              <option value="Vigente">Vigente</option>
+              <option value="Vencido">Vencido</option>
+              <option value="Re-empadronado">Re-empadronado</option>
+            </select>
+          </FormField>
         )}
-        <label className="checkbox-inst">
-          <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} /> Requiere cambio de contraseña
+
+        <label className="producer-field">
+          <span className="producer-field__label">Acceso</span>
+          <span className="producer-checkbox-card">
+            <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} />
+            {"Requiere cambio de contrase\u00f1a"}
+          </span>
         </label>
+
         {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/productores')}>Cancelar</button>
-          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
+          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
         </div>
       </form>
     </div>

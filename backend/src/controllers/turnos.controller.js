@@ -42,6 +42,43 @@ const toTurnoTimestamp = (input) => {
 
 const normalizeEstado = (e) => String(e || "pendiente").toLowerCase().trim();
 
+const temporadaFromDate = (date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return null;
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const start = m >= 7 ? y : y - 1;
+  return `${start}-${start + 1}`;
+};
+
+const temporadaFromYmd = (ymd) => {
+  const m = String(ymd || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const start = month >= 7 ? y : y - 1;
+  return `${start}-${start + 1}`;
+};
+
+const temporadaStartYear = (temporada) => {
+  const m = String(temporada || "").trim().match(/^(\d{4})-(\d{4})$/);
+  return m ? Number(m[1]) : null;
+};
+
+const getTemporadaActual = () => temporadaFromYmd(toYmdInIptTz(new Date())) || temporadaFromDate(new Date());
+
+const getTurnoTemporada = (turno) => {
+  const stored = String(turno?.temporada || "").trim();
+  if (/^\d{4}-\d{4}$/.test(stored)) return stored;
+  return temporadaFromDate(turnoDateFromRaw(turno));
+};
+
+const isTemporadaAnterior = (temporada, temporadaActual) => {
+  const start = temporadaStartYear(temporada);
+  const currentStart = temporadaStartYear(temporadaActual);
+  if (start == null || currentStart == null) return false;
+  return start < currentStart;
+};
+
 const normalizeTipoTurno = (t) => {
   const s = String(t || "").toLowerCase().trim();
   if (!s) return s;
@@ -577,11 +614,13 @@ export const crearTurno = async (req, res) => {
     }
 
     const fechaIso = date.toISOString();
+    const temporada = temporadaFromDate(date);
     const turno = {
       productorId,
       tipoTurno,
       fecha: fechaIso,
       fechaTurno: ts,
+      temporada,
       estado: "pendiente",
       creadoEn: new Date().toISOString(),
       updatedAt: Timestamp.now(),
@@ -620,8 +659,10 @@ export const obtenerTurnos = async (req, res) => {
     const desde = normalizeYmdOrNull(fechaDesde);
     const hasta = normalizeYmdOrNull(fechaHasta);
 
+    const temporadaActual = getTemporadaActual();
+    const activoParam = activo === undefined ? undefined : activo === "true";
     let query = db.collection("turnos");
-    if (activo !== undefined) {
+    if (activoParam === true) {
       query = query.where("activo", "==", activo === "true");
     }
 
@@ -632,6 +673,15 @@ export const obtenerTurnos = async (req, res) => {
     const raws = snapshot.docs
       .map(doc => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
       .filter(({ data }) => {
+        const temporada = getTurnoTemporada(data);
+        if (activoParam === true) {
+          if (data.activo === false) return false;
+          if (temporada && temporadaActual && temporada !== temporadaActual) return false;
+        } else if (activoParam === false) {
+          const archivadoManual = data.activo === false;
+          const archivadoPorTemporada = temporada && temporadaActual && isTemporadaAnterior(temporada, temporadaActual);
+          if (!archivadoManual && !archivadoPorTemporada) return false;
+        }
         if (!desde && !hasta) return true;
         const ymd = toYmdUtc(turnoDateFromRaw(data));
         if (!ymd) return true;
@@ -657,6 +707,12 @@ export const obtenerTurnos = async (req, res) => {
           raw.fechaTurno = ts;
           raw.fecha = iso;
         }
+      }
+      const temporada = getTurnoTemporada(raw);
+      if (temporada && raw.temporada !== temporada) {
+        batch.update(ref, { temporada });
+        writes++;
+        raw.temporada = temporada;
       }
       const prevEstado = normalizeEstado(raw.estado);
       const vencidoUpdate = applyVencidoIfNeeded(raw, now);
@@ -701,12 +757,17 @@ export const obtenerTurnos = async (req, res) => {
       } catch {}
     }
     const enriched = turnos
-      .map(t => ({
-        ...t,
-        productorNombre: t.productorNombre || prodInfo.get(String(t.productorId || ''))?.nombre || '',
-        ipt: t.ipt || prodInfo.get(String(t.productorId || ''))?.ipt || '',
-        motivo: t.motivo || '-',
-      }))
+      .map(t => {
+        const temporada = getTurnoTemporada(t);
+        return {
+          ...t,
+          temporada,
+          archivadoPorTemporada: Boolean(temporada && temporadaActual && isTemporadaAnterior(temporada, temporadaActual)),
+          productorNombre: t.productorNombre || prodInfo.get(String(t.productorId || ''))?.nombre || '',
+          ipt: t.ipt || prodInfo.get(String(t.productorId || ''))?.ipt || '',
+          motivo: t.motivo || '-',
+        };
+      })
       .slice(0, limit);
 
     res.json(enriched);
@@ -778,6 +839,7 @@ export const actualizarTurno = async (req, res) => {
 
     if (nextFechaTs) {
       const d = nextFechaTs.toDate();
+      data.temporada = temporadaFromDate(d);
       const soloDia = new Date(d);
       soloDia.setHours(0, 0, 0, 0);
       if (soloDia.getTime() < hoy.getTime()) {
@@ -1195,10 +1257,12 @@ export const obtenerTurnosPorProductor = async (req, res) => {
   try {
     const { productorId } = req.params;
     const { activo } = req.query;
+    const temporadaActual = getTemporadaActual();
+    const activoParam = activo === undefined ? undefined : activo === "true";
     
     let query = db.collection("turnos").where("productorId", "==", productorId);
     
-    if (activo !== undefined) {
+    if (activoParam === true) {
       query = query.where("activo", "==", activo === "true");
     }
 
@@ -1223,12 +1287,36 @@ export const obtenerTurnosPorProductor = async (req, res) => {
           raw.fecha = ts.toDate().toISOString();
         }
       }
+      const temporada = getTurnoTemporada(raw);
+      if (temporada && raw.temporada !== temporada) {
+        batch.update(doc.ref, { temporada });
+        writes++;
+        raw.temporada = temporada;
+      }
       const vencidoUpdate = applyVencidoIfNeeded(raw, now);
       if (vencidoUpdate) {
         batch.update(doc.ref, vencidoUpdate);
         writes++;
       }
-      return { id: doc.id, ...convertirTimestamps({ ...raw, motivo: raw.motivo || '-' }) };
+      return {
+        id: doc.id,
+        ...convertirTimestamps({
+          ...raw,
+          temporada,
+          archivadoPorTemporada: Boolean(temporada && temporadaActual && isTemporadaAnterior(temporada, temporadaActual)),
+          motivo: raw.motivo || '-',
+        }),
+      };
+    }).filter((t) => {
+      if (activoParam === true) {
+        if (t.activo === false) return false;
+        if (t.temporada && temporadaActual && t.temporada !== temporadaActual) return false;
+      } else if (activoParam === false) {
+        const archivadoManual = t.activo === false;
+        const archivadoPorTemporada = t.temporada && temporadaActual && isTemporadaAnterior(t.temporada, temporadaActual);
+        if (!archivadoManual && !archivadoPorTemporada) return false;
+      }
+      return true;
     });
     if (writes > 0) await batch.commit();
     res.json(turnos);

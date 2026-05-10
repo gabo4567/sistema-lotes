@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createProductor, getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
+import { createProductor, deleteProductor, getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import HomeButton from "../components/HomeButton";
 import { confirmDialog, notify } from "../utils/alerts";
@@ -226,6 +226,25 @@ const ProductoresList = () => {
     }
   };
 
+  const onDesactivar = async (productor) => {
+    const nombre = productor?.nombreCompleto || productor?.nombre || productor?.ipt || "este productor";
+    const ok = await confirmDialog({
+      title: "Desactivar productor",
+      text: `El productor ${nombre} quedará inactivo, pero no se borrará de la base de datos.`,
+      icon: "warning",
+      confirmButtonText: "Desactivar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok) return;
+    try {
+      await deleteProductor(productor.id);
+      await notify({ title: "Productor desactivado", icon: "success" });
+      load();
+    } catch {
+      await notify({ title: "Error", text: "No se pudo desactivar el productor", icon: "error" });
+    }
+  };
+
   const onVer = (id) => { navigate(`/productores/${id}`); };
   const onEditar = (id) => { navigate(`/productores/${id}/editar`); };
 
@@ -321,11 +340,28 @@ const ProductoresList = () => {
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.estado || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
-                    <div className="actions-col" style={{ display:'grid', gridTemplateColumns:'auto auto', gap:8, justifyItems:'center', alignItems:'center' }}>
-                      <button className="btn btn-compact" onClick={() => onVer(p.id)}>Ver</button>
-                      <button className="btn btn-compact" onClick={() => onEditar(p.id)}>Editar</button>
-                      <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)}>Reset contraseña</button>
-                      <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)}>Re-empadronado</button>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, minmax(120px, 1fr))',
+                        gap: 8,
+                        justifyItems: 'stretch',
+                        alignItems: 'center',
+                        maxWidth: 300,
+                        margin: '0 auto'
+                      }}
+                    >
+                      <button className="btn btn-compact" onClick={() => onVer(p.id)} style={{ minWidth: 0 }}>Ver</button>
+                      <button className="btn btn-compact" onClick={() => onEditar(p.id)} style={{ minWidth: 0 }}>Editar</button>
+                      <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)} style={{ minWidth: 0 }}>Reset contraseña</button>
+                      <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)} style={{ minWidth: 0 }}>Re-empadronar</button>
+                      <button
+                        className="btn btn-danger btn-compact"
+                        onClick={() => onDesactivar(p)}
+                        style={{ gridColumn: '1 / -1', minWidth: 0 }}
+                      >
+                        Desactivar
+                      </button>
                     </div>
                   </td>
                 </tr>

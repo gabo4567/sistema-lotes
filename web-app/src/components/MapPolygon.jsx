@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 
+const DEFAULT_GOYA_CENTER = { lat: -29.13333, lng: -59.26667 };
+
 const MapPolygon = ({ points = [] }) => {
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const containerRef = useRef(null);
@@ -37,8 +39,8 @@ const MapPolygon = ({ points = [] }) => {
   useEffect(() => {
     if (!ready || !containerRef.current || !window.google || !window.google.maps) return;
     const valid = Array.isArray(points) && points.length >= 1;
-    const center = valid ? { lat: points[0].lat, lng: points[0].lng } : { lat: -29.18, lng: -59.26 };
-    const map = new window.google.maps.Map(containerRef.current, { center, zoom: 15, mapTypeId: "terrain", streetViewControl: false });
+    const center = valid ? { lat: points[0].lat, lng: points[0].lng } : DEFAULT_GOYA_CENTER;
+    const map = new window.google.maps.Map(containerRef.current, { center, zoom: valid ? 15 : 13, mapTypeId: "roadmap", streetViewControl: false });
     let polygon = null;
     if (Array.isArray(points) && points.length >= 3) {
       polygon = new window.google.maps.Polygon({ paths: points, strokeColor: "#1d4ed8", strokeWeight: 2, fillColor: "#93c5fd", fillOpacity: 0.6 });

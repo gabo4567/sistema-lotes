@@ -10,6 +10,11 @@ export const getUser = async (uid) => {
   return res.data;
 };
 
+export const createUser = async (data) => {
+  const res = await api.post("/users", data);
+  return res.data;
+};
+
 export const updateUser = async (uid, data) => {
   const res = await api.patch(`/users/${uid}`, data);
   return res.data;

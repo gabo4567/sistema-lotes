@@ -249,6 +249,30 @@ const LotesList = () => {
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
   const handleExportExcel = async () => {
+    if (filteredAndSortedLotes.length === 0) {
+      await Swal.fire({
+        title: "Sin lotes para exportar",
+        text: "No hay lotes cargados o no hay resultados con los filtros actuales.",
+        icon: "info",
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#2E7D32",
+      });
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "Exportar Excel",
+      text: `Se exportaran ${filteredAndSortedLotes.length} lote(s) segun los filtros actuales. Desea continuar?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Exportar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#2E7D32",
+      cancelButtonColor: "#6b7280",
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       // Importar xlsx dinámicamente
       const XLSXModule = await import("xlsx");
@@ -320,7 +344,7 @@ const LotesList = () => {
         <h2 style={{ margin: 0 }}>Gestión de Lotes</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Link to="/lotes/mapa" className="btn">Mapa general</Link>
-          <button className="btn" onClick={handleExportExcel} disabled={filteredAndSortedLotes.length === 0}>Exportar Excel</button>
+          <button className="btn" onClick={handleExportExcel}>Exportar Excel</button>
           <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
         </div>
       </div>

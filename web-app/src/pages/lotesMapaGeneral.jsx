@@ -108,11 +108,11 @@ const LotesMapaGeneral = () => {
     try {
       setMapInitError("");
       const mapsApi = window.google.maps;
-      const fallbackCenter = { lat: -29.18, lng: -59.26 };
+      const fallbackCenter = { lat: -29.13333, lng: -59.26667 };
       const map = new mapsApi.Map(mapElRef.current, {
         center: fallbackCenter,
         zoom: 12,
-        mapTypeId: "terrain",
+        mapTypeId: "roadmap",
         fullscreenControl: true,
         mapTypeControl: true,
         mapTypeControlOptions: {

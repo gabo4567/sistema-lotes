@@ -7,9 +7,24 @@ import Swal from "sweetalert2";
 const METERS_PER_DEGREE_LAT = 111320;
 
 const toFiniteNumber = (value) => {
+  if (value === "" || value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const LoteField = ({ label, hint, wide = false, children }) => (
+  <label className={`producer-field lote-field ${wide ? "lote-field--wide" : ""}`}>
+    <span className="producer-field__label">{label}</span>
+    {children}
+    {hint ? <span className="lote-field__hint">{hint}</span> : null}
+  </label>
+);
+
+const ReadOnlyValue = ({ value, multiline = false }) => (
+  <div className={`producer-field__value lote-readonly-value ${multiline ? "lote-readonly-value--multiline" : ""}`}>
+    {value || "Se completara al dibujar el poligono."}
+  </div>
+);
 
 const calculatePolygonAreaHa = (polygon) => {
   if (!Array.isArray(polygon) || polygon.length < 3) return null;
@@ -73,9 +88,9 @@ const LoteAdminForm = () => {
 
   const accionLabel = (accion) => {
     const a = String(accion || "").toLowerCase().trim();
-    if (a === "crear") return "Creó el lote";
-    if (a === "actualizar") return "Actualizó el lote";
-    if (a === "eliminar") return "Eliminó el lote";
+    if (a === "crear") return "Cre\u00f3 el lote";
+    if (a === "actualizar") return "Actualiz\u00f3 el lote";
+    if (a === "eliminar") return "Elimin\u00f3 el lote";
     return accion || "-";
   };
 
@@ -106,7 +121,7 @@ const LoteAdminForm = () => {
                 <div style="font-weight:700; margin-bottom:6px;">Campo: ${esc(k)}</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                   <div><div style="color:#64748b; font-size:12px;">Antes</div><div style="white-space:pre-wrap;">${esc(typeof antes === "object" ? JSON.stringify(antes) : antes)}</div></div>
-                  <div><div style="color:#64748b; font-size:12px;">Después</div><div style="white-space:pre-wrap;">${esc(typeof despues === "object" ? JSON.stringify(despues) : despues)}</div></div>
+                  <div><div style="color:#64748b; font-size:12px;">Despu\u00e9s</div><div style="white-space:pre-wrap;">${esc(typeof despues === "object" ? JSON.stringify(despues) : despues)}</div></div>
                 </div>
               </div>
             `;
@@ -119,7 +134,7 @@ const LoteAdminForm = () => {
   const openHistorial = async (loteId) => {
     await Swal.fire({
       title: "Historial del lote",
-      html: "<div style='padding:8px 0'>Cargando historial…</div>",
+      html: "<div style='padding:8px 0'>Cargando historial...</div>",
       confirmButtonText: "Cerrar",
       confirmButtonColor: "#2E7D32",
       width: 800,
@@ -208,7 +223,7 @@ const LoteAdminForm = () => {
     return String(t).split(/\n+/).map(line=>line.trim()).filter(Boolean).map(line=>{
       const [latStr, lngStr] = line.split(/[,\s]+/);
       const lat = Number(latStr), lng = Number(lngStr);
-      if (!isFinite(lat) || !isFinite(lng)) throw new Error("Formato de polígono inválido");
+      if (!isFinite(lat) || !isFinite(lng)) throw new Error("Formato de pol\u00edgono inv\u00e1lido");
       return { lat, lng };
     });
   };
@@ -221,9 +236,9 @@ const LoteAdminForm = () => {
     setForm((current) => ({
       ...current,
       poligonoText: points.map((point) => `${point.lat},${point.lng}`).join("\n"),
-      superficie: current.superficie || areaHa == null ? current.superficie : areaHa.toFixed(2),
-      ubicacionLat: current.ubicacionLat || centroid == null ? current.ubicacionLat : String(centroid.lat),
-      ubicacionLng: current.ubicacionLng || centroid == null ? current.ubicacionLng : String(centroid.lng),
+      superficie: areaHa == null ? "" : areaHa.toFixed(2),
+      ubicacionLat: centroid == null ? "" : String(centroid.lat),
+      ubicacionLng: centroid == null ? "" : String(centroid.lng),
     }));
   };
 
@@ -233,21 +248,26 @@ const LoteAdminForm = () => {
     return lat != null && lng != null ? { lat, lng } : undefined;
   })();
 
+  const ubicacionTexto = form.ubicacionLat && form.ubicacionLng
+    ? `Latitud: ${form.ubicacionLat}\nLongitud: ${form.ubicacionLng}`
+    : "";
+
+  const superficieTexto = form.superficie ? `${form.superficie} ha` : "";
+
   const onSubmit = async (e) => {
     e.preventDefault(); setError(""); setLoading(true);
     try {
       const poligono = (poly && poly.length >= 3) ? poly : parsePoligono(form.poligonoText);
+      if (!Array.isArray(poligono) || poligono.length < 3) throw new Error("Dibuje el poligono del lote antes de guardar");
       if (!String(form.ipt || "").trim()) throw new Error("El IPT es obligatorio");
 
       const centroid = getPolygonCentroid(poligono);
       const superficieCalculada = calculatePolygonAreaHa(poligono);
-      const ubicacionLat = toFiniteNumber(form.ubicacionLat);
-      const ubicacionLng = toFiniteNumber(form.ubicacionLng);
       const payload = {
         nombre: form.nombre || "",
         ipt: String(form.ipt).trim(),
-        superficie: form.superficie ? Number(form.superficie) : superficieCalculada,
-        ubicacion: (ubicacionLat != null && ubicacionLng != null) ? { lat: ubicacionLat, lng: ubicacionLng } : centroid,
+        superficie: superficieCalculada,
+        ubicacion: centroid,
         poligono,
         metodoMarcado: form.metodoMarcado,
         observacionesTecnico: form.observacionesTecnico || "",
@@ -264,32 +284,31 @@ const LoteAdminForm = () => {
   };
 
   return (
-      <div className="section-card prod-form page-container">
+    <div className="section-card prod-form page-container">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h2 className="users-title" style={{ margin: 0 }}>{isEdit ? 'Editar lote' : 'Nuevo lote'}</h2>
+        <h2 className="users-title" style={{ margin: 0 }}>{isEdit ? "Editar lote" : "Nuevo lote"}</h2>
         {isEdit ? (
           <button type="button" className="btn secondary" onClick={() => openHistorial(id)}>Ver historial</button>
         ) : null}
       </div>
       {isEdit && ultimaMod?.usuarioId ? (
         <div style={{ marginTop: 8, marginBottom: 12, color: "#475569", fontSize: 14 }}>
-          Última modificación: {ultimaMod.usuarioNombre || ultimaMod.usuarioId} · {formatFecha(ultimaMod.fecha)}
+          {"\u00daltima modificaci\u00f3n"}: {ultimaMod.usuarioNombre || ultimaMod.usuarioId} - {formatFecha(ultimaMod.fecha)}
         </div>
       ) : null}
-      <form onSubmit={onSubmit} className="form-grid">
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Nombre del lote</label>
+
+      <form onSubmit={onSubmit} className="form-grid lote-form">
+        <LoteField label="Nombre del lote">
           <input className="input-inst" placeholder="Ej: Lote del Sur" value={form.nombre} onChange={e=>onChange('nombre', e.target.value)} />
-        </div>
+        </LoteField>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>IPT del productor</label>
+        <LoteField label="IPT del productor">
           <input className="input-inst" placeholder="Ej: 654321" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
-        </div>
+        </LoteField>
 
-        <div className="map-card" style={{ gridColumn: "1 / -1" }}>
+        <div className="map-card lote-map-card" style={{ gridColumn: "1 / -1" }}>
           <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-            <div style={{ fontWeight: 800, color: "#111827" }}>Polígono del lote</div>
+            <div className="producer-field__label">{"Pol\u00edgono del lote"}</div>
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <div style={{ width: "100%", maxWidth: 900 }}>
@@ -297,48 +316,47 @@ const LoteAdminForm = () => {
             </div>
           </div>
           {!hasApiKey && (
-            <div style={{ marginTop: 6, color: '#6b7280' }}>Sin API key: usá el campo de texto para cargar el polígono (lat,lng por línea)</div>
+            <div className="lote-field__hint" style={{ marginTop: 6 }}>{"Sin API key: usa el campo de texto para cargar el pol\u00edgono (lat,lng por l\u00ednea)"}</div>
           )}
         </div>
 
-        <div style={{ gridColumn: "1 / -1", display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Coordenadas del polígono (una por línea: lat,lng)</label>
-          <textarea className="input-inst" rows={6} value={form.poligonoText} onChange={e=>onChange('poligonoText', e.target.value)} placeholder="Ej:\n-29.1537,-59.2526\n-29.1529,-59.2518\n-29.1530,-59.2513" />
-          <div style={{ color: "#64748b", fontSize: 13 }}>Estas coordenadas definen la forma del lote.</div>
-        </div>
+        <LoteField
+          label={"Coordenadas del pol\u00edgono"}
+          hint={"Se generan automaticamente cuando el administrador dibuja el poligono en el mapa."}
+          wide
+        >
+          <ReadOnlyValue value={form.poligonoText} multiline />
+        </LoteField>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Superficie (hectáreas)</label>
-          <input className="input-inst" placeholder="Ej: 12.50" value={form.superficie} onChange={e=>onChange('superficie', e.target.value)} />
-          <div style={{ color: "#64748b", fontSize: 13 }}>Si se deja vacío, se calcula automáticamente a partir del polígono.</div>
-        </div>
+        <LoteField
+          label={"Superficie (hect\u00e1reas)"}
+          hint={"Se calcula automaticamente a partir del poligono."}
+        >
+          <ReadOnlyValue value={superficieTexto} />
+        </LoteField>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Ubicación (latitud y longitud)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <input className="input-inst" placeholder="Latitud" value={form.ubicacionLat} onChange={e=>onChange('ubicacionLat', e.target.value)} />
-            <input className="input-inst" placeholder="Longitud" value={form.ubicacionLng} onChange={e=>onChange('ubicacionLng', e.target.value)} />
-          </div>
-          <div style={{ color: "#64748b", fontSize: 13 }}>Punto de referencia del lote. Si se deja vacío, se calcula automáticamente.</div>
-        </div>
+        <LoteField
+          label={"Ubicaci\u00f3n"}
+          hint={"Punto de referencia calculado automaticamente desde el poligono."}
+        >
+          <ReadOnlyValue value={ubicacionTexto} multiline />
+        </LoteField>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Observaciones del administrador</label>
+        <LoteField label="Observaciones del administrador">
           <textarea className="input-inst" placeholder="Observaciones del administrador" value={form.observacionesTecnico} onChange={e=>onChange('observacionesTecnico', e.target.value)} />
-        </div>
+        </LoteField>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Método</label>
-          <input className="input-inst" value="Aéreo" readOnly style={{ backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }} />
-        </div>
+        <LoteField label={"M\u00e9todo"}>
+          <ReadOnlyValue value={"A\u00e9reo"} />
+        </LoteField>
 
         {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/lotes')}>Cancelar</button>
-          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando…' : 'Guardar'}</button>
+          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
         </div>
       </form>
-      </div>
+    </div>
   );
 };
 

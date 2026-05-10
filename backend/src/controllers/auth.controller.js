@@ -10,6 +10,27 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
 
+const normalizeIngresoMetadata = (body = {}) => {
+  const plataforma = String(body.plataforma || "").trim().toLowerCase();
+  const appVersion = String(body.appVersion || "").trim();
+  const evento = String(body.evento || "").trim().toLowerCase();
+
+  return {
+    plataforma: plataforma || "desconocida",
+    appVersion: appVersion || "desconocida",
+    evento: evento || "login",
+  };
+};
+
+const registrarIngresoProductor = async ({ ipt, productorId, metadata = {} }) => {
+  await db.collection("ingresosProductor").add({
+    ipt: String(ipt),
+    productorId,
+    fecha: new Date(),
+    ...normalizeIngresoMetadata(metadata),
+  });
+};
+
 const normalizeRole = (role) => {
   const v = String(role || "")
     .toLowerCase()
@@ -233,17 +254,6 @@ export const registerProductor = async (req, res) => {
       }
     }
 
-    // Crear o actualizar el registro en la colección de 'users' para que aparezca en la lista
-    await db.collection("users").doc(authUid).set({
-      email: email || "",
-      nombre: nombreCompleto,
-      role: "Productor",
-      ipt: String(ipt),
-      activo: true,
-      ultimoAcceso: null,
-      updatedAt: new Date(),
-    }, { merge: true });
-
     // Asignar claims útiles para posteriores autorizaciones
     await admin.auth().setCustomUserClaims(authUid, {
       role: "productor",
@@ -310,9 +320,10 @@ export const loginUser = async (req, res) => {
     const { uid, email: firebaseEmail } = decodedToken;
     const emailNormalized = normalizeEmail(firebaseEmail);
 
-    // 2. Buscar el rol del usuario en Firestore (por UID primero, luego por email)
-    let role = "Administrador";
+    // 2. El panel web solo permite administradores registrados en Firestore/users.
+    let role = "";
     let resolvedUid = uid;
+    let resolvedUserData = null;
 
     const userDoc = await db.collection("users").doc(uid).get();
     if (userDoc.exists) {
@@ -320,6 +331,7 @@ export const loginUser = async (req, res) => {
       if (data.activo === false) {
         return res.status(403).json({ error: "Usuario inactivo" });
       }
+      resolvedUserData = data;
       role = normalizeRole(data.role) || "Administrador";
     } else if (emailNormalized) {
       // Fallback: buscar por email (usuarios registrados antes de indexar por UID)
@@ -329,13 +341,20 @@ export const loginUser = async (req, res) => {
         if (data.activo === false) {
           return res.status(403).json({ error: "Usuario inactivo" });
         }
+        resolvedUserData = data;
         role = normalizeRole(data.role) || "Administrador";
         resolvedUid = snap.docs[0].id;
       }
     }
 
+    if (!resolvedUserData) {
+      return res.status(403).json({ error: "Usuario administrador no registrado" });
+    }
+
+    const looksLikeProductor = Boolean(resolvedUserData.ipt) || String(resolvedUid || "").startsWith("prod_");
+
     // 3. Los productores usan la app móvil — no el panel web
-    if (normalizeRole(role) === "Productor") {
+    if (looksLikeProductor || normalizeRole(role) === "Productor") {
       return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
     }
 
@@ -415,23 +434,9 @@ export const loginProductor = async (req, res) => {
       ultimoIngreso: new Date()
     });
     try {
-      await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
+      await registrarIngresoProductor({ ipt, productorId: doc.id, metadata: req.body });
     } catch (e) {
       logServerError("No se pudo registrar ingresoProductor", e);
-    }
-
-    try {
-      await db.collection("users").doc(uid).set({
-        email: (data.email ? String(data.email).toLowerCase() : ""),
-        nombre: data.nombreCompleto || data.nombre || "",
-        role: "Productor",
-        ipt: String(ipt),
-        activo: data.activo !== false,
-        ultimoAcceso: new Date(),
-        updatedAt: new Date(),
-      }, { merge: true });
-    } catch (e) {
-      logServerError("No se pudo actualizar users.ultimoAcceso para productor", e);
     }
 
     return res.json({ token, requiereCambioContrasena: requiereCambio });
@@ -490,20 +495,7 @@ export const cambiarPasswordProductor = async (req, res) => {
       productorId: doc.id
     });
     try {
-      await db.collection("users").doc(uid).set({
-        email: (data.email ? String(data.email).toLowerCase() : ""),
-        nombre: data.nombreCompleto || data.nombre || "",
-        role: "Productor",
-        ipt: String(ipt),
-        estado: data.activo === false ? "Inactivo" : "Activo",
-        ultimoAcceso: new Date(),
-        updatedAt: new Date(),
-      }, { merge: true });
-    } catch (e) {
-      logServerError("No se pudo actualizar users.ultimoAcceso luego de cambio de contraseÃ±a", e);
-    }
-    try {
-      await db.collection("ingresosProductor").add({ ipt: String(ipt), productorId: doc.id, fecha: new Date() });
+      await registrarIngresoProductor({ ipt, productorId: doc.id, metadata: req.body });
     } catch (e) {
       logServerError("No se pudo registrar ingresoProductor luego de cambio de contraseÃ±a", e);
     }

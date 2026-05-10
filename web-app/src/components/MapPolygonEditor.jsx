@@ -1,6 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 
+const DEFAULT_GOYA_CENTER = { lat: -29.13333, lng: -59.26667 };
+
+const isValidLatLng = (value) => (
+  value &&
+  Number.isFinite(Number(value.lat)) &&
+  Number.isFinite(Number(value.lng)) &&
+  Number(value.lat) >= -90 &&
+  Number(value.lat) <= 90 &&
+  Number(value.lng) >= -180 &&
+  Number(value.lng) <= 180
+);
+
 const MapPolygonEditor = ({ points = [], onChange, center }) => {
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const containerRef = useRef(null);
@@ -37,8 +49,24 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
     if (!ready || !containerRef.current || !window.google || !window.google.maps || !window.google.maps.drawing) return;
 
     const initial = Array.isArray(points) && points.length ? points : null;
-    const c = center || (initial ? { lat: initial[0].lat, lng: initial[0].lng } : { lat: -29.18, lng: -59.26 });
-    const map = new window.google.maps.Map(containerRef.current, { center: c, zoom: 15, mapTypeId: "terrain", streetViewControl: false });
+    const c = isValidLatLng(center)
+      ? { lat: Number(center.lat), lng: Number(center.lng) }
+      : initial
+        ? { lat: Number(initial[0].lat), lng: Number(initial[0].lng) }
+        : DEFAULT_GOYA_CENTER;
+    const map = new window.google.maps.Map(containerRef.current, {
+      center: c,
+      zoom: initial ? 15 : 13,
+      mapTypeId: "roadmap",
+      fullscreenControl: true,
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        position: window.google.maps.ControlPosition.TOP_LEFT,
+        style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+        mapTypeIds: ["roadmap", "terrain", "satellite", "hybrid"],
+      },
+      streetViewControl: false,
+    });
     let polygon = null;
     let polygonListeners = [];
 

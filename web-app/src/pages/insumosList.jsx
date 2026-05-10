@@ -13,12 +13,12 @@ const InsumosList = () => {
   const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'', descripcion:'', estado:'disponible' })
   const [productores, setProductores] = useState([])
   const [asignar, setAsignar] = useState({ productorId:'', cantidadAsignada:'' })
+  const [assignError, setAssignError] = useState('')
   const [iptSearch, setIptSearch] = useState('')
   const [selectedProd, setSelectedProd] = useState('')
   const [asignacionesProd, setAsignacionesProd] = useState([])
   const [loadingAsign, setLoadingAsign] = useState(false)
   const [insumoNames, setInsumoNames] = useState({})
-  const [allInsumos, setAllInsumos] = useState([]) // Para el modal de cambio de tipo
   const [filterActivo, setFilterActivo] = useState('activos')
   const [producerSearchTerm, setProducerSearchTerm] = useState('')
   const [showProducerResults, setShowProducerResults] = useState(false)
@@ -43,7 +43,6 @@ const InsumosList = () => {
       const data = await insumosService.getInsumos()
       setItems(Array.isArray(data)? data: [])
       setInsumoNames(Array.isArray(data) ? Object.fromEntries(data.map(i=>[i.id, i.nombre])) : {})
-      setAllInsumos(Array.isArray(data)? data: []) // Guardar todos los insumos para el selector
       setError('')
     } catch (e) {
       console.error(e)
@@ -101,6 +100,7 @@ const InsumosList = () => {
   const openAssign = async (insumo)=>{
     try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null }
     setAsignar({ productorId:'', cantidadAsignada:'' })
+    setAssignError('')
     setModal({ type:'assign', insumo })
   }
 
@@ -119,8 +119,19 @@ const InsumosList = () => {
     catch(e){ setError(e?.response?.data?.error||'Error al eliminar insumo') }
   }
   const onSubmitAssign = async ()=>{
-    try{ const pid = asignar.productorId; const cant = Number(asignar.cantidadAsignada||0); await insumosService.asignarAProductor(modal.insumo.id, { productorId: pid, cantidadAsignada: cant }); setModal(null); load(); }
-    catch(e){ setError(e?.response?.data?.error||'Error al asignar insumo') }
+    const pid = asignar.productorId;
+    const rawCantidad = String(asignar.cantidadAsignada ?? '').trim();
+    const cant = Number(rawCantidad);
+    if (!pid) {
+      setAssignError('Seleccione un productor.');
+      return;
+    }
+    if (!rawCantidad || !Number.isFinite(cant) || cant <= 0) {
+      setAssignError('Ingrese una cantidad a asignar mayor a 0.');
+      return;
+    }
+    try{ await insumosService.asignarAProductor(modal.insumo.id, { productorId: pid, cantidadAsignada: cant }); setAssignError(''); setModal(null); load(); }
+    catch(e){ setAssignError(e?.response?.data?.error||'Error al asignar insumo') }
   }
 
   const onQuickAdjust = async (asig, delta)=>{
@@ -502,7 +513,6 @@ const InsumosList = () => {
                             <button className="btn-icon" title="Disminuir" onClick={()=>onQuickAdjust(a, -1)} style={{ ...miniBtnStyle }}>-1</button>
                             <button className="btn-compact" onClick={()=>setModal({ type:'assign-edit', asign: a })} style={{ ...actionBtnStyle }}>Cantidad</button>
                             <button className="btn-compact" onClick={()=>setModal({ type:'assign-desc', asign: a })} style={{ ...actionBtnStyle }}>Nota</button>
-                            <button className="btn-compact" onClick={()=>setModal({ type:'assign-change-type', asign: a, newInsumoId: a.insumoId })} style={{ ...actionBtnStyle }}>Tipo</button>
                           </div>
                         </td>
                       </tr>
@@ -568,14 +578,19 @@ const InsumosList = () => {
                 <h3 style={{ marginTop:0 }}>Asignar a productor</h3>
                 <div className="filters-row" style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
                   <input className="input-inst" placeholder="Buscar por IPT" value={iptSearch} onChange={e=>setIptSearch(e.target.value)} />
-                  <select className="select-inst" value={asignar.productorId} onChange={e=>setAsignar({ ...asignar, productorId:e.target.value })}>
+                  <select className="select-inst" value={asignar.productorId} onChange={e=>{ setAsignar({ ...asignar, productorId:e.target.value }); setAssignError('') }}>
                     <option value="">Seleccione productor</option>
                     {productores.filter(p=> iptSearch ? String(p.ipt||'').includes(String(iptSearch)) : true).map(p=> (
                       <option key={p.id} value={p.id}>{p.nombreCompleto || p.ipt || p.id} {p.ipt ? `· ${p.ipt}`:''}</option>
                     ))}
                   </select>
                 </div>
-                <input className="input-inst" placeholder={`Cantidad a asignar (${modal?.insumo?.unidad || 'bolsas'})`} value={asignar.cantidadAsignada} onChange={e=>setAsignar({ ...asignar, cantidadAsignada:e.target.value })} />
+                <input className="input-inst" placeholder={`Cantidad a asignar (${modal?.insumo?.unidad || 'bolsas'})`} value={asignar.cantidadAsignada} onChange={e=>{ setAsignar({ ...asignar, cantidadAsignada:e.target.value }); setAssignError('') }} />
+                {assignError ? (
+                  <div style={{ marginTop: 6, color: '#b91c1c', fontSize: 13, fontWeight: 700 }}>
+                    {assignError}
+                  </div>
+                ) : null}
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={onSubmitAssign}>Asignar</button>
@@ -600,33 +615,6 @@ const InsumosList = () => {
                 <div className="form-actions" style={{ marginTop:8 }}>
                   <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
                   <button style={buttonStyle} onClick={async()=>{ try{ await insumosService.updateAsignacion(modal.asign.id, { descripcion: modal.asign.descripcionEdit }); setModal(null); load(); if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) } } catch(e){ setError(e?.response?.data?.error||'Error al agregar descripción') } }}>Guardar</button>
-                </div>
-              </div>
-            )}
-            {modal.type==='assign-change-type' && (
-              <div>
-                <h3 style={{ marginTop:0 }}>Modificar tipo de insumo asignado</h3>
-                <div style={{ marginBottom: 8 }}>Insumo actual: {insumoNames[modal.asign.insumoId] || '-'}</div>
-                <select className="select-inst" value={modal.newInsumoId} onChange={e=>setModal(m=>({ ...m, newInsumoId: e.target.value }))}>
-                  <option value="">Seleccione nuevo insumo</option>
-                  {allInsumos.map(i=> (
-                    <option key={i.id} value={i.id}>{i.nombre}</option>
-                  ))}
-                </select>
-                <div className="form-actions" style={{ marginTop:8 }}>
-                  <button style={{ ...buttonStyle, marginRight:8 }} onClick={()=>setModal(null)}>Cancelar</button>
-                  <button style={buttonStyle} onClick={async()=>{
-                    try{
-                      if (!modal.newInsumoId) { notify({ title: 'Debe seleccionar un nuevo insumo', icon: 'error' }); return }
-                      await insumosService.updateAsignacionTipo(modal.asign.id, modal.newInsumoId);
-                      setModal(null);
-                      load();
-                      if (selectedProd) { const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }
-                      notify({ title: 'Tipo de insumo actualizado', icon: 'success' });
-                    } catch(e){
-                      notify({ title: e?.response?.data?.error||'Error al modificar tipo de insumo', icon: 'error' })
-                    }
-                  }}>Guardar</button>
                 </div>
               </div>
             )}

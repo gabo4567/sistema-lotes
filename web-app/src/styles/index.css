@@ -557,9 +557,33 @@ body {
 .section-card{ background:#fff; border:1px solid var(--inst-border); border-radius:12px; padding:16px; box-shadow:0 8px 18px rgba(46,125,50,0.06); }
 .prod-list{ }
 .prod-form{ }
-.form-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+.form-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:14px; }
 @media (max-width: 700px){ .form-grid{ grid-template-columns: 1fr; } }
 .checkbox-inst{ display:flex; align-items:center; gap:8px; }
+.producer-field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.producer-field__label{ font-size:12px; font-weight:800; color:#64748b; letter-spacing:.02em; text-transform:uppercase; }
+.producer-field__value{ min-height:44px; display:flex; align-items:center; color:#0f172a; font-size:16px; font-weight:650; line-height:1.35; background:#f8fafc; border:1px solid #d9eadc; border-radius:10px; padding:10px 12px; overflow-wrap:anywhere; }
+.producer-field .input-inst,
+.producer-field .select-inst{ width:100%; min-width:0; box-sizing:border-box; min-height:44px; font-size:16px; padding:9px 12px; border-radius:10px; }
+.producer-detail-grid{ display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:14px; margin-top:14px; }
+.producer-detail-grid .producer-field--wide{ grid-column: span 2; }
+@media (max-width: 1200px){ .producer-detail-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px){ .producer-detail-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px){ .producer-detail-grid{ grid-template-columns: 1fr; } .producer-detail-grid .producer-field--wide{ grid-column: auto; } }
+.producer-section-title{ color:var(--inst-green-dark); font-size:22px; font-weight:900; margin:24px 0 12px; }
+.producer-checkbox-card{ min-height:44px; display:flex; align-items:center; gap:10px; border:1px solid #d9eadc; border-radius:10px; padding:10px 12px; background:#f8fafc; color:#0f172a; font-weight:700; }
+.lote-form{ margin-top:18px; }
+.lote-form .input-inst{ width:100%; min-width:0; box-sizing:border-box; min-height:46px; font-size:16px; padding:10px 12px; border-radius:10px; border:1px solid #d9eadc; background:#fff; color:#0f172a; }
+.lote-form textarea.input-inst{ min-height:112px; line-height:1.45; resize:vertical; }
+.lote-form .input-inst::placeholder{ color:#94a3b8; font-size:15px; }
+.lote-form .input-inst:focus{ outline:none; border-color:#81c784; box-shadow:0 0 0 3px rgba(46,125,50,0.12); }
+.lote-field--wide{ grid-column:1 / -1; }
+.lote-field__hint{ color:#64748b; font-size:13px; line-height:1.35; }
+.lote-coordinate-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.lote-map-card{ border-color:#d9eadc; border-radius:12px; background:#fbfdfb; }
+.lote-readonly-value{ align-items:flex-start; white-space:pre-wrap; font-weight:650; background:#f8fafc; color:#334155; cursor:default; }
+.lote-readonly-value--multiline{ min-height:84px; }
+@media (max-width: 640px){ .lote-coordinate-grid{ grid-template-columns:1fr; } }
 .form-actions{ grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:10px; }
 .prod-list .table-inst{ table-layout: fixed; }
 .prod-list .table-inst thead th{ text-align: center; }
