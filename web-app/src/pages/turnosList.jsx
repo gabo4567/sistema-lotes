@@ -1622,6 +1622,21 @@ return (
       </div>
     </div>
 
+    {viewMode === 'historial' && filtros.temporada !== 'todas' ? (
+      <div
+        className="users-title"
+        style={{
+          margin: '-8px 0 16px 0',
+          fontSize: 22,
+          fontWeight: 900,
+          color: '#14532d',
+          textAlign: 'left',
+        }}
+      >
+        Temporada {filtros.temporada}
+      </div>
+    ) : null}
+
     {isHoyFilterActive ? (
       <div className="users-title" style={{ margin: '0 0 12px 0', fontSize: 19, fontWeight: 800, textAlign: 'left' }}>
         Turnos del día de hoy
