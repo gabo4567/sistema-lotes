@@ -142,7 +142,7 @@ const [turnos, setTurnos] = useState([])
 const [prodMap, setProdMap] = useState(new Map())
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState('')
-const [viewMode, setViewMode] = useState('activos') // 'activos', 'historial', 'todos'
+const [viewMode, setViewMode] = useState('activos') // 'activos', 'historial'
 const [viewStyle, setViewStyle] = useState('cards') // 'cards' | 'agenda'
 const [updatingId, setUpdatingId] = useState(null)
 const [expandedId, setExpandedId] = useState(null)
@@ -186,7 +186,7 @@ const loadData = useCallback(async ({ showLoading = true } = {}) => {
   if (showLoading) setLoading(true)
   setError('')
   try {
-    const activoParam = viewMode === 'activos' ? true : (viewMode === 'historial' ? false : null)
+    const activoParam = viewMode === 'activos'
     const ts = await getTurnos(activoParam, {
       fechaDesde: filtros.desde || undefined,
       fechaHasta: filtros.hasta || undefined,
@@ -236,9 +236,7 @@ useEffect(() => {
   const base = collection(db, 'turnos')
   const qRef = viewMode === 'activos'
     ? query(base, where('activo', '==', true))
-    : (viewMode === 'historial'
-      ? query(base, where('activo', '==', false))
-      : base)
+    : query(base, where('activo', '==', false))
 
   const unsub = onSnapshot(
     qRef,
@@ -980,11 +978,6 @@ return (
           onClick={() => setViewMode('historial')}
           style={{ padding: '6px 12px', fontSize: 15 }}
         >Historial</button>
-        <button 
-          className={`btn turnos-toggle-btn ${viewMode === 'todos' ? 'turnos-toggle-btn--active' : ''}`} 
-          onClick={() => setViewMode('todos')}
-          style={{ padding: '6px 12px', fontSize: 15 }}
-        >Todos</button>
       </div>
     </div>
 
@@ -1604,12 +1597,13 @@ return (
                 <table className="turnos-agenda__table">
                   <thead>
                     <tr>
+                      <th style={{ width: 120 }}>Fecha</th>
                       <th style={{ width: 90 }}>Hora</th>
-                      <th style={{ width: 280 }}>Productor</th>
-                      <th style={{ width: 120 }}>IPT</th>
-                      <th style={{ width: 180 }}>Tipo</th>
-                      <th style={{ width: 140 }}>Estado</th>
-                      <th style={{ width: 320 }}>Acciones</th>
+                      <th style={{ width: 260 }}>Productor</th>
+                      <th style={{ width: 110 }}>IPT</th>
+                      <th style={{ width: 170 }}>Tipo</th>
+                      <th style={{ width: 130 }}>Estado</th>
+                      <th style={{ width: 300 }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1627,6 +1621,7 @@ return (
                             onClick={allowExpand ? () => toggleExpand(t.id) : undefined}
                             style={{ opacity: t.activo === false ? 0.7 : 1 }}
                           >
+                            <td className="turnos-agenda__cell">{formatDate(t.fechaTurno || t.fecha)}</td>
                             <td className="turnos-agenda__cell">{formatTime(t.fechaTurno || t.fecha)}</td>
                             <td className="turnos-agenda__cell">{productorNombre}</td>
                             <td className="turnos-agenda__cell">{ipt}</td>
@@ -1685,7 +1680,7 @@ return (
                           </tr>
                           {allowExpand && isExpanded && (
                             <tr className="turnos-agenda__detail">
-                              <td colSpan={6}>
+                              <td colSpan={7}>
                                 <div className="turnos-detail">
                                   <div><strong>Fecha:</strong> {formatDate(t.fechaTurno || t.fecha)} {formatTime(t.fechaTurno || t.fecha)}</div>
                                   <div><strong>Motivo:</strong> {formatMotivo(t.motivo)}</div>

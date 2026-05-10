@@ -538,7 +538,7 @@ body {
 .turnos-detail{ margin-top: 10px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 12px; color: #0f172a; display: grid; gap: 6px; }
 
 .turnos-agenda__wrap{ overflow-x: auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; }
-.turnos-agenda__table{ width: 100%; border-collapse: collapse; min-width: 980px; table-layout: fixed; }
+.turnos-agenda__table{ width: 100%; border-collapse: collapse; min-width: 1180px; table-layout: fixed; }
 .turnos-agenda__table thead th{ text-align: center; font-size: 15px; color: #0f172a; background: #f0fdf4; padding: 12px 12px; border-bottom: 1px solid #e2e8f0; }
 .turnos-agenda__cell{ text-align: center; padding: 12px 12px; border-bottom: 1px solid #e2e8f0; color: #0f172a; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turnos-agenda__row{ cursor: pointer; }
