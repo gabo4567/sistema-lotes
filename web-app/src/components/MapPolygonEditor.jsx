@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
+import { attachGoogleMapVisualControls } from "../utils/googleMapVisualControls";
 
 const DEFAULT_GOYA_CENTER = { lat: -29.13333, lng: -59.26667 };
 
@@ -32,6 +33,7 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
   const mapRef = useRef(null);
   const drawingManagerRef = useRef(null);
   const mapToolsControlRef = useRef(null);
+  const visualControlsCleanupRef = useRef(null);
   const polygonRef = useRef(null);
   const polygonListenersRef = useRef([]);
   const onChangeRef = useRef(onChange);
@@ -227,15 +229,11 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
       zoom: initial ? 15 : 13,
       mapTypeId: "roadmap",
       fullscreenControl: true,
-      mapTypeControl: true,
-      mapTypeControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_LEFT,
-        style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-        mapTypeIds: ["roadmap", "terrain", "satellite", "hybrid"],
-      },
+      mapTypeControl: false,
       streetViewControl: false,
     });
     mapRef.current = map;
+    visualControlsCleanupRef.current = attachGoogleMapVisualControls(map, window.google.maps);
 
     const toolsControl = document.createElement("div");
     toolsControl.setAttribute("role", "toolbar");
@@ -285,6 +283,10 @@ const MapPolygonEditor = ({ points = [], onChange, center }) => {
       overlayListener.remove();
       dm.setMap(null);
       drawingManagerRef.current = null;
+      if (visualControlsCleanupRef.current) {
+        visualControlsCleanupRef.current();
+        visualControlsCleanupRef.current = null;
+      }
       if (mapToolsControlRef.current) {
         mapToolsControlRef.current.undoButton.removeEventListener("click", handleUndo);
         mapToolsControlRef.current.redoButton.removeEventListener("click", handleRedo);

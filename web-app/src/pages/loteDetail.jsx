@@ -75,7 +75,13 @@ const LoteDetail = () => {
           <div style={{ width: "100%", maxWidth: 900, margin: "0 auto", display: "grid", gap: 10 }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Observaciones del administrador</label>
-              <textarea className="input-inst" placeholder="Observaciones del administrador" value={obs} onChange={e=>setObs(e.target.value)} />
+              <textarea
+                className="input-inst"
+                placeholder="Observaciones del administrador"
+                value={obs}
+                onChange={e=>setObs(e.target.value)}
+                style={{ minHeight: 98, resize: "vertical", lineHeight: 1.45 }}
+              />
             </div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <button className="btn" onClick={()=>setEstado('Validado')}>Validar</button>

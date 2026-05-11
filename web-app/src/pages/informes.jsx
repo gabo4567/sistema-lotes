@@ -8,6 +8,7 @@ import MapPolygon from "../components/MapPolygon";
 const Informes = () => {
   const [tipo, setTipo] = useState("resumen");
   const [data, setData] = useState(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
@@ -29,6 +30,7 @@ const Informes = () => {
 
   const generar = async () => {
     setLoading(true); setMessage("");
+    setHasGenerated(true);
     try {
       let d;
       const params = {};
@@ -590,6 +592,42 @@ const Informes = () => {
   };
 
   const renderData = () => {
+    if (loading) {
+      return (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "18px 20px",
+            borderRadius: 12,
+            background: "#f8fafc",
+            border: "1px solid #d9eadc",
+            color: "#2f6f4e",
+            fontWeight: 700,
+            textAlign: "center",
+          }}
+        >
+          Generando informe...
+        </div>
+      );
+    }
+    if (!data && !hasGenerated) {
+      return (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "18px 20px",
+            borderRadius: 12,
+            background: "#f8fafc",
+            border: "1px solid #d9eadc",
+            color: "#2f6f4e",
+            fontWeight: 700,
+            textAlign: "center",
+          }}
+        >
+          Presioná Generar para visualizar el informe seleccionado.
+        </div>
+      );
+    }
     if (!data) return <div className="users-msg err">Sin datos</div>;
     if (tipo === 'resumen') return renderResumen(data);
     if (tipo === 'productores') return renderProductores(data);

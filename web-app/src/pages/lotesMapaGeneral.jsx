@@ -4,6 +4,7 @@ import HomeButton from "../components/HomeButton";
 import { lotesService } from "../services/lotes.service";
 import { getProductores } from "../services/productores.service";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
+import { attachGoogleMapVisualControls } from "../utils/googleMapVisualControls";
 
 const computeCentroid = (pts) => {
   const arr = Array.isArray(pts) ? pts : [];
@@ -25,6 +26,7 @@ const LotesMapaGeneral = () => {
 
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
+  const visualControlsCleanupRef = useRef(null);
   const infoWindowRef = useRef(null);
   const polygonsRef = useRef([]);
   const selectedPolygonRef = useRef(null);
@@ -114,16 +116,12 @@ const LotesMapaGeneral = () => {
         zoom: 12,
         mapTypeId: "roadmap",
         fullscreenControl: true,
-        mapTypeControl: true,
-        mapTypeControlOptions: {
-          position: mapsApi.ControlPosition.TOP_LEFT,
-          style: mapsApi.MapTypeControlStyle.HORIZONTAL_BAR,
-          mapTypeIds: ["roadmap", "terrain", "satellite", "hybrid"],
-        },
+        mapTypeControl: false,
         streetViewControl: false,
       });
 
       mapRef.current = map;
+      visualControlsCleanupRef.current = attachGoogleMapVisualControls(map, mapsApi);
       infoWindowRef.current = new mapsApi.InfoWindow();
 
       window.setTimeout(() => {
@@ -133,6 +131,15 @@ const LotesMapaGeneral = () => {
       setMapInitError(e?.message || "No se pudo inicializar el mapa");
     }
   }, [loading, mapsReady]);
+
+  useEffect(() => {
+    return () => {
+      if (visualControlsCleanupRef.current) {
+        visualControlsCleanupRef.current();
+        visualControlsCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   const filteredLotes = useMemo(() => {
     const iptSearch = String(filters.ipt || "").trim();
@@ -283,24 +290,64 @@ const LotesMapaGeneral = () => {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <input
-          className="input-inst"
-          style={{ flex: "1 1 200px" }}
-          placeholder="Filtrar por IPT"
-          value={filters.ipt}
-          onChange={(e) => setFilters((prev) => ({ ...prev, ipt: e.target.value }))}
-        />
-        <input
-          className="input-inst"
-          style={{ flex: "1 1 260px" }}
-          placeholder="Filtrar por nombre de productor"
-          value={filters.productor}
-          onChange={(e) => setFilters((prev) => ({ ...prev, productor: e.target.value }))}
-        />
-        <button type="button" className="btn" onClick={() => setFilters({ ipt: "", productor: "" })}>Limpiar filtros</button>
-        <div style={{ color: "#6b7280", fontSize: 14 }}>
-          Mostrando {filteredLotes.length} lotes
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(180px, 0.8fr) minmax(260px, 1.2fr) auto auto",
+          gap: 12,
+          alignItems: "end",
+          marginBottom: 16,
+          padding: 16,
+          background: "#f8fafc",
+          border: "1px solid #d9eadc",
+          borderRadius: 12,
+          boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+        }}
+      >
+        <label className="producer-field" style={{ minWidth: 0 }}>
+          <span className="producer-field__label">IPT</span>
+          <input
+            className="input-inst"
+            style={{ width: "100%", minHeight: 44, borderRadius: 10, boxSizing: "border-box" }}
+            placeholder="Buscar por IPT"
+            value={filters.ipt}
+            onChange={(e) => setFilters((prev) => ({ ...prev, ipt: e.target.value }))}
+          />
+        </label>
+        <label className="producer-field" style={{ minWidth: 0 }}>
+          <span className="producer-field__label">Productor</span>
+          <input
+            className="input-inst"
+            style={{ width: "100%", minHeight: 44, borderRadius: 10, boxSizing: "border-box" }}
+            placeholder="Buscar por nombre"
+            value={filters.productor}
+            onChange={(e) => setFilters((prev) => ({ ...prev, productor: e.target.value }))}
+          />
+        </label>
+        <button
+          type="button"
+          className="btn"
+          style={{ minHeight: 44, whiteSpace: "nowrap" }}
+          onClick={() => setFilters({ ipt: "", productor: "" })}
+        >
+          Limpiar filtros
+        </button>
+        <div
+          style={{
+            minHeight: 44,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 14px",
+            borderRadius: 10,
+            background: "#ffffff",
+            border: "1px solid #d9eadc",
+            color: "#166534",
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {filteredLotes.length} {filteredLotes.length === 1 ? "lote visible" : "lotes visibles"}
         </div>
       </div>
 
