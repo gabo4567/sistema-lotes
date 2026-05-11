@@ -88,6 +88,10 @@ const normalizeTipoTurno = (t) => {
   return "otro";
 };
 
+const normalizeMotivoTurno = (tipoTurno, motivo) => {
+  return normalizeTipoTurno(tipoTurno) === "otro" ? String(motivo || "").trim() : "";
+};
+
 const normalizeRole = (r) =>
   String(r || "")
     .toLowerCase()
@@ -315,12 +319,12 @@ const isTurnoExpired = (raw, now) => {
 
 const applyVencidoIfNeeded = (raw, now) => {
   if (!isTurnoExpired(raw, now)) return null;
-  const motivoRaw = String(raw.motivo || "").trim();
+  const motivoEstadoRaw = String(raw.motivoEstado || "").trim();
   const update = { estado: "vencido", updatedAt: Timestamp.now() };
   raw.estado = "vencido";
-  if (!motivoRaw) {
-    update.motivo = "Vencido automáticamente por fecha";
-    raw.motivo = "Vencido automáticamente por fecha";
+  if (!motivoEstadoRaw) {
+    update.motivoEstado = "Vencido automáticamente por fecha";
+    raw.motivoEstado = "Vencido automáticamente por fecha";
   }
   return update;
 };
@@ -456,7 +460,7 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: `No se permiten turnos en feriados nacionales (${feriadoLabelCrear}).`, estadoActual });
     }
 
-    const motivoTrim = String(req.body.motivo || "").trim();
+    const motivoTrim = normalizeMotivoTurno(tipoTurno, req.body.motivo);
     if (tipoTurno === "otro" && !motivoTrim) {
       return res.status(400).json({ message: 'Si el tipo es "Otro", el motivo es obligatorio.', estadoActual });
     }
@@ -625,7 +629,7 @@ export const crearTurno = async (req, res) => {
       creadoEn: new Date().toISOString(),
       updatedAt: Timestamp.now(),
       activo: true,
-      ...(req.body.motivo ? { motivo: req.body.motivo } : {}),
+      motivo: motivoTrim,
       ...(tipoTurno === "insumo" && categoriaInsumo ? { categoriaInsumo } : {}),
     };
 
@@ -636,7 +640,7 @@ export const crearTurno = async (req, res) => {
       accion: "turno_creado",
       estadoAnterior: null,
       estadoNuevo: "pendiente",
-      motivo: req.body.motivo || null,
+      motivo: motivoTrim || null,
       realizadoPor: buildRealizadoPor(req),
       origen: buildOrigen(req),
       automatico: false,
@@ -859,10 +863,14 @@ export const actualizarTurno = async (req, res) => {
       data.tipoTurno = normalizeTipoTurno(data.tipoTurno);
     }
     const nextTipo = normalizeTipoTurno(data.tipoTurno ?? current.tipoTurno);
-    const nextMotivo = Object.prototype.hasOwnProperty.call(data, "motivo") ? data.motivo : current.motivo;
+    const nextMotivo = normalizeMotivoTurno(
+      nextTipo,
+      Object.prototype.hasOwnProperty.call(data, "motivo") ? data.motivo : current.motivo
+    );
     if (nextTipo === "otro" && !String(nextMotivo || "").trim()) {
       return res.status(400).json({ message: 'Si el tipo es "Otro", el motivo es obligatorio.' });
     }
+    data.motivo = nextMotivo;
 
     const targetYmd = nextFechaTs ? toYmdUtc(nextFechaTs.toDate()) : null;
     if (targetYmd && nextTipo && current.productorId) {
@@ -897,7 +905,7 @@ export const actualizarTurno = async (req, res) => {
       accion: "turno_actualizado",
       estadoAnterior: normalizeEstado(current.estado),
       estadoNuevo: normalizeEstado(current.estado),
-      motivo: data.motivo ?? current.motivo ?? null,
+      motivo: data.motivo || null,
       realizadoPor: buildRealizadoPor(req),
       origen: buildOrigen(req),
       automatico: false,
@@ -914,7 +922,8 @@ export const actualizarTurno = async (req, res) => {
 export const cambiarEstadoTurno = async (req, res) => {
   try {
     const { id } = req.params;
-    let { estado, motivo } = req.body;
+    let { estado } = req.body;
+    const motivoEstado = String(req.body?.motivoEstado ?? req.body?.motivo ?? "").trim();
     const mapEstados = {
       Solicitado: "pendiente",
       Aprobado: "confirmado",
@@ -1008,8 +1017,8 @@ export const cambiarEstadoTurno = async (req, res) => {
     }
 
     const update = { estado: to, updatedAt: Timestamp.now() };
-    if (typeof motivo === "string") {
-      update.motivo = motivo;
+    if (motivoEstado) {
+      update.motivoEstado = motivoEstado;
     }
     await ref.update(update);
 
@@ -1018,7 +1027,7 @@ export const cambiarEstadoTurno = async (req, res) => {
       accion: "estado_cambiado",
       estadoAnterior: from,
       estadoNuevo: to,
-      motivo: typeof motivo === "string" ? motivo : null,
+      motivo: motivoEstado || null,
       realizadoPor: buildRealizadoPor(req),
       origen: buildOrigen(req),
       automatico: false,
@@ -1046,7 +1055,7 @@ export const cambiarEstadoTurno = async (req, res) => {
             to === "cancelado"  ? "Turno cancelado"  : "Turno completado";
           const notifBody =
             to === "confirmado" ? `Tu turno del ${fechaFmt} fue confirmado.` :
-            to === "cancelado"  ? `Tu turno del ${fechaFmt} fue cancelado${typeof motivo === "string" && motivo ? `: ${motivo}` : "."}` :
+            to === "cancelado"  ? `Tu turno del ${fechaFmt} fue cancelado${motivoEstado ? `: ${motivoEstado}` : "."}` :
             `Tu turno del ${fechaFmt} fue completado. ¡Gracias!`;
 
           await sendExpoPush(

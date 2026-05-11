@@ -12,8 +12,8 @@ export const getTurnos = async (activo, { fechaDesde, fechaHasta, limit } = {})=
   const res = await api.get('/turnos', Object.keys(params).length ? { params } : undefined);
   return res.data
 }
-export const setEstadoTurno = async (id, estado, motivo, options)=>{
-  const body = { estado, motivo }
+export const setEstadoTurno = async (id, estado, motivoEstado, options)=>{
+  const body = { estado, motivoEstado }
   if (options && typeof options === 'object' && options.force === true) {
     body.force = true
   }

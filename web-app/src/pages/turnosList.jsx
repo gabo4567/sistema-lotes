@@ -446,7 +446,7 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   try {
     const motivoForAdminCancel = normalizeEstado(nuevo) === 'cancelado' ? 'Cancelado por el administrador' : undefined
     await setEstadoTurno(id, nuevo, motivoForAdminCancel, force ? { force: true } : undefined)
-    setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo, ...(motivoForAdminCancel ? { motivo: motivoForAdminCancel } : {}) } : t))
+    setTurnos(turnos.map(t=> t.id===id ? { ...t, estado: nuevo, ...(motivoForAdminCancel ? { motivoEstado: motivoForAdminCancel } : {}) } : t))
     setError('')
     notify({ title: 'Estado actualizado', icon: 'success' })
   } catch (e) {
@@ -606,10 +606,15 @@ const formatMotivo = (motivo)=>{
   return m
 }
 
+const shouldShowTurnoMotivo = (t) => {
+  const tipo = String(t?.tipoTurno || '').toLowerCase().trim()
+  return tipo === 'otro' || tipo === 'otra' || tipo === 'otros'
+}
+
 const getCancelNotice = (t) => {
   const est = normalizeEstado(t?.estado)
   if (est !== 'cancelado') return null
-  const m = String(t?.motivo || '').trim().toLowerCase()
+  const m = String(t?.motivoEstado || '').trim().toLowerCase()
   if (!m) return 'Cancelado por el administrador'
   if (m.includes('administrador')) return 'Cancelado por el administrador'
   return 'Cancelado por el productor'
@@ -695,7 +700,7 @@ const exportarCSV = useCallback(async () => {
       ESTADO_LABELS[est] || est,
       pInfo?.nombre || t.productorNombre || '-',
       pInfo?.ipt || t.ipt || '-',
-      String(t.motivo || '-'),
+      shouldShowTurnoMotivo(t) ? formatMotivo(t.motivo) : '-',
     ]
   })
   const escape = (v) => `"${String(v).replace(/"/g, '""')}"`
@@ -1715,7 +1720,9 @@ return (
                               <td colSpan={7}>
                                 <div className="turnos-detail">
                                   <div><strong>Fecha:</strong> {formatDate(t.fechaTurno || t.fecha)} {formatTime(t.fechaTurno || t.fecha)}</div>
-                                  <div><strong>Motivo:</strong> {formatMotivo(t.motivo)}</div>
+                                  {shouldShowTurnoMotivo(t) ? (
+                                    <div><strong>Motivo:</strong> {formatMotivo(t.motivo)}</div>
+                                  ) : null}
                                   {getCancelNotice(t) ? (
                                     <div
                                       style={{
@@ -1793,7 +1800,9 @@ return (
                         </span>
                       ) : null}
                     </div>
-                    <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
+                    {shouldShowTurnoMotivo(t) ? (
+                      <div className="turno-item"><span className="turno-label">Motivo:</span> {formatMotivo(t.motivo)}</div>
+                    ) : null}
                     {isInsumo && insDisp ? (
                       <div className="turno-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                         <span className="turno-label">Insumos:</span>
@@ -1845,7 +1854,9 @@ return (
 
                     {allowExpand && isExpanded && (
                       <div className="turnos-detail" onClick={(e) => e.stopPropagation()}>
-                        <div><strong>Motivo completo:</strong> {formatMotivo(t.motivo)}</div>
+                        {shouldShowTurnoMotivo(t) ? (
+                          <div><strong>Motivo completo:</strong> {formatMotivo(t.motivo)}</div>
+                        ) : null}
                         {isInsumo ? (
                           <div style={{ marginTop: 8 }}>
                             <strong>Insumos:</strong>{' '}

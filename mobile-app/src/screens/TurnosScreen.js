@@ -53,6 +53,7 @@ export default function TurnosScreen() {
 
   const turnosDisabled = !isTurnosHabilitados(turnosConfig);
   const turnosStatusUnknown = turnosConfig?.estadoActual == null;
+  const turnosRangeMessage = getTurnosRangeMessage(turnosConfig);
 
   const loadTurnosConfig = useCallback(async ({ forceRefresh = false } = {}) => {
     const cacheKey = "turnos_config_cache_v3";
@@ -588,7 +589,7 @@ export default function TurnosScreen() {
   };
 
   const getCancelNotice = (t) => {
-    const m = String(t?.motivo || "").trim().toLowerCase();
+    const m = String(t?.motivoEstado || "").trim().toLowerCase();
     if (m.includes("cancelado por el productor")) return "Cancelado por el productor";
     if (m.includes("cancelado por el administrador")) return "Cancelado por el administrador";
     const est = normalizeEstado(t?.estado);
@@ -666,9 +667,11 @@ export default function TurnosScreen() {
   const normalizeTipoFromLabel = (label) => {
     const s = String(label || "").toLowerCase();
     if (s.includes("insumo")) return "insumo";
-    if (s.includes("renovación") || s.includes("renov")) return "carnet";
+    if (s.includes("renovación") || s.includes("renov") || s.includes("carnet")) return "carnet";
     return "otro";
   };
+
+  const shouldShowTurnoMotivo = (turno) => normalizeTipoFromLabel(turno?.tipoTurno) === "otro";
 
   const openDatePicker = () => {
     const minDate = minSelectableDate();
@@ -801,7 +804,7 @@ export default function TurnosScreen() {
   }, [view, fechaInput, tipo, categoriaInsumo, isOnline, turnosDisabled]);
 
   useEffect(() => {
-    if (view !== "form") return;
+    if (view !== "form" && view !== "edit") return;
     if (normalizeTipoFromLabel(tipo) !== "otro" && String(motivo || "").trim()) {
       setMotivo("");
     }
@@ -841,7 +844,7 @@ export default function TurnosScreen() {
         tipoNormalizado = 'otro';
       }
 
-      const motivoTrim = String(motivo || '').trim();
+      const motivoTrim = tipoNormalizado === 'otro' ? String(motivo || '').trim() : "";
       if (tipoNormalizado === 'otro' && !motivoTrim) {
         setError('Si el tipo es "Otro", el motivo es obligatorio.');
         return;
@@ -967,7 +970,8 @@ export default function TurnosScreen() {
     setTurnoEditando(turno);
     setFechaInput(formatDDMMYYYY(turno.fechaTurno));
     setTipo(getTipoLabel(turno.tipoTurno));
-    setMotivo(turno.motivo || "");
+    setCategoriaInsumo(turno.categoriaInsumo || "");
+    setMotivo(normalizeTipoFromLabel(turno.tipoTurno) === "otro" ? (turno.motivo || "") : "");
     setView("edit");
     setError("");
     setSuccess("");
@@ -995,7 +999,7 @@ export default function TurnosScreen() {
       let tipoNormalizado;
       tipoNormalizado = normalizeTipoFromLabel(tipo);
 
-      const motivoTrim = String(motivo || '').trim();
+      const motivoTrim = tipoNormalizado === 'otro' ? String(motivo || '').trim() : "";
       if (tipoNormalizado === 'otro' && !motivoTrim) {
         setError('Si el tipo es "Otro", el motivo es obligatorio.');
         return;
@@ -1067,6 +1071,9 @@ export default function TurnosScreen() {
       }
 
       const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivoTrim };
+      if (tipoNormalizado === "insumo" && categoriaInsumo) {
+        body.categoriaInsumo = categoriaInsumo;
+      }
       const resp = await authFetch(`${API_URL}/turnos/${turnoEditando.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1084,6 +1091,7 @@ export default function TurnosScreen() {
       setFechaInput("");
       setTipo("");
       setMotivo("");
+      setCategoriaInsumo("");
       await loadList();
       setView("list");
     } catch (error) {
@@ -1118,7 +1126,7 @@ export default function TurnosScreen() {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
 
-      const body = { estado: 'cancelado', motivo: 'Cancelado por el productor' };
+      const body = { estado: 'cancelado', motivoEstado: 'Cancelado por el productor' };
       
       const resp = await authFetch(`${API_URL}/turnos/${turno.id}/estado`, {
         method: "PATCH",
@@ -1207,6 +1215,7 @@ export default function TurnosScreen() {
     setFechaInput("");
     setTipo("");
     setMotivo("");
+    setCategoriaInsumo("");
     setError("");
     setSuccess("");
     setView("list");
@@ -1446,7 +1455,9 @@ export default function TurnosScreen() {
                       <Text style={styles.turnoTipo}>
                         Tipo: {getTipoLabel(item.tipoTurno)}{item.categoriaInsumo ? ` · ${item.categoriaInsumo}` : ''}
                       </Text>
-                      <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
+                      {shouldShowTurnoMotivo(item) ? (
+                        <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
+                      ) : null}
                       {getCancelNotice(item) ? (
                         <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
                           <Text style={[styles.turnoNoticeText, styles.turnoNoticeCancelText]}>{getCancelNotice(item)}</Text>
@@ -1506,6 +1517,18 @@ export default function TurnosScreen() {
           ) : (
             <View style={styles.turnosEnabledCard}>
               <Text style={styles.turnosEnabledTitle}>Turnos habilitados</Text>
+              {turnosRangeMessage ? (
+                <View style={styles.turnosEnabledRangeBlock}>
+                  <Text style={styles.turnosEnabledRange}>
+                    <Text style={styles.turnosEnabledRangeLabel}>Desde: </Text>
+                    {turnosRangeMessage.desde}
+                  </Text>
+                  <Text style={styles.turnosEnabledRange}>
+                    <Text style={styles.turnosEnabledRangeLabel}>Hasta: </Text>
+                    {turnosRangeMessage.hasta}
+                  </Text>
+                </View>
+              ) : null}
               {String(turnosConfig?.mensaje || "").trim() ? (
                 <Text style={styles.turnosEnabledSubtitle}>{String(turnosConfig.mensaje).trim()}</Text>
               ) : null}
@@ -1615,13 +1638,36 @@ export default function TurnosScreen() {
           {mostrarTipos && (
             <View style={styles.dropdown}>
               {tipoOptions.map(opt => (
-                <TouchableOpacity key={opt} style={styles.option} onPress={() => { setTipo(opt); setMostrarTipos(false); }}>
+                <TouchableOpacity key={opt} style={styles.option} onPress={() => {
+                  setTipo(opt);
+                  setMostrarTipos(false);
+                  if (!opt.toLowerCase().includes('insumo')) setCategoriaInsumo('');
+                }}>
                   <Text>{opt}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           )}
-          <TextInput style={styles.input} placeholder={normalizeTipoFromLabel(tipo) === 'otro' ? 'Motivo (obligatorio)' : 'Motivo (opcional)'} value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
+          {normalizeTipoFromLabel(tipo) === "insumo" && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: '600' }}>CategorÃ­a de insumo a retirar</Text>
+              <View style={styles.dropdown}>
+                {["Arada", "AlmÃ¡cigo", "Transplante", "Cosecha"].map(cat => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.option, categoriaInsumo === cat && { backgroundColor: '#f0fdf4' }]}
+                    onPress={() => setCategoriaInsumo(cat)}
+                  >
+                    <Text style={[{ color: '#2c3e50' }, categoriaInsumo === cat && { color: '#166534', fontWeight: '700' }]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!categoriaInsumo && <Text style={styles.helperText}>SeleccionÃ¡ la categorÃ­a a retirar</Text>}
+            </View>
+          )}
+          {normalizeTipoFromLabel(tipo) === 'otro' ? (
+            <TextInput style={styles.input} placeholder="Motivo (obligatorio)" value={motivo} onChangeText={setMotivo} multiline numberOfLines={3} />
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
           <View style={styles.row}>
@@ -1701,6 +1747,69 @@ export default function TurnosScreen() {
   );
 }
 
+const TURNOS_WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const TURNOS_MONTHS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+const parseTurnosYmdDate = (value) => {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day, 12, 0, 0, 0);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== monthIndex ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+};
+
+const formatTurnosLongDate = (value, { includeYear = true } = {}) => {
+  const date = parseTurnosYmdDate(value);
+  if (!date) return "";
+
+  const weekday = TURNOS_WEEKDAYS[date.getDay()];
+  const month = TURNOS_MONTHS[date.getMonth()];
+  const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  const base = `${capitalizedWeekday} ${date.getDate()} de ${month}`;
+  return includeYear ? `${base} de ${date.getFullYear()}` : base;
+};
+
+const getTurnosRangeMessage = (config) => {
+  if (!config || config.estadoActual !== true) return "";
+  if (String(config.modo || "").toLowerCase().trim() !== "rango") return "";
+  if (String(config.rangoModo || "").toLowerCase().trim() !== "enable") return "";
+
+  const start = parseTurnosYmdDate(config.desde);
+  const end = parseTurnosYmdDate(config.hasta);
+  if (!start || !end) return "";
+
+  return {
+    desde: formatTurnosLongDate(config.desde),
+    hasta: formatTurnosLongDate(config.hasta),
+  };
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12, backgroundColor: "#fff" },
   title: { fontSize: 20, textAlign: "center", marginVertical: 10, color: "#1e8449" },
@@ -1725,9 +1834,12 @@ const styles = StyleSheet.create({
   turnosDisabledCard: { backgroundColor: "#fff7ed", borderColor: "#fed7aa", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   turnosDisabledTitle: { color: "#9a3412", fontWeight: "800", fontSize: 13, marginBottom: 4 },
   turnosDisabledSubtitle: { color: "#9a3412", fontWeight: "700", fontSize: 12 },
-  turnosEnabledCard: { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
-  turnosEnabledTitle: { color: "#166534", fontWeight: "800", fontSize: 13, marginBottom: 4 },
-  turnosEnabledSubtitle: { color: "#166534", fontWeight: "700", fontSize: 12 },
+  turnosEnabledCard: { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 12 },
+  turnosEnabledTitle: { color: "#166534", fontWeight: "800", fontSize: 15, marginBottom: 6 },
+  turnosEnabledRangeBlock: { marginBottom: 5 },
+  turnosEnabledRange: { color: "#166534", fontWeight: "700", fontSize: 14, lineHeight: 21 },
+  turnosEnabledRangeLabel: { color: "#0f5132", fontWeight: "900" },
+  turnosEnabledSubtitle: { color: "#166534", fontWeight: "700", fontSize: 13, lineHeight: 19 },
   topTabBtn: { flex: 1, minHeight: 46, alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 14 },
   topTabText: { fontSize: 15, fontWeight: "700" },
   topTabInactive: { opacity: 1, borderWidth: 2.5, borderColor: "transparent" },
