@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { isTurnosHabilitados } from '../utils/turnos.utils'
 import { getProductores } from '../services/productores.service'
 import HomeButton from '../components/HomeButton'
-import { db } from '../services/firebase'
 import TurnoHistorial from '../components/turnos/TurnoHistorial'
 
 const toDateSafe = (raw) => {
@@ -242,43 +240,6 @@ useEffect(() => {
 useEffect(() => {
   setFiltros((cur) => ({ ...cur, temporada: 'todas' }))
 }, [viewMode])
-
-useEffect(() => {
-  const refreshTimerRef = { current: null }
-  const scheduleRefresh = () => {
-    if (refreshTimerRef.current) return
-    refreshTimerRef.current = window.setTimeout(() => {
-      refreshTimerRef.current = null
-      loadData({ showLoading: false })
-    }, 200)
-  }
-
-  const base = collection(db, 'turnos')
-  const qRef = viewMode === 'activos'
-    ? query(base, where('activo', '==', true))
-    : query(base, where('activo', '==', false))
-
-  const unsub = onSnapshot(
-    qRef,
-    (snap) => {
-      const changes = snap.docChanges()
-      if (changes.length === 0) return
-      scheduleRefresh()
-    },
-    (err) => {
-      console.error('Firestore onSnapshot error:', err)
-      loadData({ showLoading: false })
-    }
-  )
-
-  return () => {
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current)
-      refreshTimerRef.current = null
-    }
-    unsub()
-  }
-}, [viewMode, loadData])
 
 useEffect(() => {
   const handleFocus = () => loadData({ showLoading: false })

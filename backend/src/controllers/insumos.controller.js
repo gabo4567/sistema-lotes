@@ -14,6 +14,17 @@ const normalizeProductorInsumoEstado = ({ cantidadAsignada, cantidadEntregada })
   return "pendiente";
 };
 
+const getProductorNombre = async (productorId) => {
+  const pid = String(productorId || "").trim();
+  if (!pid) return "";
+
+  const doc = await db.collection("productores").doc(pid).get();
+  if (!doc.exists) return "";
+
+  const productor = doc.data() || {};
+  return String(productor.nombreCompleto || productor.nombre || productor.razonSocial || "").trim();
+};
+
 const buildNormalizePatchProductorInsumo = (raw) => {
   const patch = {};
 
@@ -195,17 +206,21 @@ export const asignarInsumoAProductor = async (req, res) => {
   try {
     const { id } = req.params; // insumoId
     const { productorId, cantidadAsignada } = req.body;
-    if (!productorId) return res.status(400).json({ error: "Debe seleccionar al productor para asignarle los insumos" });
+    const pid = String(productorId || "").trim();
+    if (!pid) return res.status(400).json({ error: "Debe seleccionar al productor para asignarle los insumos" });
     const cant = Number(cantidadAsignada);
     if (!isFinite(cant) || cant <= 0) return res.status(400).json({ error: "cantidadAsignada inválida" });
     const refInsumo = db.collection("insumos").doc(id);
-    const insSnap = await refInsumo.get();
+    const [insSnap, productorNombre] = await Promise.all([
+      refInsumo.get(),
+      getProductorNombre(pid),
+    ]);
     if (!insSnap.exists) return res.status(404).json({ error: "Insumo no encontrado" });
     const ins = insSnap.data();
     const disponible = Number(ins.cantidadDisponible || 0);
     // Buscar asignación existente pendiente para este productor y este insumo
     const existingSnap = await db.collection("productorInsumos")
-      .where("productorId", "==", String(productorId))
+      .where("productorId", "==", pid)
       .where("insumoId", "==", String(id))
       .where("estado", "==", "pendiente")
       .limit(1)
@@ -214,7 +229,8 @@ export const asignarInsumoAProductor = async (req, res) => {
     if (existingSnap.empty) {
       if (disponible < cant) return res.status(400).json({ error: "Stock insuficiente" });
       const asignacion = {
-        productorId: String(productorId),
+        productorId: pid,
+        productorNombre,
         insumoId: id,
         cantidadAsignada: cant,
         cantidadEntregada: 0,
@@ -242,6 +258,7 @@ export const asignarInsumoAProductor = async (req, res) => {
         cantidadEntregada: prevEnt,
         estado,
         updatedAt: new Date(),
+        productorNombre: productorNombre || data?.productorNombre || "",
         ...(data?.createdAt === undefined ? { createdAt: data?.fechaAsignacion || new Date() } : {}),
       });
       await refInsumo.update({ cantidadDisponible: disponible - cant, updatedAt: new Date() });

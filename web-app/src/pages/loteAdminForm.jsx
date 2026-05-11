@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
 import MapPolygonEditor from "../components/MapPolygonEditor";
@@ -217,7 +217,7 @@ const LoteAdminForm = () => {
     }
   })() }, [id]);
 
-  const onChange = (k, v) => setForm({ ...form, [k]: v });
+  const onChange = (k, v) => setForm((current) => ({ ...current, [k]: v }));
 
   const parsePoligono = (t) => {
     return String(t).split(/\n+/).map(line=>line.trim()).filter(Boolean).map(line=>{
@@ -228,7 +228,7 @@ const LoteAdminForm = () => {
     });
   };
 
-  const syncPolygonInForm = (points) => {
+  const syncPolygonInForm = useCallback((points) => {
     const centroid = getPolygonCentroid(points);
     const areaHa = calculatePolygonAreaHa(points);
 
@@ -240,13 +240,13 @@ const LoteAdminForm = () => {
       ubicacionLat: centroid == null ? "" : String(centroid.lat),
       ubicacionLng: centroid == null ? "" : String(centroid.lng),
     }));
-  };
+  }, []);
 
-  const center = (() => {
+  const center = useMemo(() => {
     const lat = toFiniteNumber(form.ubicacionLat);
     const lng = toFiniteNumber(form.ubicacionLng);
     return lat != null && lng != null ? { lat, lng } : undefined;
-  })();
+  }, [form.ubicacionLat, form.ubicacionLng]);
 
   const ubicacionTexto = form.ubicacionLat && form.ubicacionLng
     ? `Latitud: ${form.ubicacionLat}\nLongitud: ${form.ubicacionLng}`

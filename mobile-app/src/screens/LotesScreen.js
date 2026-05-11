@@ -33,6 +33,25 @@ import { usePermissionPrompt } from "../components/PermissionPromptModal";
 
 const DETAIL_MAP_HEIGHT = Math.max(240, Math.min(380, Math.round(Dimensions.get("window").height * 0.42)));
 
+const MapTypeToggle = ({ value, onChange }) => (
+  <View style={styles.mapTypeToggle}>
+    <TouchableOpacity
+      style={[styles.mapTypeOption, value === "standard" && styles.mapTypeOptionActive]}
+      onPress={() => onChange("standard")}
+      activeOpacity={0.85}
+    >
+      <Text style={[styles.mapTypeText, value === "standard" && styles.mapTypeTextActive]}>Mapa</Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.mapTypeOption, value === "satellite" && styles.mapTypeOptionActive]}
+      onPress={() => onChange("satellite")}
+      activeOpacity={0.85}
+    >
+      <Text style={[styles.mapTypeText, value === "satellite" && styles.mapTypeTextActive]}>Satélite</Text>
+    </TouchableOpacity>
+  </View>
+);
+
 export default function LotesScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -53,6 +72,7 @@ export default function LotesScreen() {
   const [polygonConfirmed, setPolygonConfirmed] = useState(false);
   const [viewingList, setViewingList] = useState(false);
   const [viewMode, setViewMode] = useState("normal");
+  const [mapType, setMapType] = useState("standard");
   const [viewingDetailFromList, setViewingDetailFromList] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editNombre, setEditNombre] = useState("");
@@ -730,11 +750,13 @@ export default function LotesScreen() {
       </View>
 
       {viewMode !== "listOnly" && !(creating && createStep === "form") && (location ? (
+        <View style={[styles.map, viewMode === "mapOnly" ? styles.mapFullscreen : creating ? styles.mapCreating : null, { marginBottom: 4 }]}>
         <MapView
           ref={mapRef}
-          style={[styles.map, viewMode === "mapOnly" ? styles.mapFullscreen : creating ? styles.mapCreating : null, { marginBottom: 4 }]}
+          style={StyleSheet.absoluteFill}
           initialRegion={location}
           onPress={onMapPress}
+          mapType={mapType}
         >
           <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }} title="Mi ubicación" />
 
@@ -760,6 +782,8 @@ export default function LotesScreen() {
             </>
           )}
         </MapView>
+        <MapTypeToggle value={mapType} onChange={setMapType} />
+        </View>
       ) : locationPermissionDenied ? (
         <View style={styles.permissionCard}>
           <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
@@ -1013,6 +1037,7 @@ export default function LotesScreen() {
               <MapView
                 style={styles.mapThumbnail}
                 region={getPolygonRegion(points)}
+                mapType={mapType}
                 scrollEnabled={false}
                 zoomEnabled={false}
                 rotateEnabled={false}
@@ -1159,10 +1184,12 @@ export default function LotesScreen() {
 
       {viewingDetailFromList && selected && (
         <View style={{ flex: 1 }}>
+          <View style={styles.detailMap}>
           <MapView
             ref={mapRef}
-            style={styles.detailMap}
+            style={StyleSheet.absoluteFill}
             region={getPolygonRegion(points)}
+            mapType={mapType}
           >
             {points.map((p, i) => (
               <Marker key={`d-${i}`} coordinate={p} />
@@ -1176,6 +1203,8 @@ export default function LotesScreen() {
               />
             )}
           </MapView>
+          <MapTypeToggle value={mapType} onChange={setMapType} />
+          </View>
 
           <ScrollView
             style={{ flex: 1 }}
@@ -1322,6 +1351,38 @@ const styles = StyleSheet.create({
   mapCreating: { flex: 0, height: 280 },
   mapFullscreen: { flex: 1 },
   mapThumbnail: { height: 190, width: "100%" },
+  mapTypeToggle: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderRadius: 999,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.12)",
+    elevation: 4,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  mapTypeOption: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  mapTypeOptionActive: {
+    backgroundColor: "#1e8449",
+  },
+  mapTypeText: {
+    color: "#34495e",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  mapTypeTextActive: {
+    color: "#ffffff",
+  },
   formCard: { padding: 14, backgroundColor: "#ffffff" },
   row: { flexDirection: "row", justifyContent: "space-around", padding: 8 },
   topBar: { paddingHorizontal: 8, paddingTop: 4 },
