@@ -317,6 +317,19 @@ const isTurnoExpired = (raw, now) => {
   return false;
 };
 
+const hasTurnoPendienteOConfirmadoDelTipo = (docs, tipoTurno, { excludeId } = {}) => {
+  const tipo = normalizeTipoTurno(tipoTurno);
+  return docs.some((d) => {
+    if (excludeId && d.id === excludeId) return false;
+    const other = d.data();
+    const otherTipo = normalizeTipoTurno(other?.tipoTurno);
+    if (otherTipo !== tipo) return false;
+    if (isTurnoExpired(other, new Date())) return false;
+    const st = normalizeEstado(other?.estado);
+    return st === "pendiente" || st === "confirmado";
+  });
+};
+
 const applyVencidoIfNeeded = (raw, now) => {
   if (!isTurnoExpired(raw, now)) return null;
   const motivoEstadoRaw = String(raw.motivoEstado || "").trim();
@@ -479,6 +492,9 @@ export const crearTurno = async (req, res) => {
         .get();
 
       if (tipoTurno === "insumo") {
+        if (hasTurnoPendienteOConfirmadoDelTipo(snapDup.docs, "insumo")) {
+          return res.status(400).json({ message: "Ya tenés un turno de retiro de insumos pendiente o confirmado.", estadoActual });
+        }
         const hasInsumoPendienteOConfirmado = snapDup.docs.some((d) => {
           const other = d.data();
           const otherTipo = normalizeTipoTurno(other?.tipoTurno);
@@ -493,6 +509,9 @@ export const crearTurno = async (req, res) => {
       }
 
       if (tipoTurno === "carnet") {
+        if (hasTurnoPendienteOConfirmadoDelTipo(snapDup.docs, "carnet")) {
+          return res.status(400).json({ message: "Ya tenés un turno de renovación de carnet pendiente o confirmado.", estadoActual });
+        }
         const hasCarnetPendienteOConfirmado = snapDup.docs.some((d) => {
           const other = d.data();
           const otherTipo = normalizeTipoTurno(other?.tipoTurno);
@@ -883,6 +902,12 @@ export const actualizarTurno = async (req, res) => {
         const st = normalizeEstado(estadoRaw);
         return st !== "cancelado" && st !== "completado" && st !== "vencido";
       };
+      if (nextTipo === "insumo" && hasTurnoPendienteOConfirmadoDelTipo(snapDup.docs, "insumo", { excludeId: id })) {
+        return res.status(400).json({ message: "Ya tenés un turno de retiro de insumos pendiente o confirmado." });
+      }
+      if (nextTipo === "carnet" && hasTurnoPendienteOConfirmadoDelTipo(snapDup.docs, "carnet", { excludeId: id })) {
+        return res.status(400).json({ message: "Ya tenés un turno de renovación de carnet pendiente o confirmado." });
+      }
       const hasDup = snapDup.docs.some((d) => {
         if (d.id === id) return false;
         const other = d.data();
@@ -1453,6 +1478,18 @@ export const disponibilidadTurno = async (req, res) => {
           const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
           if (!psnap.empty) {
             const productorId = psnap.docs[0].id;
+            const snapTurnos = await db
+              .collection("turnos")
+              .where("productorId", "==", String(productorId))
+              .where("activo", "==", true)
+              .get();
+            if (hasTurnoPendienteOConfirmadoDelTipo(snapTurnos.docs, "insumo")) {
+              return res.json({
+                disponible: false,
+                motivo: "Ya tenés un turno de retiro de insumos pendiente o confirmado.",
+                estadoActual: true,
+              });
+            }
             const disp = await getDisponibilidadInsumos(productorId);
             if (!disp?.tieneDisponible) {
               return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles.", estadoActual: true });

@@ -673,6 +673,17 @@ export default function TurnosScreen() {
 
   const shouldShowTurnoMotivo = (turno) => normalizeTipoFromLabel(turno?.tipoTurno) === "otro";
 
+  const hasTurnoPendienteOConfirmadoDelTipo = (items, tipoNormalizado, { excludeId } = {}) => {
+    return (Array.isArray(items) ? items : []).some((t) => {
+      if (!t) return false;
+      if (excludeId && String(t.id || "") === String(excludeId)) return false;
+      if (t.activo === false) return false;
+      if (normalizeTipoFromLabel(t.tipoTurno) !== tipoNormalizado) return false;
+      const estado = getDisplayEstado(t);
+      return estado === "pendiente" || estado === "confirmado";
+    });
+  };
+
   const openDatePicker = () => {
     const minDate = minSelectableDate();
     const current = parseInputToDate(fechaInput);
@@ -903,6 +914,15 @@ export default function TurnosScreen() {
         return key === requestedKey;
       });
 
+      if (tipoNormalizado === "insumo" && hasTurnoPendienteOConfirmadoDelTipo(turnosParaValidar, "insumo")) {
+        setError("Ya tenés un turno de retiro de insumos pendiente o confirmado.");
+        return;
+      }
+      if (tipoNormalizado === "carnet" && hasTurnoPendienteOConfirmadoDelTipo(turnosParaValidar, "carnet")) {
+        setError("Ya tenés un turno de renovación de carnet pendiente o confirmado.");
+        return;
+      }
+
       if (hayDuplicado) {
         setError("Ya tenés un turno del mismo tipo para esa fecha y hora. Elegí otra fecha/hora o solicitá un tipo diferente.");
         return;
@@ -1060,6 +1080,15 @@ export default function TurnosScreen() {
         const key = toKeyFromAnyDate(t.fechaTurno || t.fecha);
         return key === requestedKey;
       });
+
+      if (tipoNormalizado === "insumo" && hasTurnoPendienteOConfirmadoDelTipo(turnosParaValidar, "insumo", { excludeId: turnoEditando.id })) {
+        setError("Ya tenés un turno de retiro de insumos pendiente o confirmado.");
+        return;
+      }
+      if (tipoNormalizado === "carnet" && hasTurnoPendienteOConfirmadoDelTipo(turnosParaValidar, "carnet", { excludeId: turnoEditando.id })) {
+        setError("Ya tenés un turno de renovación de carnet pendiente o confirmado.");
+        return;
+      }
 
       if (hayDuplicado) {
         if (tipoNormalizado === 'carnet') {
