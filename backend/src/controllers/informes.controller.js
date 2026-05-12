@@ -112,7 +112,7 @@ export const obtenerResumenGeneral = async (req, res) => {
     // Insumos disponibles por tipo
     const insumosDisponibles = insumosSnap.docs.map(di => {
       const x = di.data();
-      return { id: di.id, nombre: x.nombre, cantidadDisponible: Number(x.cantidadDisponible || 0), unidad: x.unidad || "bolsas" };
+      return { id: di.id, nombre: x.nombre, cantidadDisponible: Number(x.cantidadDisponible || 0), unidad: x.unidad || "cosecha" };
     });
 
     // Insumos asignados a productores (detalle)

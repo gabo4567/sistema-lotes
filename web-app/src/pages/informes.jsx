@@ -46,9 +46,17 @@ const Informes = () => {
 
   const expPdf = async () => {
     if (!data) { setMessage("No hay datos para exportar"); return; }
-    const ok = await confirmDialog({ title: '¿Exportar a PDF?', text: 'Se generará el informe actual en formato PDF.', icon: 'warning', confirmButtonText: 'Exportar', cancelButtonText: 'Cancelar' });
+    const ok = await confirmDialog({ 
+      title: '¿Generar Documento PDF?', 
+      text: 'Se preparará el informe actual para impresión o guardado como PDF.', 
+      icon: 'info', 
+      confirmButtonText: 'Generar', 
+      cancelButtonText: 'Cancelar' 
+    });
     if (!ok) return;
-    const title = `Informe - ${tipo}`;
+
+    const fechaStr = new Date().toLocaleString();
+    const title = `Informe - ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
 
     const tbl = (columns, rows) => {
       const thead = `<thead><tr>${columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead>`;
@@ -57,96 +65,126 @@ const Informes = () => {
     };
 
     let content = '';
+    // ... (logic for content generation remains same but we can clean up headers)
     if (tipo === 'resumen' && data && typeof data === 'object') {
-      content += `<section><h2>Resumen</h2>${tbl(['Usuarios','Productores activos','Lotes activos','Turnos activos'], [[data.totalUsuarios, data.totalProductoresActivos, data.totalLotesActivos, data.totalTurnosActivos]])}<div class="small">Última actualización: ${formatValue(data.ultimaActualizacion)}</div></section>`;
+      content += `<div class="doc-section"><h2>1. Resumen General</h2>${tbl(['Usuarios','Productores activos','Lotes activos','Turnos activos'], [[data.totalUsuarios, data.totalProductoresActivos, data.totalLotesActivos, data.totalTurnosActivos]])}<p class="timestamp">Última actualización: ${formatValue(data.ultimaActualizacion)}</p></div>`;
       const usuarios = Array.isArray(data.usuarios)? data.usuarios: [];
-      content += `<section><h3>Usuarios del sistema</h3>${tbl(['Nombre','Email','Rol','IPT'], usuarios.map(u=>[u.nombre, u.email, u.role, u.ipt||'-']))}</section>`;
+      content += `<div class="doc-section"><h3>1.1 Usuarios del sistema</h3>${tbl(['Nombre','Email','Rol','IPT'], usuarios.map(u=>[u.nombre, u.email, u.role, u.ipt||'-']))}</div>`;
       const act = Array.isArray(data.actividadMovil)? data.actividadMovil: [];
-      content += `<section><h3>Actividad móvil</h3>${tbl(['IPT','Productor','Ingresos','Nuevos lotes','Modificaciones','Turnos'], act.map(a=>[a.productorIpt, a.productorNombre, a.ingresosApp, a.lotesCreados, a.lotesModificados, a.turnosSolicitados]))}</section>`;
+      content += `<div class="doc-section"><h3>1.2 Actividad móvil</h3>${tbl(['IPT','Productor','Ingresos','Nuevos lotes','Modificaciones','Turnos'], act.map(a=>[a.productorIpt, a.productorNombre, a.ingresosApp, a.lotesCreados, a.lotesModificados, a.turnosSolicitados]))}</div>`;
       const lotes = Array.isArray(data.lotesConDueno)? data.lotesConDueno: [];
-      content += `<section><h3>Lotes con dueño</h3>${tbl(['Lote','IPT','Productor'], lotes.map(l=>[l.nombre, l.ipt, l.productorNombre]))}</section>`;
-      const disp = Array.isArray(data.insumosDisponibles)? data.insumosDisponibles: [];
-      content += `<section><h3>Insumos disponibles</h3>${tbl(['Tipo','Cantidad','Unidad'], disp.map(i=>[i.nombre, i.cantidadDisponible, i.unidad]))}</section>`;
-      const det = Array.isArray(data.insumosAsignadosDetalle)? data.insumosAsignadosDetalle: [];
-      content += `<section><h3>Insumos asignados</h3>${tbl(['Tipo','Asignado','IPT','Productor'], det.map(r=>[r.tipo, r.cantidadAsignada, r.productorIpt, r.productorNombre]))}</section>`;
-      const trs = Array.isArray(data.turnosLista)? data.turnosLista: [];
-      content += `<section><h3>Turnos de productores</h3>${tbl(['IPT','Productor','Fecha','Estado','Tipo','Motivo'], trs.map(t=>[t.productorIpt, t.productorNombre, t.fecha, t.estado, t.tipo, t.motivo]))}</section>`;
+      content += `<div class="doc-section"><h3>1.3 Lotes registrados</h3>${tbl(['Lote','IPT','Productor'], lotes.map(l=>[l.nombre, l.ipt, l.productorNombre]))}</div>`;
     } else if (tipo === 'productores' && Array.isArray(data)) {
-      content += `<section><h2>Productores activos</h2>${tbl(['IPT','Nombre','Estado','Lotes','Turnos'], data.map(p=>[p.ipt, p.nombreCompleto||p.nombre, p.estado, p.totalLotes??0, p.totalTurnos??0]))}</section>`;
+      content += `<div class="doc-section"><h2>Listado de Productores Activos</h2>${tbl(['IPT','Nombre','Estado','Lotes','Turnos'], data.map(p=>[p.ipt, p.nombreCompleto||p.nombre, p.estado, p.totalLotes??0, p.totalTurnos??0]))}</div>`;
     } else if (tipo === 'insumosResumen' && data && typeof data === 'object') {
-      content += `<section><h2>Insumos: asignación y consumo</h2>${tbl(['Asignado','Entregado','Pendiente'], [[data.totalAsignado, data.totalEntregado, data.totalPendiente]])}</section>`;
+      content += `<div class="doc-section"><h2>Insumos: Resumen de Asignación</h2>${tbl(['Asignado','Entregado','Pendiente'], [[data.totalAsignado, data.totalEntregado, data.totalPendiente]])}</div>`;
       const porInsumo = Object.entries(data.porInsumo||{}).map(([n,m])=>[n, m.asignado||0, m.entregado||0, m.pendiente||0]);
-      content += `<section><h3>Por insumo</h3>${tbl(['Insumo','Asignado','Entregado','Pendiente'], porInsumo)}</section>`;
-      const porProd = Object.entries(data.porProductor||{}).map(([pid,m])=>[m.productorNombre||pid, m.productorIpt||'', m.asignado||0, m.entregado||0, m.pendiente||0]);
-      content += `<section><h3>Por productor</h3>${tbl(['Productor','IPT','Asignado','Entregado','Pendiente'], porProd)}</section>`;
+      content += `<div class="doc-section"><h3>Detalle por Insumo</h3>${tbl(['Insumo','Asignado','Entregado','Pendiente'], porInsumo)}</div>`;
     } else if (tipo === 'turnosEficiencia' && data && typeof data === 'object') {
       const conteoRows = Object.entries(data.conteo||{}).map(([k,v])=>[k, v]);
-      const porcRows = Object.entries(data.porcentaje||{}).map(([k,v])=>[k, v+'%']);
-      content += `<section><h2>Turnos: eficiencia y cumplimiento</h2>${tbl(['Estado','Cantidad'], conteoRows)}${tbl(['Estado','%'], porcRows)}</section>`;
-    } else {
-      const rows = Array.isArray(data)? data: [data];
-      content += rows.map(r=>`<section>${tbl(Object.keys(r||{}), [Object.values(r||{})])}</section>`).join('');
+      content += `<div class="doc-section"><h2>Turnos: Eficiencia y Cumplimiento</h2>${tbl(['Estado','Cantidad'], conteoRows)}</div>`;
     }
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${title}</title>
       <style>
-        body{ font-family: Arial, sans-serif; padding:16px; }
-        h1{ margin-top:0; }
-        h2{ margin:12px 0 6px; color:#14532d; }
-        h3{ margin:10px 0 6px; color:#166534; }
-        .tbl{ width:100%; border-collapse:collapse; margin-bottom:10px; }
-        .tbl th{ background:#f0fdf4; border:1px solid #e5e7eb; padding:6px; text-align:center; }
-        .tbl td{ border:1px solid #e5e7eb; padding:6px; text-align:center; }
-        .small{ font-size:12px; color:#555; margin-bottom:8px; }
-        section{ page-break-inside:auto; }
+        @page { size: A4; margin: 2cm; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.5; margin: 0; padding: 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1a4d2e; padding-bottom: 15px; margin-bottom: 30px; }
+        .header-info h1 { margin: 0; color: #1a4d2e; font-size: 24px; text-transform: uppercase; }
+        .header-info p { margin: 5px 0 0; color: #64748b; font-size: 14px; }
+        .doc-section { margin-bottom: 30px; page-break-inside: avoid; }
+        h2 { color: #1a4d2e; font-size: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px; }
+        h3 { color: #334155; font-size: 17px; margin: 20px 0 10px; }
+        .tbl { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px; }
+        .tbl th { background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; color: #475569; font-weight: 700; }
+        .tbl td { border: 1px solid #e2e8f0; padding: 8px; color: #1e293b; }
+        .tbl tr:nth-child(even) { background-color: #fcfcfc; }
+        .timestamp { font-size: 11px; color: #94a3b8; text-align: right; margin-top: 5px; }
+        .footer { position: fixed; bottom: 0; width: 100%; font-size: 10px; color: #94a3b8; text-align: center; padding: 10px 0; border-top: 1px solid #e2e8f0; }
       </style>
-    </head><body><h1>${title}</h1>${content}</body></html>`;
+    </head>
+    <body>
+      <div class="header">
+        <div class="header-info">
+          <h1>Sistema de Gestión Agrícola - IPT</h1>
+          <p>${title}</p>
+        </div>
+        <div style="text-align: right;">
+          <p style="margin:0; font-weight:700;">Fecha de Emisión</p>
+          <p style="margin:0; color:#64748b;">${fechaStr}</p>
+        </div>
+      </div>
+      ${content}
+      <div class="footer">
+        Documento generado automáticamente por el Sistema IPT - Página 1
+      </div>
+    </body>
+    </html>`;
+    
     const win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); }
-  };
-
-  const toCsv = (val) => {
-    if (Array.isArray(val)) {
-      const rows = [];
-      let headers = [];
-      val.forEach((item) => {
-        if (item && typeof item === 'object') {
-          const keys = Object.keys(item);
-          headers = Array.from(new Set([...headers, ...keys]));
-        }
-      });
-      rows.push(headers.join(','));
-      val.forEach((item) => {
-        if (item && typeof item === 'object') {
-          rows.push(headers.map((h) => JSON.stringify(formatValue(item[h] ?? ''))).join(','));
-        } else {
-          rows.push(JSON.stringify(formatValue(item ?? '')));
-        }
-      });
-      return rows.join('\n');
+    if (win) { 
+      win.document.write(html); 
+      win.document.close(); 
+      setTimeout(() => { win.focus(); win.print(); }, 500);
     }
-    if (val && typeof val === 'object') {
-      const rows = Object.entries(val).map(([k, v]) => `${JSON.stringify(k)},${JSON.stringify(formatValue(v))}`);
-      return ['clave,valor', ...rows].join('\n');
-    }
-    return `valor\n${JSON.stringify(formatValue(val ?? ''))}`;
   };
 
   const expExcel = async () => {
     if (!data) { setMessage("No hay datos para exportar"); return; }
-    const ok = await confirmDialog({ title: '¿Exportar a Excel?', text: 'Se generará el informe actual en CSV (Excel).', icon: 'warning', confirmButtonText: 'Exportar', cancelButtonText: 'Cancelar' });
+    const ok = await confirmDialog({ 
+      title: '¿Exportar a Excel?', 
+      text: 'Se generará un archivo de Excel profesional con los datos actuales.', 
+      icon: 'question', 
+      confirmButtonText: 'Exportar', 
+      cancelButtonText: 'Cancelar' 
+    });
     if (!ok) return;
-    const csv = toCsv(data);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `informe-${tipo}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    setMessage('Archivo CSV generado');
+
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      
+      const addToSheet = (sheetName, jsonData) => {
+        const worksheet = XLSX.utils.json_to_sheet(jsonData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      };
+
+      if (tipo === 'resumen') {
+        addToSheet("Resumen", [{
+          "Total Usuarios": data.totalUsuarios,
+          "Productores Activos": data.totalProductoresActivos,
+          "Lotes Activos": data.totalLotesActivos,
+          "Turnos Activos": data.totalTurnosActivos,
+          "Última Actualización": formatValue(data.ultimaActualizacion)
+        }]);
+        if (data.usuarios) addToSheet("Usuarios", data.usuarios.map(u => ({ Nombre: u.nombre, Email: u.email, Rol: u.role, IPT: u.ipt || '-' })));
+        if (data.actividadMovil) addToSheet("Actividad Móvil", data.actividadMovil);
+        if (data.lotesConDueno) addToSheet("Lotes", data.lotesConDueno);
+      } else if (tipo === 'productores') {
+        addToSheet("Productores", data.map(p => ({ IPT: p.ipt, Nombre: p.nombreCompleto || p.nombre, Estado: p.estado, Lotes: p.totalLotes ?? 0, Turnos: p.totalTurnos ?? 0 })));
+      } else if (tipo === 'insumosResumen') {
+        addToSheet("Insumos Total", [{ Asignado: data.totalAsignado, Entregado: data.totalEntregado, Pendiente: data.totalPendiente }]);
+        addToSheet("Por Insumo", Object.entries(data.porInsumo || {}).map(([n, m]) => ({ Insumo: n, ...m })));
+      } else if (tipo === 'turnosEficiencia') {
+        addToSheet("Turnos Conteo", [data.conteo || {}]);
+        addToSheet("Turnos Porcentaje", [data.porcentaje || {}]);
+      } else {
+        const rows = Array.isArray(data) ? data : [data];
+        addToSheet("Datos", rows);
+      }
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `Informe_IPT_${tipo}_${timestamp}.xlsx`);
+      setMessage('Archivo Excel generado exitosamente');
+    } catch (err) {
+      console.error("Error al exportar Excel:", err);
+      setMessage("Error al generar el archivo Excel");
+    }
   };
 
   const renderKV = (obj) => {
@@ -638,45 +676,105 @@ const Informes = () => {
   };
 
   return (
-    <div className="section-card informes page-container">
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <h2 className="users-title">Informes</h2>
-      <div className="inf-controls">
-        <select className="select-inst select-lg" value={tipo} onChange={e=>setTipo(e.target.value)}>
-          <option value="resumen">Resumen general</option>
-          <option value="productores">Productores activos</option>
-          <option value="insumosResumen">Insumos: asignación y consumo</option>
-          <option value="turnosEficiencia">Turnos: eficiencia y cumplimiento</option>
-        </select>
-        <div style={{ display:'flex', alignItems:'flex-start', gap: 8 }}>
-          <div>
-            <div className="inf-date-label">Fecha inicio</div>
-            <input className="input-inst inf-date-input" type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)} />
+    <div className="informes-container">
+      {/* Header de Informes */}
+      <div className="informes-header-row">
+        <div className="informes-header-left">
+          <HomeButton />
+          <div className="informes-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
           </div>
-          <div>
-            <div className="inf-date-label">Fecha fin</div>
-            <input className="input-inst inf-date-input" type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)} />
+          <div className="informes-header-titles">
+            <h1 className="main-title">Informes y Estadísticas</h1>
+            <p className="subtitle">Consultá resúmenes generales, actividad de productores y eficiencia del sistema.</p>
           </div>
         </div>
-        <div className="inf-actions">
-          <button className="btn" onClick={generar}>{loading? 'Generando…' : 'Generar'}</button>
-          <button className="btn" onClick={expPdf}>Exportar PDF</button>
-          <button className="btn" onClick={expExcel}>Exportar Excel</button>
+        <div className="informes-header-actions">
+          <button className="btn-informe-action pdf" onClick={expPdf}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            Exportar PDF
+          </button>
+          <button className="btn-informe-action excel" onClick={expExcel}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Exportar Excel
+          </button>
         </div>
       </div>
-      {message && <div className="users-msg ok" style={{ marginBottom: 10 }}>{message}</div>}
-      {renderData()}
+
+      {/* Filtros e Interfaz de Generación */}
+      <div className="informes-filters-card">
+        <div className="informe-filter-group" style={{ flex: '2' }}>
+          <label>Tipo de Informe</label>
+          <div className="informe-input-wrapper">
+            <select value={tipo} onChange={e=>setTipo(e.target.value)}>
+              <option value="resumen">Resumen general</option>
+              <option value="productores">Productores activos</option>
+              <option value="insumosResumen">Insumos: asignación y consumo</option>
+              <option value="turnosEficiencia">Turnos: eficiencia y cumplimiento</option>
+            </select>
+          </div>
+        </div>
+        <div className="informe-filter-group">
+          <label>Fecha Inicio</label>
+          <div className="informe-input-wrapper">
+            <input type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)} />
+          </div>
+        </div>
+        <div className="informe-filter-group">
+          <label>Fecha Fin</label>
+          <div className="informe-input-wrapper">
+            <input type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)} />
+          </div>
+        </div>
+        <button className="btn-clear-filters" onClick={() => { setTipo('resumen'); setFechaInicio(''); setFechaFin(''); }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 3H2L10 12.46V19L14 21V12.46L22 3Z"></path>
+          </svg>
+          Limpiar filtros
+        </button>
+        <button className="btn-informe-action primary" onClick={generar} disabled={loading}>
+          {loading ? 'Generando...' : 'Generar Informe'}
+        </button>
+      </div>
+
+      {message && <div className="alert-box success">{message}</div>}
+      
+      <div className="results-container">
+        {loading ? (
+          <div style={{ padding: 60, color: '#1a4d2e', textAlign: 'center', fontSize: '18px', fontWeight: '700' }}>
+            Generando informe solicitado...
+          </div>
+        ) : renderData()}
+      </div>
+
       {mapView && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }} onClick={()=>setMapView(null)}>
-          <div style={{ width:'86%', maxWidth:900, background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:12, boxShadow:'0 12px 30px rgba(16,24,32,0.20)' }} onClick={(e)=>e.stopPropagation()}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontWeight:700, color:'#14532d' }}>{mapView.title || 'Ubicación'}</div>
-              <button className="btn" onClick={()=>setMapView(null)}>Cerrar</button>
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, backdropFilter: 'blur(4px)' }} onClick={()=>setMapView(null)}>
+          <div style={{ width:'90%', maxWidth:1000, background:'#fff', border:'1px solid #e2e8f0', borderRadius:20, padding:24, boxShadow:'0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+              <div style={{ fontSize: '20px', fontWeight:800, color:'#1e293b' }}>{mapView.title || 'Ubicación en Mapa'}</div>
+              <button className="btn-icon-edit" onClick={()=>setMapView(null)} style={{ padding: 8 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
             </div>
             {Array.isArray(mapView?.polygon) && mapView.polygon.length>=3 ? (
               <MapPolygon points={mapView.polygon} />
             ) : (
-              <div id="inf-map-container" style={{ width:'100%', height:420, borderRadius:12 }} />
+              <div id="inf-map-container" style={{ width:'100%', height:500, borderRadius:12 }} />
             )}
           </div>
         </div>

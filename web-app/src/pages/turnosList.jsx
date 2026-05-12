@@ -958,21 +958,37 @@ const canTransitionEstado = (fromEstado, toEstado) => {
 
 return (
   <div className="turnos-list page-container">
-    <div style={{ marginBottom: 8 }}><HomeButton /></div>
-    
-    <div className="header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-      <h2 className="users-title" style={{ margin: 0 }}>Gestión de Turnos</h2>
-      <div className="view-tabs" style={{ display: 'flex', gap: 8 }}>
-        <button 
-          className={`btn turnos-toggle-btn ${viewMode === 'activos' ? 'turnos-toggle-btn--active' : ''}`} 
-          onClick={() => setViewMode('activos')}
-          style={{ padding: '6px 12px', fontSize: 15 }}
-        >Activos</button>
-        <button 
-          className={`btn turnos-toggle-btn ${viewMode === 'historial' ? 'turnos-toggle-btn--active' : ''}`} 
-          onClick={() => setViewMode('historial')}
-          style={{ padding: '6px 12px', fontSize: 15 }}
-        >Archivados</button>
+    <div className="turnos-header-row">
+      <div className="turnos-header-left">
+        <HomeButton />
+        <div className="turnos-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4.5" width="18" height="16.5" rx="2.5"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18"></path>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01"></path>
+          </svg>
+        </div>
+        <div className="turnos-header-titles">
+          <h1 className="main-title">Gestión de Turnos</h1>
+          <p className="subtitle">Administrá y controlá todos los turnos de los productores.</p>
+        </div>
+      </div>
+
+      <div className="turnos-header-actions">
+        <div className="view-tabs">
+          <button
+            className={`btn turnos-toggle-btn ${viewMode === 'activos' ? 'turnos-toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('activos')}
+          >
+            Activos
+          </button>
+          <button
+            className={`btn turnos-toggle-btn ${viewMode === 'historial' ? 'turnos-toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('historial')}
+          >
+            Archivados
+          </button>
+        </div>
       </div>
     </div>
 
@@ -994,45 +1010,35 @@ return (
       <div
         role="dialog"
         aria-modal="true"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.35)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 16,
-          zIndex: 9999,
-        }}
+        className="turnos-modal-overlay"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) closeCapacidadModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Capacidad de turnos por día</div>
-            <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
+        <div className="turnos-modal-card turnos-modal-card--cap">
+          <div className="turnos-modal-header">
+            <div className="turnos-modal-title">Capacidad de turnos por día</div>
+            <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving}>Cerrar</button>
           </div>
-          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Fecha</label>
+          <div className="turnos-modal-body">
+            <div className="turnos-form-group">
+              <label className="turnos-modal-label">Fecha</label>
               <input
                 type="date"
                 className="input-inst"
                 value={capFecha}
                 onChange={(e) => setCapFecha(e.target.value)}
                 disabled={capSaving}
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
               {formatFechaLarga(capFecha) ? (
-                <div style={{ fontSize: 14, color: '#6b7280' }}>
+                <div className="turnos-modal-help">
                   {formatFechaLarga(capFecha)}
                 </div>
               ) : null}
             </div>
 
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Capacidad</label>
+            <div className="turnos-form-group">
+              <label className="turnos-modal-label">Capacidad</label>
               <input
                 type="number"
                 min={1}
@@ -1041,9 +1047,8 @@ return (
                 value={capacidad}
                 onChange={(e) => setCapacidad(e.target.value)}
                 disabled={capSaving}
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 14, color: '#6b7280' }}>
+              <div className="turnos-modal-help">
                 {capLoading
                   ? 'Cargando capacidad…'
                   : (() => {
@@ -1061,7 +1066,7 @@ return (
               </div>
             </div>
           </div>
-          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div className="turnos-modal-footer">
             <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving}>Cancelar</button>
             <button className="btn primary" onClick={saveCapacidad} disabled={capSaving || capLoading}>
               {capSaving ? 'Guardando…' : 'Guardar'}
@@ -1075,60 +1080,40 @@ return (
       <div
         role="dialog"
         aria-modal="true"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.35)',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'center',
-          padding: 16,
-          overflowY: 'auto',
-          zIndex: 9999,
-        }}
+        className="turnos-modal-overlay turnos-modal-overlay--scroll"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) closeConfigModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 16 }}>
+        <div className="turnos-modal-card turnos-modal-card--cfg">
           {cfgRangeIntentOpen ? (
             <div
               role="dialog"
               aria-modal="true"
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0,0,0,0.45)',
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'center',
-                padding: 16,
-                overflowY: 'auto',
-                zIndex: 10000,
-              }}
+              className="turnos-modal-overlay turnos-modal-overlay--scroll"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) cancelRangeIntent()
               }}
             >
-              <div style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 16 }}>
-                <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>Configuración de turnos</div>
-                  <button className="btn secondary" onClick={cancelRangeIntent} style={{ padding: '6px 10px' }}>Cancelar</button>
+              <div className="turnos-modal-card turnos-modal-card--range">
+                <div className="turnos-modal-header">
+                  <div className="turnos-modal-title">Configuración de turnos</div>
+                  <button className="btn secondary" onClick={cancelRangeIntent}>Cancelar</button>
                 </div>
-                <div style={{ padding: 16, display: 'grid', gap: 10 }}>
-                  <div style={{ fontSize: 16, color: '#374151', lineHeight: 1.4 }}>
+                <div className="turnos-modal-body" style={{ gap: 10 }}>
+                  <div style={{ fontSize: 16, lineHeight: 1.4 }}>
                     Seleccionaste un rango de fechas para los turnos. ¿Qué querés hacer?
                   </div>
-                  <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '10px 12px' }}>
+                  <div className="turnos-modal-note">
                     <strong>Rango:</strong> {formatYmdCortoOrDash(cfgPendingDesde)} → {formatYmdCortoOrDash(cfgPendingHasta)}
                   </div>
                   {(cfgPendingDesde && cfgPendingHasta && cfgPendingDesde > cfgPendingHasta) ? (
-                    <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '10px 12px' }}>
+                    <div className="turnos-modal-note turnos-modal-note--danger">
                       El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
                     </div>
                   ) : null}
                 </div>
-                <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+                <div className="turnos-modal-footer" style={{ flexWrap: 'wrap' }}>
                   <button
                     className="btn secondary"
                     onClick={() => applyRangeIntent('disable')}
@@ -1147,12 +1132,13 @@ return (
               </div>
             </div>
           ) : null}
-          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>Habilitación de turnos</div>
-            <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
+          <div className="turnos-modal-header">
+            <div className="turnos-modal-title">Habilitación de turnos</div>
+            <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving}>Cerrar</button>
           </div>
-          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+          <div className="turnos-modal-body">
             <div
+              className="turnos-cfg-box"
               style={{
                 borderRadius: 12,
                 border: `1px solid ${cfgEstadoBorder}`,
@@ -1164,37 +1150,18 @@ return (
             >
               <div style={{ display: 'grid', gap: 12 }}>
                 <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>Configuración</div>
-                  <div style={{ fontSize: 14, color: '#6b7280' }}>Gestioná cómo se habilitan los turnos</div>
+                  <div style={{ fontSize: 16, fontWeight: 800 }}>Configuración</div>
+                  <div className="turnos-modal-help">Gestioná cómo se habilitan los turnos</div>
                 </div>
 
                 <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    background: '#e5e7eb',
-                    borderRadius: 999,
-                    padding: 4,
-                    border: '1px solid #d1d5db',
-                    boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.06)',
-                    gap: 4,
-                  }}
+                  className="turnos-segment"
                 >
                   <button
                     type="button"
                     onClick={setModoManual}
                     disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                    style={{
-                      border: 'none',
-                      background: cfgModo === 'manual' ? '#dcfce7' : 'transparent',
-                      color: cfgModo === 'manual' ? '#14532d' : '#374151',
-                      fontWeight: cfgModo === 'manual' ? 800 : 700,
-                      padding: '10px 12px',
-                      borderRadius: 999,
-                      cursor: (cfgSaving || cfgLoading || cfgRangeIntentOpen) ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 150ms ease, color 150ms ease, transform 150ms ease',
-                      boxShadow: cfgModo === 'manual' ? '0 6px 14px rgba(15,23,42,0.10)' : 'none',
-                    }}
+                    className={`turnos-segment-btn ${cfgModo === 'manual' ? 'is-active' : ''}`}
                   >
                     Manual
                   </button>
@@ -1202,27 +1169,17 @@ return (
                     type="button"
                     onClick={setModoRango}
                     disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                    style={{
-                      border: 'none',
-                      background: cfgModo === 'rango' ? '#dcfce7' : 'transparent',
-                      color: cfgModo === 'rango' ? '#14532d' : '#374151',
-                      fontWeight: cfgModo === 'rango' ? 800 : 700,
-                      padding: '10px 12px',
-                      borderRadius: 999,
-                      cursor: (cfgSaving || cfgLoading || cfgRangeIntentOpen) ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 150ms ease, color 150ms ease, transform 150ms ease',
-                      boxShadow: cfgModo === 'rango' ? '0 6px 14px rgba(15,23,42,0.10)' : 'none',
-                    }}
+                    className={`turnos-segment-btn ${cfgModo === 'rango' ? 'is-active' : ''}`}
                   >
                     Por rango de fechas
                   </button>
                 </div>
 
                 <div
+                  className="turnos-cfg-status"
                   style={{
                     borderRadius: 12,
                     border: `1px solid ${cfgEstadoBorder}`,
-                    background: '#ffffff',
                     padding: 12,
                     display: 'grid',
                     gap: 8,
@@ -1235,13 +1192,13 @@ return (
                         Estado actual
                       </div>
                       <div
+                        className="turnos-cfg-chip"
                         style={{
                           padding: '4px 10px',
                           borderRadius: 999,
                           fontSize: 14,
                           fontWeight: 900,
                           border: `1px solid ${cfgEstadoChipBorder}`,
-                          background: '#ffffff',
                           color: cfgEstadoAccent,
                           boxShadow: '0 6px 14px rgba(15,23,42,0.06)',
                         }}
@@ -1249,7 +1206,7 @@ return (
                         {cfgEstadoLabel}
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 700 }}>
+                    <div className="turnos-cfg-mode" style={{ fontSize: 14, fontWeight: 700 }}>
                       {cfgModo === 'manual' ? 'Modo: Manual' : 'Modo: Por rango'}
                     </div>
                   </div>
@@ -1261,7 +1218,7 @@ return (
                         : 'Los usuarios NO pueden solicitar turnos. Verán un mensaje al intentar hacerlo.'}
                     </div>
                     {mostrarAvisoEstadoDesconocido ? (
-                      <div style={{ fontSize: 14, color: '#64748b' }}>
+                      <div className="turnos-modal-help">
                         No se pudo verificar el estado actual. Verificá tu conexión.
                       </div>
                     ) : null}
@@ -1270,7 +1227,7 @@ return (
 
                 {cfgModo === 'manual' ? (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Manual</div>
+                    <div className="turnos-modal-section-title">Manual</div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: (cfgSaving || cfgLoading) ? 'not-allowed' : 'pointer' }}>
                       <input
                         type="checkbox"
@@ -1278,17 +1235,17 @@ return (
                         onChange={(e) => setCfgHabilitado(e.target.checked)}
                         disabled={cfgSaving || cfgLoading}
                       />
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                      <div className="turnos-modal-section-text">
                         {cfgHabilitado ? 'Turnos habilitados' : 'Turnos deshabilitados'}
                       </div>
                     </label>
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Por rango de fechas</div>
+                    <div className="turnos-modal-section-title">Por rango de fechas</div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
-                        <label style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#374151' }}>Desde</label>
+                        <label className="turnos-modal-label" style={{ display: 'block' }}>Desde</label>
                         <input
                           type="date"
                           className="input-inst"
@@ -1298,11 +1255,10 @@ return (
                             setDraftDesde(next)
                           }}
                           disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
                         />
                       </div>
                       <div style={{ display: 'grid', gap: 6, flex: '1 1 180px', minWidth: 180 }}>
-                        <label style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#374151' }}>Hasta</label>
+                        <label className="turnos-modal-label" style={{ display: 'block' }}>Hasta</label>
                         <input
                           type="date"
                           className="input-inst"
@@ -1312,11 +1268,10 @@ return (
                             setDraftHasta(next)
                           }}
                           disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
                         />
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280' }}>
+                    <div className="turnos-modal-help">
                       Definí el rango y luego tocá “Aplicar rango” para elegir qué querés hacer.
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1331,11 +1286,11 @@ return (
                       </button>
                     </div>
                     {draftRangoInvalido ? (
-                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+                      <div className="turnos-modal-note turnos-modal-note--danger" style={{ fontSize: 14 }}>
                         El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
                       </div>
                     ) : draftHasRangoFechas ? (
-                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
+                      <div className="turnos-modal-note" style={{ fontSize: 14 }}>
                         <strong>Rango:</strong> {formatYmdCortoOrDash(draftDesde)} → {formatYmdCortoOrDash(draftHasta)} ·{' '}
                         <strong>Acción:</strong> {draftEsDistinto && draftRangoCompletoValido ? 'A confirmar' : (cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango')}
                       </div>
@@ -1346,7 +1301,7 @@ return (
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Mensaje del administrador (opcional)</label>
+              <label className="turnos-modal-label" style={{ fontSize: 16 }}>Mensaje del administrador (opcional)</label>
               <input
                 type="text"
                 className="input-inst"
@@ -1354,20 +1309,19 @@ return (
                 onChange={(e) => setCfgMensaje(e.target.value)}
                 disabled={cfgSaving || cfgLoading}
                 placeholder="Ej: Los turnos se habilitan nuevamente el lunes."
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 15, color: '#6b7280' }}>
+              <div className="turnos-modal-help" style={{ fontSize: 15 }}>
                 {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se muestra en la app. Si los turnos están deshabilitados, se muestra junto al mensaje por defecto. Si están habilitados, se muestra como aviso informativo.'}
               </div>
               {estadoTurnosHabilitados ? (
-                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
+                <div className="turnos-backend-badge turnos-backend-badge--ok">
                   <strong>Estado (backend):</strong> Turnos habilitados{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
                 </div>
               ) : (
-                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
+                <div className="turnos-backend-badge turnos-backend-badge--warn">
                   <strong>Estado (backend):</strong> Turnos deshabilitados hasta nuevo aviso{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
                   {mostrarAvisoEstadoDesconocido ? (
-                    <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
+                    <div className="turnos-modal-help" style={{ marginTop: 6 }}>
                       No se pudo verificar el estado actual. Verificá tu conexión.
                     </div>
                   ) : null}
@@ -1375,7 +1329,7 @@ return (
               )}
             </div>
           </div>
-          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div className="turnos-modal-footer">
             <button className="btn secondary" onClick={closeConfigModal} disabled={cfgSaving}>Cancelar</button>
             <button className="btn primary" onClick={saveConfigTurnos} disabled={cfgSaving || cfgLoading}>
               {cfgSaving ? 'Guardando…' : 'Guardar'}

@@ -337,18 +337,49 @@ const LotesList = () => {
   };
 
   return (
-    
-    <div className="page-container">
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ margin: 0 }}>Gestión de Lotes</h2>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Link to="/lotes/mapa" className="btn">Mapa general</Link>
-          <button className="btn" onClick={handleExportExcel}>Exportar Excel</button>
-          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
+    <div className="lotes-container">
+      {/* Header de Lotes */}
+      <div className="lotes-header-row">
+        <div className="lotes-header-left">
+          <HomeButton />
+          <div className="lotes-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div className="lotes-header-titles">
+            <h1 className="main-title">Gestión de Lotes</h1>
+            <p className="subtitle">Administrá y consultá todos los lotes registrados.</p>
+          </div>
+        </div>
+        <div className="lotes-header-actions">
+          <Link to="/lotes/mapa" className="btn-lote-action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+              <line x1="8" y1="2" x2="8" y2="18"></line>
+              <line x1="16" y1="6" x2="16" y2="22"></line>
+            </svg>
+            Mapa general
+          </Link>
+          <button className="btn-lote-action" onClick={handleExportExcel}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Exportar Excel
+          </button>
+          <Link to="/lotes/nuevo" className="btn-lote-action primary">
+            <span style={{ fontSize: '20px', lineHeight: '1' }}>+</span> Nuevo lote
+          </Link>
         </div>
       </div>
 
+      {/* Filtros */}
       <LoteFilters 
         filters={filters} 
         onFilterChange={handleFilterChange} 
@@ -356,65 +387,132 @@ const LotesList = () => {
       />
 
       {loading ? (
-        <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando lotes...</div>
+        <div style={{ padding: 60, color: '#1a4d2e', textAlign: 'center', fontSize: '18px', fontWeight: '700' }}>
+          Cargando lotes...
+        </div>
       ) : (
         <>
           {filteredAndSortedLotes.length === 0 ? (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px', 
-              backgroundColor: '#f9fafb', 
-              borderRadius: '12px',
-              border: '1px dashed #d1d5db',
-              color: '#6b7280'
-            }}>
-              {lotes.length === 0 ? "No hay lotes registrados." : "No se encontraron lotes con los filtros aplicados."}
+            <div className="lotes-empty-state">
+              <div className="empty-state-illustration">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  <path d="M12 22V12"></path>
+                  <path d="M12 8a3 3 0 0 1 3-3h1"></path>
+                  <path d="M12 8a3 3 0 0 0-3-3H8"></path>
+                  <path d="M12 12l8.73-5.04"></path>
+                  <path d="M12 12L3.27 6.96"></path>
+                </svg>
+              </div>
+              <h3 className="empty-state-title">No hay lotes registrados</h3>
+              <p className="empty-state-desc">
+                {lotes.length === 0 
+                  ? "Aún no se han creado lotes. Comenzá agregando un nuevo lote para llevar un mejor control de tu producción."
+                  : "No se encontraron lotes con los filtros aplicados. Intentá ajustar tu búsqueda."}
+              </p>
+              <button className="btn-create-empty" onClick={() => navigate("/lotes/nuevo")}>
+                <span style={{ fontSize: '20px', lineHeight: '1' }}>+</span> Crear nuevo lote
+              </button>
             </div>
           ) : (
-            <div className="table-wrap">
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f0f0f0' }}>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Superficie (ha)</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Método</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAndSortedLotes.map((lote) => (
-                    <tr key={lote.id}>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                        <div>{lote.nombre || '-'}</div>
-                        {ultimaModByLoteId[lote.id]?.usuarioId ? (
-                          <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
-                            Última modificación: {ultimaModByLoteId[lote.id]?.usuarioNombre || ultimaModByLoteId[lote.id]?.usuarioId}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.ipt || '-'}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.superficie ? lote.superficie.toFixed(2) : '-'}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.estado || 'Pendiente'}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{formatMetodo(lote.metodoMarcado)}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                        <div className="actions-col" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                          <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}`)}>Ver</button>
-                          <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}/editar`)}>Editar</button>
-                          <button className="btn secondary" onClick={() => openHistorial(lote.id)}>Historial</button>
+            <div className="users-table-card">
+              <div className="table-responsive">
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                          Nombre
                         </div>
-                      </td>
+                      </th>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                          IPT
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                          Superficie (ha)
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                          Estado
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                          Método
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                          Acciones
+                        </div>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredAndSortedLotes.map((lote) => (
+                      <tr key={lote.id}>
+                        <td>
+                          <div className="user-info-cell">
+                            <div className="user-avatar" style={{ backgroundColor: '#f0fdf4', color: '#166534' }}>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span className="user-name">{lote.nombre || '-'}</span>
+                              {ultimaModByLoteId[lote.id]?.usuarioId ? (
+                                <span className="user-date">
+                                  Mod: {ultimaModByLoteId[lote.id]?.usuarioNombre || ultimaModByLoteId[lote.id]?.usuarioId}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td><span className="user-email">{lote.ipt || '-'}</span></td>
+                        <td><span className="lotes-superficie">{lote.superficie ? lote.superficie.toFixed(2) : '-'}</span></td>
+                        <td>
+                          <div className={`status-badge ${lote.activo !== false ? 'active' : 'inactive'}`}>
+                            <span className="dot"></span>
+                            {lote.estado || 'Activo'}
+                          </div>
+                        </td>
+                        <td><span className="user-date">{formatMetodo(lote.metodoMarcado)}</span></td>
+                        <td>
+                          <div className="user-actions">
+                            <div className="action-buttons-row">
+                              <button className="btn-action-activate" onClick={() => navigate(`/lotes/${lote.id}`)}>
+                                Ver
+                              </button>
+                              <button className="btn-action-reset" onClick={() => navigate(`/lotes/${lote.id}/editar`)}>
+                                Editar
+                              </button>
+                            </div>
+                            <button className="btn-action-reset" style={{ width: '100%' }} onClick={() => openHistorial(lote.id)}>
+                              Historial
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="table-footer">
+                <span className="pagination-info">Total: {filteredAndSortedLotes.length} lotes</span>
+              </div>
             </div>
           )}
         </>
       )}
     </div>
-    
   );
 };
 

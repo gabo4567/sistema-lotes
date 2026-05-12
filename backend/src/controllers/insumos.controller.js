@@ -131,7 +131,7 @@ export const crearInsumo = async (req, res) => {
     const insumo = {
       nombre: nom,
       cantidadDisponible: cant,
-      unidad: unidad ? String(unidad) : "bolsas",
+      unidad: unidad ? String(unidad) : "cosecha",
       descripcion: descripcion ? String(descripcion) : "",
       estado: (estado && ["disponible","no_disponible"].includes(String(estado))) ? String(estado) : "disponible",
       activo: true,

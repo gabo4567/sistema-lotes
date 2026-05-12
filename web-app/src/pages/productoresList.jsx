@@ -251,15 +251,36 @@ const ProductoresList = () => {
   if (error) return <div style={{ padding: 24, color: "#c0392b" }}>{error}</div>;
 
   return (
-    <div className="users-list page-container" style={{ width: '100%' }}>
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: 12, flexWrap: 'wrap' }}>
-        <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }} onClick={onClickImport} disabled={importing}>
-            {importing ? "Importando…" : "Importar Excel"}
+    <div className="productores-container">
+      {/* Header de Productores */}
+      <div className="productores-header-row">
+        <div className="productores-header-left">
+          <HomeButton />
+          <div className="productores-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <div className="productores-header-titles">
+            <h1 className="main-title">Gestión de Productores</h1>
+            <p className="subtitle">Administrá la base de datos de productores y su información de contacto.</p>
+          </div>
+        </div>
+        <div className="productores-header-actions">
+          <button className="btn-productor-action" onClick={onClickImport} disabled={importing}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            {importing ? "Importando..." : "Importar Excel"}
           </button>
-          <Link to="/productores/nuevo" className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }}>Nuevo productor</Link>
+          <Link to="/productores/nuevo" className="btn-productor-action primary">
+            <span style={{ fontSize: '20px', lineHeight: '1' }}>+</span> Nuevo productor
+          </Link>
           <input
             ref={fileInputRef}
             type="file"
@@ -270,104 +291,149 @@ const ProductoresList = () => {
         </div>
       </div>
 
-      <div className="filters-bar" style={{ 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: 12, 
-        backgroundColor: '#f8fafc', 
-        padding: 16, 
-        borderRadius: 12, 
-        marginBottom: 20,
-        border: '1px solid #e2e8f0',
-        alignItems: 'flex-end'
-      }}>
-        <div className="filter-item" style={{ flex: 1, minWidth: 220 }}>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>IPT</label>
-          <input
-            type="text"
-            className="input-inst"
-            placeholder="Filtrar por IPT..."
-            value={iptFilter}
-            onChange={e=>setIptFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
-          />
+      {/* Filtros */}
+      <div className="productores-filters-card">
+        <div className="productor-filter-group" style={{ flex: '0 0 240px' }}>
+          <label>IPT</label>
+          <div className="productor-input-wrapper">
+            <input
+              type="text"
+              placeholder="Filtrar por IPT..."
+              value={iptFilter}
+              onChange={e => setIptFilter(e.target.value)}
+            />
+          </div>
         </div>
-        <div className="filter-item" style={{ flex: 1, minWidth: 260 }}>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
-          <input
-            type="text"
-            className="input-inst"
-            placeholder="Filtrar por nombre..."
-            value={nameFilter}
-            onChange={e=>setNameFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
-          />
+        <div className="productor-filter-group">
+          <label>Nombre del productor</label>
+          <div className="productor-input-wrapper">
+            <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              placeholder="Buscar por nombre..."
+              value={nameFilter}
+              onChange={e => setNameFilter(e.target.value)}
+            />
+          </div>
         </div>
-        <button
-          className="btn secondary"
-          onClick={() => { setIptFilter(''); setNameFilter(''); }}
-          style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
-        >
-          Limpiar Filtros
+        <button className="btn-clear-filters" onClick={() => { setIptFilter(''); setNameFilter(''); }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 3H2L10 12.46V19L14 21V12.46L22 3Z"></path>
+          </svg>
+          Limpiar filtros
         </button>
       </div>
 
       {loading ? (
-        <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando…</div>
+        <div style={{ padding: 60, color: '#1a4d2e', textAlign: 'center', fontSize: '18px', fontWeight: '700' }}>
+          Cargando productores...
+        </div>
       ) : (
-        <div className="table-wrap">
-          <table className="table-inst" style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f0f0f0' }}>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Teléfono</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Localidad</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Ingresos</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {viewItems.length === 0 ? (
-                <tr><td colSpan={7} style={{ border: '1px solid #ddd', padding: '12px', textAlign:'center' }}>Sin resultados</td></tr>
-              ) : viewItems.map((p) => (
-                <tr key={p.id}>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.ipt || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.nombreCompleto || ''}>{p.nombreCompleto || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.telefono || ''}>{p.telefono || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.domicilioCasa || ''}>{p.domicilioCasa || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.estado || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, minmax(120px, 1fr))',
-                        gap: 8,
-                        justifyItems: 'stretch',
-                        alignItems: 'center',
-                        maxWidth: 300,
-                        margin: '0 auto'
-                      }}
-                    >
-                      <button className="btn btn-compact" onClick={() => onVer(p.id)} style={{ minWidth: 0 }}>Ver</button>
-                      <button className="btn btn-compact" onClick={() => onEditar(p.id)} style={{ minWidth: 0 }}>Editar</button>
-                      <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)} style={{ minWidth: 0 }}>Reset contraseña</button>
-                      <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)} style={{ minWidth: 0 }}>Re-empadronar</button>
-                      <button
-                        className="btn btn-danger btn-compact"
-                        onClick={() => onDesactivar(p)}
-                        style={{ gridColumn: '1 / -1', minWidth: 0 }}
-                      >
-                        Desactivar
-                      </button>
+        <div className="users-table-card">
+          <div className="table-responsive">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                      IPT / Nombre
                     </div>
-                  </td>
+                  </th>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                      Contacto
+                    </div>
+                  </th>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      Localidad
+                    </div>
+                  </th>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                      Estado
+                    </div>
+                  </th>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                      Ingresos
+                    </div>
+                  </th>
+                  <th>
+                    <div className="th-content">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                      Acciones
+                    </div>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {viewItems.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>No se encontraron productores</td></tr>
+                ) : viewItems.map((p) => {
+                  const initials = (p.nombreCompleto || p.nombre || "??").split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <div className="user-info-cell">
+                          <div className="user-avatar">{initials}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span className="user-name">{p.nombreCompleto || '-'}</span>
+                            <span className="user-email">IPT: {p.ipt || '-'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span className="user-email" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                            {p.telefono || '-'}
+                          </span>
+                          <span className="user-email" style={{ fontSize: '12px', opacity: 0.8 }}>{p.email || ''}</span>
+                        </div>
+                      </td>
+                      <td><span className="user-date">{p.domicilioCasa || '-'}</span></td>
+                      <td>
+                        <div className={`status-badge ${p.estado === 'Activo' ? 'active' : 'inactive'}`}>
+                          <span className="dot"></span>
+                          {p.estado || 'Activo'}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="user-role" style={{ backgroundColor: '#f0fdf4', color: '#166534' }}>
+                          {p.historialIngresos ?? 0} ingresos
+                        </span>
+                      </td>
+                      <td>
+                        <div className="user-actions">
+                          <div className="action-buttons-row">
+                            <button className="btn-action-activate" onClick={() => onVer(p.id)}>Ver</button>
+                            <button className="btn-action-reset" onClick={() => onEditar(p.id)}>Editar</button>
+                          </div>
+                          <div className="action-buttons-row">
+                            <button className="btn-action-reset" style={{ flex: 1 }} onClick={() => onResetPassword(p.ipt)}>Reset Clave</button>
+                            <button className="btn-action-activate" style={{ flex: 1 }} onClick={() => onReempadronado(p.ipt)}>Re-empadronar</button>
+                          </div>
+                          <button className="btn-action-deactivate" onClick={() => onDesactivar(p)}>Desactivar Productor</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-footer">
+            <span className="pagination-info">Total: {viewItems.length} productores</span>
+          </div>
         </div>
       )}
     </div>
