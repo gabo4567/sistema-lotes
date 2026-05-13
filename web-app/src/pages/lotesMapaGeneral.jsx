@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import HomeButton from "../components/HomeButton";
 import { lotesService } from "../services/lotes.service";
 import { getProductores } from "../services/productores.service";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
@@ -282,7 +281,6 @@ const LotesMapaGeneral = () => {
 
   return (
     <div className="page-container">
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Mapa general de lotes</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -291,6 +289,7 @@ const LotesMapaGeneral = () => {
       </div>
 
       <div
+        className="lotes-map-filters"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(180px, 0.8fr) minmax(260px, 1.2fr) auto auto",
@@ -333,6 +332,7 @@ const LotesMapaGeneral = () => {
           Limpiar filtros
         </button>
         <div
+          className="lotes-map-filters__count"
           style={{
             minHeight: 44,
             display: "flex",

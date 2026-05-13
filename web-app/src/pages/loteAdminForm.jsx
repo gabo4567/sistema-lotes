@@ -117,8 +117,8 @@ const LoteAdminForm = () => {
             const antes = v?.antes ?? "-";
             const despues = v?.despues ?? "-";
             return `
-              <div style="border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#f8fafc;">
-                <div style="font-weight:700; margin-bottom:6px;">Campo: ${esc(k)}</div>
+              <div class="lote-history-change" style="border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#f8fafc;">
+                <div class="lote-history-change__field" style="font-weight:700; margin-bottom:6px;">Campo: ${esc(k)}</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                   <div><div style="color:#64748b; font-size:12px;">Antes</div><div style="white-space:pre-wrap;">${esc(typeof antes === "object" ? JSON.stringify(antes) : antes)}</div></div>
                   <div><div style="color:#64748b; font-size:12px;">Despu\u00e9s</div><div style="white-space:pre-wrap;">${esc(typeof despues === "object" ? JSON.stringify(despues) : despues)}</div></div>
@@ -138,6 +138,12 @@ const LoteAdminForm = () => {
       confirmButtonText: "Cerrar",
       confirmButtonColor: "#2E7D32",
       width: 800,
+      customClass: {
+        popup: "lote-history-swal",
+        title: "lote-history-swal__title",
+        htmlContainer: "lote-history-swal__html",
+        confirmButton: "lote-history-swal__button",
+      },
       didOpen: async () => {
         try {
           Swal.showLoading();
@@ -154,14 +160,14 @@ const LoteAdminForm = () => {
             return;
           }
           const html = `
-            <div style="text-align:left; display:flex; flex-direction:column; gap:12px; max-height:60vh; overflow:auto; padding-right:6px;">
+            <div class="lote-history-list" style="text-align:left; display:flex; flex-direction:column; gap:12px; max-height:60vh; overflow:auto; padding-right:6px;">
               ${historial
                 .map((h) => {
                   const isUpd = String(h?.accion || "").toLowerCase().trim() === "actualizar";
                   const cambiosHtml = isUpd ? renderCambios(h?.cambios) : "<div style='color:#6b7280'>Sin detalles</div>";
                   const nombre = h?.usuarioNombre || h?.usuarioId || "-";
                   return `
-                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px; background:#ffffff;">
+                    <div class="lote-history-entry" style="border:1px solid #e2e8f0; border-radius:12px; padding:12px; background:#ffffff;">
                       <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                         <div style="font-weight:800;">${accionLabel(h?.accion)}</div>
                         <div style="color:#64748b;">${formatFecha(h?.fecha)}</div>

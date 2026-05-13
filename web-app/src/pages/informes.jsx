@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { resumenGeneral, productoresActivos, insumosResumen, turnosEficiencia } from "../services/informes.service";
-import HomeButton from "../components/HomeButton";
 import { confirmDialog } from "../utils/alerts";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 import MapPolygon from "../components/MapPolygon";
@@ -190,12 +189,12 @@ const Informes = () => {
       err: { bg: '#fee2e2', fg: '#7f1d1d', bd: '#ef4444' },
     }[tone] || { bg: '#eef2ff', fg: '#1e3a8a', bd: '#93c5fd' };
     return (
-      <span style={{ background: colors.bg, color: colors.fg, border: `1px solid ${colors.bd}`, borderRadius: 999, padding: '6px 12px', fontSize: 14, lineHeight: 1 }}>{text}</span>
+      <span className={`informes-badge informes-badge--${tone}`} style={{ background: colors.bg, color: colors.fg, border: `1px solid ${colors.bd}`, borderRadius: 999, padding: '6px 12px', fontSize: 14, lineHeight: 1 }}>{text}</span>
     );
   };
 
   const card = (title, children) => (
-    <div className="result-card" style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
+    <div className="result-card informes-result-card" style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
       <div style={{ fontWeight: 600, color: '#14532d', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
@@ -213,7 +212,7 @@ const Informes = () => {
       <div className="result-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
           {tiles.map(t => (
-            <div key={t.k} style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: 12 }}>
+            <div className="informes-metric-card" key={t.k} style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: 12 }}>
               <div style={{ color: '#14532d', fontSize: 13 }}>{t.label}</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: '#166534' }}>{formatValue(d[t.k])}</div>
             </div>
@@ -379,7 +378,7 @@ const Informes = () => {
     return (
       <div className="result-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
         {arr.map((p) => (
-          <div key={p.id} className="result-card" style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
+          <div key={p.id} className="result-card informes-result-card" style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ fontWeight: 700, color: '#14532d' }}>
                 {p.nombreCompleto || p.nombre || 'Productor'} {p.ipt && <span style={{ color:'#0c4a6e', fontWeight:600 }}>· IPT: {p.ipt}</span>}
@@ -411,11 +410,11 @@ const Informes = () => {
 
                     return ordered.map((g, gi) => (
                       <div key={g.id} style={{ display:'grid', gridTemplateColumns:'1fr', gap: 8, marginTop: gi === 0 ? 0 : 20 }}>
-                        <div style={{ padding: '6px 8px', borderRadius: 8, background: '#ecfdf5', border: '1px dashed #86efac' }}>
+                        <div className="informes-location-group" style={{ padding: '6px 8px', borderRadius: 8, background: '#ecfdf5', border: '1px dashed #86efac' }}>
                           <div style={{ color:'#14532d', fontWeight: 800 }}>{g.nombre}</div>
                         </div>
                         {g.items.map((u, idx) => (
-                          <div key={`${g.id}_${idx}`} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 8 }}>
+                          <div className="informes-location-row" key={`${g.id}_${idx}`} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 8 }}>
                             <div style={{ color:'#14532d', fontWeight:600 }}>{u.nombre || 'Ubicación'}</div>
                             {typeof u.lat === 'number' && typeof u.lng === 'number' ? (
                               <button className="btn" style={{ minHeight:32 }} onClick={()=>setMapView({ lat: u.lat, lng: u.lng, title: u.nombre })}>Ver mapa</button>
@@ -435,7 +434,7 @@ const Informes = () => {
               card('Lista de lotes', (
                 <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
                   {p.lotes.map(l => (
-                    <div key={l.id} style={{ background:'#f8fafc', border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
+                    <div className="informes-lote-card" key={l.id} style={{ background:'#f8fafc', border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
                       <div className="result-row"><span className="result-label">Nombre:</span> {formatValue(l.nombre)}</div>
                       <div className="result-row"><span className="result-label">Estado:</span> {formatValue(l.estado)}</div>
                       <div className="result-row"><span className="result-label">Superficie:</span> {formatValue(l.superficie)} ha</div>
@@ -495,15 +494,15 @@ const Informes = () => {
     return (
       <div className="result-grid" style={{ display:'grid', gap: 18, gridTemplateColumns:'1fr', alignItems:'stretch' }}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap: 16 }}>
-          <div style={{ background: '#ecfeff', border: '1px solid #67e8f9', borderRadius: 12, padding: 12 }}>
+          <div className="informes-metric-card informes-metric-card--info" style={{ background: '#ecfeff', border: '1px solid #67e8f9', borderRadius: 12, padding: 12 }}>
             <div style={{ color:'#0c4a6e', fontSize: 13 }}>Total asignado</div>
             <div style={{ fontSize: 20, fontWeight: 700, color:'#0c4a6e' }}>{formatValue(d.totalAsignado)}</div>
           </div>
-          <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 12, padding: 12 }}>
+          <div className="informes-metric-card informes-metric-card--success" style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 12, padding: 12 }}>
             <div style={{ color:'#166534', fontSize: 13 }}>Entregado</div>
             <div style={{ fontSize: 20, fontWeight: 700, color:'#166534' }}>{formatValue(d.totalEntregado)}</div>
           </div>
-          <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 12, padding: 12 }}>
+          <div className="informes-metric-card informes-metric-card--warn" style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 12, padding: 12 }}>
             <div style={{ color:'#7c2d12', fontSize: 13 }}>Pendiente</div>
             <div style={{ fontSize: 20, fontWeight: 700, color:'#7c2d12' }}>{formatValue(d.totalPendiente)}</div>
           </div>
@@ -570,7 +569,7 @@ const Informes = () => {
         {card('Conteo por estado', (
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap: 8 }}>
             {entriesC.map(([k, v]) => (
-              <div key={k} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'6px 10px' }}>
+              <div className="informes-inline-stat" key={k} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'6px 10px' }}>
                 <span style={{ color:'#14532d' }}>{k}</span>
                 {badge(formatValue(v), 'info')}
               </div>
@@ -580,7 +579,7 @@ const Informes = () => {
         {card('Porcentaje por estado', (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap: 8 }}>
             {entriesP.map(([k, v]) => (
-              <div key={k} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#ecfeff', border:'1px solid #67e8f9', borderRadius:8, padding:'6px 10px' }}>
+              <div className="informes-inline-stat informes-inline-stat--info" key={k} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#ecfeff', border:'1px solid #67e8f9', borderRadius:8, padding:'6px 10px' }}>
                 <span style={{ color:'#0c4a6e' }}>{k}</span>
                 {badge(`${formatValue(v)}%`, 'info')}
               </div>
@@ -595,6 +594,7 @@ const Informes = () => {
     if (loading) {
       return (
         <div
+          className="informes-empty-state"
           style={{
             marginTop: 8,
             padding: "18px 20px",
@@ -613,6 +613,7 @@ const Informes = () => {
     if (!data && !hasGenerated) {
       return (
         <div
+          className="informes-empty-state"
           style={{
             marginTop: 8,
             padding: "18px 20px",
@@ -639,8 +640,8 @@ const Informes = () => {
 
   return (
     <div className="section-card informes page-container">
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
-      <h2 className="users-title">Informes</h2>
+      <h2 className="users-title" style={{ marginBottom: 0 }}>Informes</h2>
+      <p className="section-subtitle">Generá reportes y exportá información clave del sistema.</p>
       <div className="inf-controls">
         <select className="select-inst select-lg" value={tipo} onChange={e=>setTipo(e.target.value)}>
           <option value="resumen">Resumen general</option>
@@ -668,7 +669,7 @@ const Informes = () => {
       {renderData()}
       {mapView && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }} onClick={()=>setMapView(null)}>
-          <div style={{ width:'86%', maxWidth:900, background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:12, boxShadow:'0 12px 30px rgba(16,24,32,0.20)' }} onClick={(e)=>e.stopPropagation()}>
+          <div className="informes-map-modal" style={{ width:'86%', maxWidth:900, background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:12, boxShadow:'0 12px 30px rgba(16,24,32,0.20)' }} onClick={(e)=>e.stopPropagation()}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
               <div style={{ fontWeight:700, color:'#14532d' }}>{mapView.title || 'Ubicación'}</div>
               <button className="btn" onClick={()=>setMapView(null)}>Cerrar</button>

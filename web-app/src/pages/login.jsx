@@ -8,7 +8,7 @@ import { AuthContext } from "../contexts/AuthContextBase.js";
 import { notify } from "../utils/alerts";
 import { getFirebaseApp } from "../utils/firebaseClient";
 
-import bg from "../assets/470694502_1364235428284349_7836195038289849919_n.jpg";
+import loginBg from "../assets/TABACALES-2023-18.jpg";
 import logo from "../assets/cropped-ipt-logo-byn.png";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -129,105 +129,102 @@ const Login = () => {
   const forgotTo = `/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`;
 
   return (
-    <div className="auth-split">
-      {/* LEFT - FORM */}
-      <div className="left-col">
-        <div className="auth-card">
-          <div className="header-center mb-3">
-            <img src={logo} alt="Logo" className="logo" />
-            <div>
-              <div className="admin-title">Panel de administración</div>
-              <div className="admin-subtitle">Acceso exclusivo para personal autorizado del IPT</div>
+    <div className="login-hero">
+      <div className="login-hero__bg" style={{ backgroundImage: `url(${loginBg})` }} aria-hidden="true" />
+      <div className="login-hero__overlay" aria-hidden="true" />
+
+      <div className="login-hero__content">
+        <div className="login-card">
+          <div className="login-brand">
+            <div className="login-card__hero-wrap">
+              <img className="login-card__hero" src={logo} alt="Instituto Provincial del Tabaco" />
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="mb-3 form-group">
-              <label htmlFor="email" className="form-label">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                className={`form-control${emailError ? " is-invalid" : ""}`}
-                placeholder="tucorreo@dominio.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
-                autoComplete="username"
-              />
-              {emailError && (
-                <div className="invalid-feedback" style={{ display: "block" }}>{emailError}</div>
-              )}
+          <h1 className="login-title">Panel de administración</h1>
+          <p className="login-subtitle">Acceso exclusivo para personal autorizado del IPT</p>
+
+          <form onSubmit={handleSubmit} noValidate className="login-form">
+            <div className="login-field">
+              <label htmlFor="email" className="login-label">Email</label>
+              <div className="login-input">
+                <span className="login-input__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </span>
+                <input
+                  id="email"
+                  type="email"
+                  className="login-input__field"
+                  placeholder="tucorreo@dominio.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
+                  autoComplete="username"
+                />
+              </div>
+              {emailError ? (
+                <div className="login-error">{emailError}</div>
+              ) : null}
             </div>
 
-            <div className="mb-3 form-group password-wrapper">
-              <label htmlFor="password" className="form-label">
-                Contraseña
-              </label>
-              <div className="password-input-wrap">
+            <div className="login-field">
+              <label htmlFor="password" className="login-label">Contraseña</label>
+              <div className="login-input">
+                <span className="login-input__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </span>
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  className="form-control"
+                  className="login-input__field"
                   placeholder="Contraseña"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                 />
-
                 <button
                   type="button"
-                  className="toggle-pass"
+                  className="login-input__toggle"
                   onClick={() => setShowPassword((s) => !s)}
                   aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
                   {showPassword ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                      <path d="M3 3L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M9.88 9.88C9.33 10.42 9 11.19 9 12C9 13.66 10.34 15 12 15C12.81 15 13.58 14.67 14.12 14.12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M12 7C8 7 4.73 9.11 3 12C4.73 14.89 8 17 12 17C16 17 19.27 14.89 21 12C19.27 9.11 16 7 12 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
                     </svg>
                   ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                   )}
                 </button>
               </div>
             </div>
 
-            <div className="actions">
-              <button
-                type="submit"
-                className="btn btn-primary btn-primary-custom"
-                disabled={loading}
-              >
-                {loading ? "Ingresando..." : "Ingresar"}
-              </button>
+            <button type="submit" className="login-submit" disabled={loading}>
+              {loading ? "Ingresando..." : "Ingresar"}
+            </button>
 
-              {error && <div className="mensajeError">{error}</div>}
+            {error ? <div className="login-error login-error--center">{error}</div> : null}
 
-              <div className="forgot-link">
-                <Link to={forgotTo}>¿Olvidaste tu contraseña?</Link>
-              </div>
+            <div className="login-forgot">
+              <Link to={forgotTo}>¿Olvidaste tu contraseña?</Link>
+            </div>
 
-              <div className="auth-card-footer">
-                <div>Versión 1.0.0</div>
-                <div>© 2026 IPT</div>
-              </div>
+            <div className="login-footer">
+              <div>Versión 1.0.0</div>
+              <div>© 2026 IPT</div>
             </div>
           </form>
         </div>
-      </div>
-
-      {/* RIGHT - IMAGE */}
-      <div className="right-col">
-        <div
-          className="bg-img"
-          style={{ backgroundImage: `url(${bg})` }}
-          aria-hidden="true"
-        />
       </div>
     </div>
   );

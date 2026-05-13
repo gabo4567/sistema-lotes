@@ -109,6 +109,7 @@ const EstadoBadge = ({ estado }) => {
   const color = ESTADO_COLORS[key] || { bg: '#f3f4f6', border: '#d1d5db', text: '#374151' }
   return (
     <span
+      className={`turno-history-state turno-history-state--${key}`}
       style={{
         display: 'inline-block',
         padding: '2px 8px',
@@ -137,7 +138,7 @@ const HistorialItem = ({ item, isLast }) => {
   const tieneMotivo = item?.motivo && String(item.motivo).trim() && item?.accion !== 'config_cambiada'
 
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+    <div className="turno-history-item" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
       {/* Línea de tiempo */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 32 }}>
         <div
@@ -171,6 +172,7 @@ const HistorialItem = ({ item, isLast }) => {
 
       {/* Contenido */}
       <div
+        className="turno-history-card"
         style={{
           flex: 1,
           backgroundColor: '#ffffff',
@@ -182,7 +184,7 @@ const HistorialItem = ({ item, isLast }) => {
         }}
       >
         {/* Fecha y hora */}
-        <div style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600, marginBottom: 4, letterSpacing: '.02em' }}>
+        <div className="turno-history-meta" style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600, marginBottom: 4, letterSpacing: '.02em' }}>
           {formatFechaHora(item?.createdAt)}
           {esAutomatico && (
             <span style={{ marginLeft: 8, color: '#64748b', fontWeight: 500 }}>· Automático</span>
@@ -191,9 +193,10 @@ const HistorialItem = ({ item, isLast }) => {
 
         {/* Quién */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{nombre}</span>
+          <span className="turno-history-actor" style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{nombre}</span>
           {rolLabel && (
             <span
+              className="turno-history-role"
               style={{
                 fontSize: 11,
                 fontWeight: 600,
@@ -210,7 +213,7 @@ const HistorialItem = ({ item, isLast }) => {
         </div>
 
         {/* Acción */}
-        <div style={{ fontSize: 14, color: '#374151', fontWeight: 600, marginBottom: tieneTransicion || tieneMotivo ? 8 : 0 }}>
+        <div className="turno-history-action" style={{ fontSize: 14, color: '#374151', fontWeight: 600, marginBottom: tieneTransicion || tieneMotivo ? 8 : 0 }}>
           {accionLabel}
         </div>
 
@@ -226,6 +229,7 @@ const HistorialItem = ({ item, isLast }) => {
         {/* Motivo */}
         {tieneMotivo && (
           <div
+            className="turno-history-reason"
             style={{
               backgroundColor: '#fafafa',
               border: '1px solid #f0f0f0',
@@ -235,7 +239,7 @@ const HistorialItem = ({ item, isLast }) => {
               color: '#6b7280',
             }}
           >
-            <span style={{ fontWeight: 600, color: '#374151' }}>Motivo: </span>
+            <span className="turno-history-reason-label" style={{ fontWeight: 600, color: '#374151' }}>Motivo: </span>
             {item.motivo}
           </div>
         )}
@@ -244,11 +248,11 @@ const HistorialItem = ({ item, isLast }) => {
         {item?.accion === 'config_cambiada' && item?.estadoNuevo && (
           <div style={{ marginTop: 4 }}>
             {item.estadoAnterior && (
-              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 2 }}>
+              <div className="turno-history-config-row" style={{ fontSize: 12, color: '#9ca3af', marginBottom: 2 }}>
                 Antes: <span style={{ fontWeight: 600, color: '#6b7280' }}>{formatConfigDesc(item.estadoAnterior)}</span>
               </div>
             )}
-            <div style={{ fontSize: 12, color: '#6b7280' }}>
+            <div className="turno-history-config-row" style={{ fontSize: 12, color: '#6b7280' }}>
               Ahora: <span style={{ fontWeight: 600, color: '#374151' }}>{formatConfigDesc(item.estadoNuevo)}</span>
             </div>
           </div>
@@ -296,6 +300,7 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
 
   return (
     <div
+      className="turno-history-backdrop"
       role="dialog"
       aria-modal="true"
       style={{
@@ -303,10 +308,10 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
         inset: 0,
         background: 'rgba(0,0,0,0.35)',
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'center',
         padding: 16,
-        overflowY: 'auto',
+        overflow: 'hidden',
         zIndex: 9999,
       }}
       onMouseDown={(e) => {
@@ -314,20 +319,23 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
       }}
     >
       <div
+        className="turno-history-modal"
         style={{
           width: '100%',
           maxWidth: 540,
+          maxHeight: 'calc(100dvh - 32px)',
           background: '#fff',
           borderRadius: 14,
           border: '1px solid #e5e7eb',
           boxShadow: '0 8px 28px rgba(0,0,0,0.15)',
           overflow: 'hidden',
-          marginTop: 16,
-          marginBottom: 16,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {/* Header */}
         <div
+          className="turno-history-header"
           style={{
             padding: '14px 16px',
             borderBottom: '1px solid #f3f4f6',
@@ -343,6 +351,7 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
             <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Auditoría de cambios y acciones</div>
           </div>
           <button
+            className="turno-history-close"
             onClick={onClose}
             style={{
               background: 'none',
@@ -360,13 +369,14 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
         </div>
 
         {/* Cuerpo */}
-        <div style={{ padding: 16, maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+        <div className="turno-history-body" style={{ padding: 16, overflowY: 'auto', minHeight: 0 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 32, color: '#9ca3af', fontSize: 14 }}>
+            <div className="turno-history-loading" style={{ textAlign: 'center', padding: 32, color: '#9ca3af', fontSize: 14 }}>
               Cargando historial…
             </div>
           ) : error ? (
             <div
+              className="turno-history-error"
               style={{
                 padding: 12,
                 borderRadius: 10,
@@ -400,6 +410,7 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
             </div>
           ) : historial.length === 0 ? (
             <div
+              className="turno-history-empty"
               style={{
                 textAlign: 'center',
                 padding: 40,

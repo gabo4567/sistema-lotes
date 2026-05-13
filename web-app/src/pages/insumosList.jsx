@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { insumosService } from '../services/insumos.service'
 import { getProductores } from '../services/productores.service'
-import HomeButton from '../components/HomeButton'
 import { notify, confirmDialog } from '../utils/alerts'
 
 
@@ -172,20 +171,19 @@ const InsumosList = () => {
 
   return (
     <div className="insumos-list insumos-page page-container">
-      <div className="insumos-page__top"><HomeButton /></div>
       <div className="insumos-hero">
         <div>
           <h2>Gestion de Insumos</h2>
-          <p>Stock disponible, asignaciones y seguimiento por productor.</p>
+          <p className="section-subtitle">Administrá los insumos disponibles y su stock.</p>
         </div>
         <button className="btn insumos-primary-action" onClick={openAdd}>Agregar insumo</button>
       </div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
       <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Insumos disponibles del IPT</div>
       {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
-      <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+      <div className="insumos-toolbar" style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
         <button className="btn secondary" onClick={openAdd} style={{ minHeight: 42, padding: '0 14px' }}>Agregar insumo</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+        <div className="insumos-filter-panel" style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
           <label style={{ fontSize: 15, fontWeight: 600 }}>Mostrar:</label>
           <select 
             className="select-inst" 
@@ -200,8 +198,8 @@ const InsumosList = () => {
         </div>
       </div>
       {loading ? (<div>Cargando…</div>) : (
-        <div className="table-wrap">
-          <table className="table-inst" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: 980 }}>
+        <div className="table-wrap admin-data-table-wrap">
+          <table className="table-inst admin-data-table" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: 980 }}>
             <thead>
               <tr style={{ background:'#f0fdf4' }}>
                 <th style={{ textAlign:'center', width:'20%' }}>Nombre</th>
@@ -242,13 +240,13 @@ const InsumosList = () => {
         </div>
       )}
 
-      <div style={{ marginTop: 24, color:'#14532d', fontWeight: 600, marginBottom: 12 }}>Insumos asignados por productor</div>
-      <div className="filters-bar" style={{ 
-        display: 'flex', 
-        gap: 12, 
-        backgroundColor: '#f8fafc', 
-        padding: '12px 16px', 
-        borderRadius: 12, 
+      <div className="insumos-section-title" style={{ marginTop: 24, color:'#14532d', fontWeight: 600, marginBottom: 12 }}>Insumos asignados por productor</div>
+      <div className="filters-bar insumos-producer-search" style={{
+        display: 'flex',
+        gap: 12,
+        backgroundColor: '#f8fafc',
+        padding: '12px 16px',
+        borderRadius: 12,
         marginBottom: 20,
         border: '1px solid #e2e8f0',
         maxWidth: 600,
@@ -276,13 +274,13 @@ const InsumosList = () => {
             }}
           />
           {showProducerResults && filteredProducers.length > 0 && (
-            <div style={{ 
-              position: 'absolute', 
-              top: 'calc(100% + 8px)', 
-              left: 0, 
-              right: 0, 
-              background: '#fff', 
-              border: '1px solid #e2e8f0', 
+            <div className="insumos-producer-results" style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              left: 0,
+              right: 0,
+              background: '#fff',
+              border: '1px solid #e2e8f0',
               borderRadius: 10, 
               boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)', 
               zIndex: 100,
@@ -290,7 +288,8 @@ const InsumosList = () => {
               overflowY: 'auto'
             }}>
               {filteredProducers.map(p => (
-                <div 
+                <div
+                  className="insumos-producer-result"
                   key={p.id} 
                   onClick={() => selectProducer(p)}
                   style={{ 
@@ -301,7 +300,7 @@ const InsumosList = () => {
                     flexDirection: 'column',
                     gap: 4
                   }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = document.body.classList.contains('dark-mode') ? '#1c2940' : '#f1f5f9'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
@@ -343,21 +342,21 @@ const InsumosList = () => {
       </div>
       {selectedProd && (
         <div style={{ marginTop: 20 }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            backgroundColor: '#f0fdf4', 
+          <div className="insumos-assignment-header" style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#f0fdf4',
             padding: '12px 20px', 
             borderRadius: '12px 12px 0 0',
             border: '1px solid #dcfce7',
             borderBottom: 'none'
           }}>
-            <span style={{ color: '#166534', fontWeight: 600 }}>
+            <span className="insumos-assignment-title" style={{ color: '#166534', fontWeight: 600 }}>
               Asignaciones para: {productores.find(p => p.id === selectedProd)?.nombreCompleto || 'Productor'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
+              <span className="insumos-assignment-ipt" style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
                 IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
               </span>
               <button
@@ -370,6 +369,7 @@ const InsumosList = () => {
               </button>
               <button
                 onClick={onEliminarAsignaciones}
+                className="insumos-delete-assignments"
                 style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
               >
                 Eliminar todas las asignaciones
@@ -377,7 +377,7 @@ const InsumosList = () => {
             </div>
           </div>
 
-          <div style={{
+          <div className="insumos-assignment-summary" style={{
             border: '1px solid #e2e8f0',
             borderTop: 'none',
             padding: '10px 20px',
@@ -387,17 +387,17 @@ const InsumosList = () => {
             gap: 12,
             flexWrap: 'wrap'
           }}>
-            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
               Asignado: <span style={{ color: '#0f172a' }}>{resumenProd.asignado}</span>
             </div>
-            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
               Entregado: <span style={{ color: '#0f172a' }}>{resumenProd.entregado}</span>
             </div>
-            <div style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
               Disponible: <span style={{ color: resumenProd.tieneDisponible ? '#166534' : '#b91c1c' }}>{resumenProd.disponible}</span>
             </div>
             {!resumenProd.tieneDisponible && (
-              <div style={{
+              <div className="insumos-empty-pill" style={{
                 background: '#fef2f2',
                 border: '1px solid #fecaca',
                 color: '#991b1b',
@@ -411,24 +411,24 @@ const InsumosList = () => {
             )}
           </div>
           
-          <div className="table-wrap" style={{ 
-            border: '1px solid #e2e8f0', 
+          <div className="table-wrap insumos-assignment-table-wrap" style={{
+            border: '1px solid #e2e8f0',
             borderRadius: '0 0 12px 12px',
             backgroundColor: '#fff',
             overflowX: 'auto',
             WebkitOverflowScrolling: 'touch'
           }}>
             {loadingAsign ? (
-              <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+              <div className="insumos-loading-state" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
                 <div className="spinner" style={{ marginBottom: 12 }}></div>
                 Cargando asignaciones del productor…
               </div>
             ) : asignacionesProd.length === 0 ? (
-              <div style={{ 
-                padding: '60px 20px', 
-                textAlign: 'center', 
-                display: 'flex', 
-                flexDirection: 'column', 
+              <div className="insumos-empty-state" style={{
+                padding: '60px 20px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 gap: 12
               }}>

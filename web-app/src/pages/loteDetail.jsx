@@ -48,22 +48,22 @@ const LoteDetail = () => {
 
           <div className="detail-grid" style={{ marginBottom: 12 }}>
             <div className="detail-item">
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#14532d", letterSpacing: ".02em", textTransform: "uppercase" }}>IPT</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{lote.ipt || "-"}</div>
+              <div className="detail-item__label">IPT</div>
+              <div className="detail-item__value">{lote.ipt || "-"}</div>
             </div>
             <div className="detail-item">
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#14532d", letterSpacing: ".02em", textTransform: "uppercase" }}>Estado</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{lote.estado || "-"}</div>
+              <div className="detail-item__label">Estado</div>
+              <div className="detail-item__value">{lote.estado || "-"}</div>
             </div>
             <div className="detail-item">
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#14532d", letterSpacing: ".02em", textTransform: "uppercase" }}>Método</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{formatMetodo(lote.metodoMarcado)}</div>
+              <div className="detail-item__label">Método</div>
+              <div className="detail-item__value">{formatMetodo(lote.metodoMarcado)}</div>
             </div>
           </div>
 
           <div className="map-card" style={{ marginTop: 0 }}>
             <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-              <div style={{ fontWeight: 800, color: "#111827" }}>Polígono del lote</div>
+              <div className="lote-detail__section-title">Polígono del lote</div>
             </div>
             <div style={{ display: "flex", justifyContent: "center" }}>
               <div style={{ width: "100%", maxWidth: 900 }}>
@@ -74,7 +74,7 @@ const LoteDetail = () => {
 
           <div style={{ width: "100%", maxWidth: 900, margin: "0 auto", display: "grid", gap: 10 }}>
             <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Observaciones del administrador</label>
+              <label className="lote-detail__field-label">Observaciones del administrador</label>
               <textarea
                 className="input-inst"
                 placeholder="Observaciones del administrador"

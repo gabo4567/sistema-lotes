@@ -4,7 +4,6 @@ import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { isTurnosHabilitados } from '../utils/turnos.utils'
 import { getProductores } from '../services/productores.service'
-import HomeButton from '../components/HomeButton'
 import TurnoHistorial from '../components/turnos/TurnoHistorial'
 
 const toDateSafe = (raw) => {
@@ -958,10 +957,11 @@ const canTransitionEstado = (fromEstado, toEstado) => {
 
 return (
   <div className="turnos-list page-container">
-    <div style={{ marginBottom: 8 }}><HomeButton /></div>
-    
     <div className="header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-      <h2 className="users-title" style={{ margin: 0 }}>Gestión de Turnos</h2>
+      <div>
+        <h2 className="users-title" style={{ margin: 0 }}>Gestión de Turnos</h2>
+        <p className="section-subtitle">Gestioná y visualizá los turnos asignados.</p>
+      </div>
       <div className="view-tabs" style={{ display: 'flex', gap: 8 }}>
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'activos' ? 'turnos-toggle-btn--active' : ''}`} 
@@ -1008,7 +1008,7 @@ return (
           if (e.target === e.currentTarget) closeCapacidadModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+        <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
           <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Capacidad de turnos por día</div>
             <button className="btn secondary" onClick={closeCapacidadModal} disabled={capSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
@@ -1090,7 +1090,7 @@ return (
           if (e.target === e.currentTarget) closeConfigModal()
         }}
       >
-        <div style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 16 }}>
+        <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 16 }}>
           {cfgRangeIntentOpen ? (
             <div
               role="dialog"
@@ -1110,7 +1110,7 @@ return (
                 if (e.target === e.currentTarget) cancelRangeIntent()
               }}
             >
-              <div style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 16 }}>
+              <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 10px 26px rgba(0,0,0,0.18)', fontSize: 16 }}>
                 <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>Configuración de turnos</div>
                   <button className="btn secondary" onClick={cancelRangeIntent} style={{ padding: '6px 10px' }}>Cancelar</button>
@@ -1153,6 +1153,7 @@ return (
           </div>
           <div style={{ padding: 16, display: 'grid', gap: 12 }}>
             <div
+              className="turnos-config-card"
               style={{
                 borderRadius: 12,
                 border: `1px solid ${cfgEstadoBorder}`,
@@ -1169,6 +1170,7 @@ return (
                 </div>
 
                 <div
+                  className="turnos-config-segment"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr',
@@ -1184,6 +1186,7 @@ return (
                     type="button"
                     onClick={setModoManual}
                     disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                    className={cfgModo === 'manual' ? 'turnos-config-segment__btn is-active' : 'turnos-config-segment__btn'}
                     style={{
                       border: 'none',
                       background: cfgModo === 'manual' ? '#dcfce7' : 'transparent',
@@ -1202,6 +1205,7 @@ return (
                     type="button"
                     onClick={setModoRango}
                     disabled={cfgSaving || cfgLoading || cfgRangeIntentOpen}
+                    className={cfgModo === 'rango' ? 'turnos-config-segment__btn is-active' : 'turnos-config-segment__btn'}
                     style={{
                       border: 'none',
                       background: cfgModo === 'rango' ? '#dcfce7' : 'transparent',
@@ -1219,6 +1223,7 @@ return (
                 </div>
 
                 <div
+                  className="turnos-config-status"
                   style={{
                     borderRadius: 12,
                     border: `1px solid ${cfgEstadoBorder}`,
@@ -1235,6 +1240,7 @@ return (
                         Estado actual
                       </div>
                       <div
+                        className="turnos-config-status__chip"
                         style={{
                           padding: '4px 10px',
                           borderRadius: 999,
@@ -1261,7 +1267,7 @@ return (
                         : 'Los usuarios NO pueden solicitar turnos. Verán un mensaje al intentar hacerlo.'}
                     </div>
                     {mostrarAvisoEstadoDesconocido ? (
-                      <div style={{ fontSize: 14, color: '#64748b' }}>
+                      <div className="turnos-config-muted" style={{ fontSize: 14, color: '#64748b' }}>
                         No se pudo verificar el estado actual. Verificá tu conexión.
                       </div>
                     ) : null}
@@ -1316,7 +1322,7 @@ return (
                         />
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280' }}>
+                    <div className="turnos-config-muted" style={{ fontSize: 14, color: '#6b7280' }}>
                       Definí el rango y luego tocá “Aplicar rango” para elegir qué querés hacer.
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1331,11 +1337,11 @@ return (
                       </button>
                     </div>
                     {draftRangoInvalido ? (
-                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+                      <div className="turnos-config-alert turnos-config-alert--error" style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
                         El rango es inválido: “Desde” no puede ser mayor que “Hasta”.
                       </div>
                     ) : draftHasRangoFechas ? (
-                      <div style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
+                      <div className="turnos-config-alert" style={{ fontSize: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', padding: '8px 10px' }}>
                         <strong>Rango:</strong> {formatYmdCortoOrDash(draftDesde)} → {formatYmdCortoOrDash(draftHasta)} ·{' '}
                         <strong>Acción:</strong> {draftEsDistinto && draftRangoCompletoValido ? 'A confirmar' : (cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango')}
                       </div>
@@ -1356,18 +1362,18 @@ return (
                 placeholder="Ej: Los turnos se habilitan nuevamente el lunes."
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 17, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ fontSize: 15, color: '#6b7280' }}>
+              <div className="turnos-config-muted" style={{ fontSize: 15, color: '#6b7280' }}>
                 {cfgLoading ? 'Cargando configuración…' : 'Este mensaje se muestra en la app. Si los turnos están deshabilitados, se muestra junto al mensaje por defecto. Si están habilitados, se muestra como aviso informativo.'}
               </div>
               {estadoTurnosHabilitados ? (
-                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
+                <div className="turnos-config-alert turnos-config-alert--success" style={{ fontSize: 15, borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', padding: '8px 10px' }}>
                   <strong>Estado (backend):</strong> Turnos habilitados{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
                 </div>
               ) : (
-                <div style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
+                <div className="turnos-config-alert turnos-config-alert--warning" style={{ fontSize: 15, borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', padding: '8px 10px' }}>
                   <strong>Estado (backend):</strong> Turnos deshabilitados hasta nuevo aviso{cfgHasRangoFechas ? ` (${formatYmdCortoOrDash(cfgDesde)} → ${formatYmdCortoOrDash(cfgHasta)} · ${cfgRangoModo === 'disable' ? 'Deshabilitar en este rango' : 'Habilitar solo en este rango'})` : ''}{String(cfgMensaje || '').trim() ? ` · ${String(cfgMensaje).trim()}` : ''}
                   {mostrarAvisoEstadoDesconocido ? (
-                    <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
+                    <div className="turnos-config-muted" style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
                       No se pudo verificar el estado actual. Verificá tu conexión.
                     </div>
                   ) : null}
@@ -1472,16 +1478,16 @@ return (
         <span className="turnos-summary__label">Total</span>
         <span className={`estado-badge expired`}>{summary.total}</span>
       </div>
-      <div style={{ width: '100%', height: 1, background: '#f3f4f6', margin: '4px 0' }} />
-      <div className="turnos-summary__chip" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+      <div className="turnos-summary-divider" style={{ width: '100%', height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+      <div className="turnos-summary__chip turnos-summary__chip--insumo" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
         <span className="turnos-summary__label" style={{ color: '#1d4ed8' }}>Insumos</span>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#1d4ed8' }}>{summary.insumo}</span>
       </div>
-      <div className="turnos-summary__chip" style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+      <div className="turnos-summary__chip turnos-summary__chip--carnet" style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
         <span className="turnos-summary__label" style={{ color: '#15803d' }}>Carnet</span>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#15803d' }}>{summary.carnet}</span>
       </div>
-      <div className="turnos-summary__chip" style={{ backgroundColor: '#fafafa', border: '1px solid #e5e7eb' }}>
+      <div className="turnos-summary__chip turnos-summary__chip--otro" style={{ backgroundColor: '#fafafa', border: '1px solid #e5e7eb' }}>
         <span className="turnos-summary__label" style={{ color: '#6b7280' }}>Otros</span>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#6b7280' }}>{summary.otro}</span>
       </div>
@@ -1614,7 +1620,7 @@ return (
     ) : (
       <>
         {turnosFiltrados.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#64748b', backgroundColor: '#f8fafc', borderRadius: 12 }}>
+          <div className="turnos-empty-state" style={{ textAlign: 'center', padding: 40, color: '#64748b', backgroundColor: '#f8fafc', borderRadius: 12 }}>
             {isHoyFilterActive ? 'No se encontraron turnos para el día de hoy' : 'No se encontraron turnos con los filtros aplicados.'}
           </div>
         ) : (
@@ -1682,22 +1688,20 @@ return (
                                     </>
                                   ) : null}
                                   {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
-                                    <button className="btn" disabled={isUpdating} onClick={() => handleArchivar(t.id)} style={{ backgroundColor: 'transparent', color: '#374151', border: '1px solid #9ca3af' }}>
+                                    <button className="btn turno-action-btn turno-action-btn--archive" disabled={isUpdating} onClick={() => handleArchivar(t.id)}>
                                       {isUpdating ? 'Actualizando…' : 'Archivar'}
                                     </button>
                                   ) : null}
                                   <button
-                                    className="btn"
-                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    className="btn turno-action-btn turno-action-btn--history"
                                     onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                                   >Historial</button>
                                 </div>
                               ) : isAutoArchived ? (
                                 <div className="turnos-quick-actions">
-                                  <span style={{ color: '#64748b', fontSize: 13, fontWeight: 700 }}>Archivado por temporada</span>
+                                  <span className="turnos-archived-note" style={{ color: '#64748b', fontSize: 13, fontWeight: 700 }}>Archivado por temporada</span>
                                   <button
-                                    className="btn"
-                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    className="btn turno-action-btn turno-action-btn--history"
                                     onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                                   >Historial</button>
                                 </div>
@@ -1707,8 +1711,7 @@ return (
                                     {isUpdating ? 'Actualizando…' : 'Restaurar'}
                                   </button>
                                   <button
-                                    className="btn"
-                                    style={{ backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', fontSize: 13 }}
+                                    className="btn turno-action-btn turno-action-btn--history"
                                     onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                                   >Historial</button>
                                 </div>
@@ -1869,6 +1872,7 @@ return (
                         ) : null}
                         {getCancelNotice(t) ? (
                           <div
+                            className="turnos-notice turnos-notice--cancel"
                             style={{
                               marginTop: 8,
                               display: 'inline-block',
@@ -1886,6 +1890,7 @@ return (
                         ) : null}
                         {getExpiredNotice(t) ? (
                           <div
+                            className="turnos-notice turnos-notice--expired"
                             style={{
                               marginTop: 8,
                               display: 'inline-block',
@@ -1923,27 +1928,24 @@ return (
                           <div className="turnos-actions-row">
                             {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
                               <button
-                                className="btn"
+                                className="btn turno-action-btn turno-action-btn--archive"
                                 disabled={isUpdating}
-                                style={{ backgroundColor: 'transparent', color: '#374151', border: '1px solid #9ca3af', padding: '6px 12px' }}
                                 onClick={() => handleArchivar(t.id)}
                               >{isUpdating ? 'Actualizando…' : 'Archivar'}</button>
                             ) : null}
                             <button
-                              className="btn"
-                              style={{ backgroundColor: 'transparent', color: '#475569', border: '1px solid #cbd5e1' }}
+                              className="btn turno-action-btn turno-action-btn--history"
                               onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                             >Ver historial</button>
                           </div>
                         </>
                       ) : isAutoArchived ? (
                         <>
-                          <div style={{ width: '100%', padding: '8px 10px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', fontSize: 13, fontWeight: 700, textAlign: 'center' }}>
+                          <div className="turnos-archived-card-note" style={{ width: '100%', padding: '8px 10px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', fontSize: 13, fontWeight: 700, textAlign: 'center' }}>
                             Archivado por temporada
                           </div>
                           <button
-                            className="btn"
-                            style={{ width: '100%', marginTop: 6, backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                            className="btn turno-action-btn turno-action-btn--history turno-action-btn--full"
                             onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                           >Ver historial</button>
                         </>
@@ -1956,8 +1958,7 @@ return (
                             onClick={() => handleRestaurar(t.id)}
                           >{isUpdating ? 'Actualizando…' : 'Restaurar Turno'}</button>
                           <button
-                            className="btn"
-                            style={{ width: '100%', marginTop: 6, backgroundColor: 'transparent', color: '#6b7280', border: '1px solid #e5e7eb', padding: '6px 12px', fontSize: 13 }}
+                            className="btn turno-action-btn turno-action-btn--history turno-action-btn--full"
                             onClick={() => setHistorialModal({ open: true, turnoId: t.id })}
                           >Ver historial</button>
                         </>

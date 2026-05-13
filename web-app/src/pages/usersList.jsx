@@ -8,7 +8,6 @@ import {
   updateUser,
 } from "../services/users.service";
 import { notify, confirmDialog } from "../utils/alerts";
-import HomeButton from "../components/HomeButton";
 import { AuthContext } from "../contexts/AuthContextBase";
 
 const emptyCreateForm = { nombre: "", email: "", password: "", activo: true };
@@ -207,13 +206,15 @@ const UsersList = () => {
 
   return (
     <div className="users-list page-container" style={{ width: "100%" }}>
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <h2 className="users-title" style={{ margin: 0 }}>Gestion de Usuarios</h2>
+        <div>
+          <h2 className="users-title" style={{ margin: 0 }}>Gestion de Usuarios</h2>
+          <p className="section-subtitle">Administrá los accesos y permisos del personal autorizado.</p>
+        </div>
         <button className="btn" onClick={openCreate}>Nuevo administrador</button>
       </div>
 
-      <div className="filters-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12, backgroundColor: "#f8fafc", padding: 16, borderRadius: 12, marginBottom: 20, border: "1px solid #e2e8f0", alignItems: "flex-end" }}>
+      <div className="filters-bar usuarios-filters-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12, backgroundColor: "#f8fafc", padding: 16, borderRadius: 12, marginBottom: 20, border: "1px solid #e2e8f0", alignItems: "flex-end" }}>
         <div className="filter-item" style={{ flex: 1, minWidth: 250 }}>
           <label style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
           <input
@@ -236,8 +237,8 @@ const UsersList = () => {
       {loading ? (
         <div style={{ padding: 16, color: "#166534", textAlign: "center" }}>Cargando usuarios...</div>
       ) : (
-        <div className="table-wrap" style={{ width: "100%" }}>
-          <table className="table-inst" style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="table-wrap admin-data-table-wrap" style={{ width: "100%" }}>
+          <table className="table-inst admin-data-table" style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr style={{ backgroundColor: "#f0f0f0" }}>
                 <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Nombre</th>
@@ -280,7 +281,7 @@ const UsersList = () => {
 
       {modal ? (
         <div className="insumos-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className="insumos-modal" role="dialog" aria-modal="true">
+          <div className="insumos-modal usuarios-modal" role="dialog" aria-modal="true">
             {modal === "create" ? (
               <div>
                 <h3 style={{ marginTop: 0 }}>Nuevo administrador</h3>

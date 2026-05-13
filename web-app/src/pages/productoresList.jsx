@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createProductor, deleteProductor, getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
-import HomeButton from "../components/HomeButton";
 import { confirmDialog, notify } from "../utils/alerts";
 
 const ProductoresList = () => {
@@ -252,9 +251,11 @@ const ProductoresList = () => {
 
   return (
     <div className="users-list page-container" style={{ width: '100%' }}>
-      <div style={{ marginBottom: 8 }}><HomeButton /></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: 12, flexWrap: 'wrap' }}>
-        <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
+        <div>
+          <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
+          <p className="section-subtitle">Consultá, filtrá y administrá la información de los productores.</p>
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }} onClick={onClickImport} disabled={importing}>
             {importing ? "Importando…" : "Importar Excel"}
@@ -270,11 +271,11 @@ const ProductoresList = () => {
         </div>
       </div>
 
-      <div className="filters-bar" style={{ 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: 12, 
-        backgroundColor: '#f8fafc', 
+      <div className="filters-bar productores-filters-bar" style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 12,
+        backgroundColor: '#f8fafc',
         padding: 16, 
         borderRadius: 12, 
         marginBottom: 20,
@@ -315,8 +316,8 @@ const ProductoresList = () => {
       {loading ? (
         <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando…</div>
       ) : (
-        <div className="table-wrap">
-          <table className="table-inst" style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <div className="table-wrap admin-data-table-wrap">
+          <table className="table-inst admin-data-table" style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>

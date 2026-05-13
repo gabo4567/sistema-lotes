@@ -13,21 +13,42 @@ const ProductorDetail = () => {
   const { id } = useParams();
   const [prod, setProd] = useState(null);
   const [hist, setHist] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [histLoading, setHistLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
+        setLoading(true);
+        setHistLoading(false);
+        setProd(null);
+        setHist(null);
+        setError("");
         const { data } = await getProductorById(id);
+        if (!alive) return;
         setProd(data);
         if (data?.ipt) {
+          setHistLoading(true);
           const { data: h } = await getHistorialIngresos(data.ipt);
+          if (!alive) return;
           setHist(typeof h === "object" && h !== null && "historialIngresos" in h ? h.historialIngresos : h);
+        } else {
+          setHist([]);
         }
       } catch {
-        setError("No se pudo cargar productor");
+        if (alive) setError("No se pudo cargar productor");
+      } finally {
+        if (alive) {
+          setLoading(false);
+          setHistLoading(false);
+        }
       }
     })();
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   const entradaCampo = (() => {
@@ -37,8 +58,10 @@ const ProductorDetail = () => {
 
   return (
     <div className="section-card prod-detail page-container">
-      {!prod ? (
-        <div>Cargando...</div>
+      {loading && !prod ? (
+        <div className="producer-detail-loading">Cargando productor...</div>
+      ) : !prod ? (
+        <div className="producer-detail-loading">No se pudo mostrar el productor.</div>
       ) : (
         <>
           <h2 className="users-title">{prod.nombreCompleto || "Productor"}</h2>
@@ -55,7 +78,9 @@ const ProductorDetail = () => {
           </div>
 
           <h3 className="producer-section-title">Historial de ingresos</h3>
-          {Array.isArray(hist) && hist.length > 0 ? (
+          {histLoading ? (
+            <div className="producer-detail-loading producer-detail-loading--inline">Cargando historial de ingresos...</div>
+          ) : Array.isArray(hist) && hist.length > 0 ? (
             <div className="producer-detail-grid">
               {hist.map((h, idx) => (
                 <React.Fragment key={idx}>
@@ -70,7 +95,7 @@ const ProductorDetail = () => {
               <DetailField label="Ingresos totales" value={hist} wide />
             </div>
           ) : (
-            <div className="users-msg err" style={{ marginTop: 8 }}>Sin datos</div>
+            <div className="producer-detail-empty">Sin datos de ingresos registrados.</div>
           )}
           {error && <div className="users-msg err" style={{ marginTop: 8 }}>{error}</div>}
         </>
