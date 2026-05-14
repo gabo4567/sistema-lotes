@@ -1487,11 +1487,6 @@ export default function TurnosScreen() {
                       
                       {item.activo !== false && !isEstadoFinal(displayEstado) ? (
                         <View style={styles.turnoActions}>
-                          {displayEstado === "pendiente" ? (
-                            <TouchableOpacity style={styles.btnEditar} onPress={() => editarTurno(item)}>
-                              <Text style={styles.btnActionText}>Editar</Text>
-                            </TouchableOpacity>
-                          ) : null}
                           {displayEstado === "pendiente" || displayEstado === "confirmado" ? (
                             <TouchableOpacity style={styles.btnEliminar} onPress={() => confirmarEliminarTurno(item)}>
                               <Text style={styles.btnActionText}>Cancelar Turno</Text>
