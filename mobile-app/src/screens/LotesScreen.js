@@ -17,6 +17,7 @@ import {
   Linking,
   BackHandler,
   Dimensions,
+  Switch,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -67,6 +68,7 @@ export default function LotesScreen() {
   const [selected, setSelected] = useState(null);
   const [nombre, setNombre] = useState("");
   const [observacionesProductor, setObservacionesProductor] = useState("");
+  const [loteArado, setLoteArado] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createStep, setCreateStep] = useState("polygon");
   const [polygonConfirmed, setPolygonConfirmed] = useState(false);
@@ -77,6 +79,7 @@ export default function LotesScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editNombre, setEditNombre] = useState("");
   const [editObservaciones, setEditObservaciones] = useState("");
+  const [editLoteArado, setEditLoteArado] = useState(false);
   const [showingOfflineData, setShowingOfflineData] = useState(false);
 
   const mapRef = useRef(null);
@@ -476,6 +479,7 @@ export default function LotesScreen() {
     setPoints([]);
     setNombre("");
     setObservacionesProductor("");
+    setLoteArado(false);
     setMode("aereo");
     setCreateStep("polygon");
     setPolygonConfirmed(false);
@@ -489,6 +493,7 @@ export default function LotesScreen() {
     setPoints([]);
     setNombre("");
     setObservacionesProductor("");
+    setLoteArado(false);
     setCreateStep("polygon");
     setPolygonConfirmed(false);
   };
@@ -592,6 +597,8 @@ export default function LotesScreen() {
           metodoMarcado,
           nombre: nombre.trim(),
           observacionesProductor: observacionesProductor?.slice(0, 500) || "",
+          loteArado,
+          ...(loteArado ? { fechaMarcadoArado: new Date().toISOString() } : {}),
           superficie: Number(currentAreaHa.toFixed(4)),
         };
 
@@ -605,6 +612,7 @@ export default function LotesScreen() {
       setSelected(null);
       setNombre("");
       setObservacionesProductor("");
+      setLoteArado(false);
       setCreating(false);
       setCreateStep("polygon");
 
@@ -1084,10 +1092,24 @@ export default function LotesScreen() {
                 />
               </View>
 
+              <View style={styles.switchCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchTitle}>La tierra está arada</Text>
+                  <Text style={styles.switchHint}>Marcá esta opción si este lote ya está preparado para retirar insumos de almácigo o transplante.</Text>
+                </View>
+                <Switch
+                  value={loteArado}
+                  onValueChange={setLoteArado}
+                  trackColor={{ false: "#d1d5db", true: "#bbf7d0" }}
+                  thumbColor={loteArado ? "#1e8449" : "#f8fafc"}
+                />
+              </View>
+
               <View style={[styles.formInfo, { backgroundColor: "#f0faf4", borderRadius: 8, marginBottom: 14 }]}>
                 <Text style={styles.itemText}>Superficie: {currentAreaHa.toFixed(2)} ha</Text>
                 <Text style={styles.itemText}>Método: {mode === "gps" ? "GPS" : "Aéreo"}</Text>
                 <Text style={styles.itemText}>Estado: Pendiente</Text>
+                <Text style={styles.itemText}>Tierra arada: {loteArado ? "Sí" : "No"}</Text>
               </View>
 
               <View style={{ flexDirection: "row", gap: 12 }}>
@@ -1108,6 +1130,7 @@ export default function LotesScreen() {
           <Text style={styles.formTitle}>Detalle del lote</Text>
           <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
           <Text style={styles.itemText}>Estado: {selected.estado}</Text>
+          <Text style={styles.itemText}>Tierra arada: {selected.loteArado ? "Sí" : "No"}</Text>
           <Text style={styles.itemText}>
             Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
           </Text>
@@ -1121,6 +1144,7 @@ export default function LotesScreen() {
                 onPress={() => {
                   setEditNombre(selected.nombre || "");
                   setEditObservaciones(selected.observacionesProductor || "");
+                  setEditLoteArado(Boolean(selected.loteArado));
                   setEditModalVisible(true);
                 }}
               >
@@ -1164,6 +1188,7 @@ export default function LotesScreen() {
                   ) : null}
                   <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
                   <Text style={styles.itemText}>Estado: {item.estado}</Text>
+                  <Text style={styles.itemText}>Tierra arada: {item.loteArado ? "Sí" : "No"}</Text>
                   <Text style={styles.itemText}>
                     Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
                   </Text>
@@ -1217,6 +1242,7 @@ export default function LotesScreen() {
               ) : null}
               <Text style={styles.itemText}>Nombre: {selected.nombre || "-"}</Text>
               <Text style={styles.itemText}>Estado: {selected.estado}</Text>
+              <Text style={styles.itemText}>Tierra arada: {selected.loteArado ? "Sí" : "No"}</Text>
               <Text style={styles.itemText}>
                 Superficie: {typeof selected.superficie === "number" ? selected.superficie : computeAreaHa((selected.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
               </Text>
@@ -1231,6 +1257,7 @@ export default function LotesScreen() {
                     onPress={() => {
                       setEditNombre(selected.nombre || "");
                       setEditObservaciones(selected.observacionesProductor || "");
+                      setEditLoteArado(Boolean(selected.loteArado));
                       setEditModalVisible(true);
                     }}
                   >
@@ -1278,6 +1305,7 @@ export default function LotesScreen() {
                 ) : null}
                 <Text style={styles.itemText}>Nombre: {item.nombre || "-"}</Text>
                 <Text style={styles.itemText}>Estado: {item.estado}</Text>
+                <Text style={styles.itemText}>Tierra arada: {item.loteArado ? "Sí" : "No"}</Text>
                 <Text style={styles.itemText}>
                   Superficie: {typeof item.superficie === "number" ? item.superficie : computeAreaHa((item.poligono || []).map((pt) => ({ latitude: pt.lat, longitude: pt.lng }))).toFixed(2)} ha
                 </Text>
@@ -1308,6 +1336,18 @@ export default function LotesScreen() {
               <Text style={styles.label}>Observaciones (max 500)</Text>
               <TextInput style={[styles.input, styles.textArea]} value={editObservaciones} onChangeText={setEditObservaciones} multiline numberOfLines={4} maxLength={500} />
             </View>
+            <View style={styles.switchCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>La tierra está arada</Text>
+                <Text style={styles.switchHint}>Usá esta marca para habilitar el retiro de insumos cuando corresponda.</Text>
+              </View>
+              <Switch
+                value={editLoteArado}
+                onValueChange={setEditLoteArado}
+                trackColor={{ false: "#d1d5db", true: "#bbf7d0" }}
+                thumbColor={editLoteArado ? "#1e8449" : "#f8fafc"}
+              />
+            </View>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
                 style={[styles.btn, styles.primary]}
@@ -1318,7 +1358,12 @@ export default function LotesScreen() {
                     const resp = await authFetch(`${API_URL}/lotes/${selected.id}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ nombre: editNombre.trim(), observacionesProductor: editObservaciones?.slice(0, 500) || "" }),
+                      body: JSON.stringify({
+                        nombre: editNombre.trim(),
+                        observacionesProductor: editObservaciones?.slice(0, 500) || "",
+                        loteArado: editLoteArado,
+                        fechaMarcadoArado: editLoteArado && !selected.loteArado ? new Date().toISOString() : selected.fechaMarcadoArado,
+                      }),
                     });
                     if (!resp.ok) throw new Error("No se pudo actualizar");
                     setEditModalVisible(false);
@@ -1397,6 +1442,9 @@ const styles = StyleSheet.create({
   label: { color: "#34495e", marginBottom: 4 },
   input: { backgroundColor: "#f7f7f7", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 8 },
   textArea: { height: 80, textAlignVertical: "top" },
+  switchCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 12, backgroundColor: "#f0faf4", borderWidth: 1, borderColor: "#bbf7d0", borderRadius: 10 },
+  switchTitle: { color: "#14532d", fontWeight: "800", marginBottom: 4 },
+  switchHint: { color: "#4b5563", fontSize: 12, lineHeight: 16 },
   btn: { backgroundColor: "#1e8449", padding: 8, borderRadius: 8 },
   btnActive: { backgroundColor: "#2ecc71" },
   primary: { backgroundColor: "#2ecc71" },

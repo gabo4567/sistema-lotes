@@ -57,6 +57,15 @@ const normalizeText = (value, fallback = "") => {
   return String(value).trim();
 };
 
+const normalizeBoolean = (value, fallback = false) => {
+  if (typeof value === "boolean") return value;
+  if (value == null) return fallback;
+  const s = String(value).toLowerCase().trim();
+  if (["true", "1", "si", "sí", "yes"].includes(s)) return true;
+  if (["false", "0", "no"].includes(s)) return false;
+  return fallback;
+};
+
 const normalizePolygon = (polygon) => {
   if (!Array.isArray(polygon) || polygon.length < 3) {
     throw new Error("El poligono debe tener al menos 3 puntos validos");
@@ -135,6 +144,10 @@ const buildLotePayload = (source, current = {}) => {
   const polygon = normalizePolygon(source.poligono ?? current.poligono);
   const ipt = normalizeText(source.ipt ?? current.ipt);
   const metodoMarcado = normalizeText(source.metodoMarcado ?? current.metodoMarcado, "aereo") || "aereo";
+  const loteArado = normalizeBoolean(source.loteArado ?? current.loteArado, false);
+  const fechaMarcadoArado = loteArado
+    ? (source.fechaMarcadoArado ?? (current.loteArado ? current.fechaMarcadoArado : null) ?? new Date())
+    : null;
 
   if (!ipt) {
     throw new Error("El IPT es obligatorio");
@@ -149,6 +162,8 @@ const buildLotePayload = (source, current = {}) => {
     observacionesTecnico: normalizeText(source.observacionesTecnico ?? current.observacionesTecnico),
     nombre: normalizeText(source.nombre ?? current.nombre) || null,
     observacionesProductor: normalizeText(source.observacionesProductor ?? current.observacionesProductor),
+    loteArado,
+    fechaMarcadoArado,
   };
 };
 

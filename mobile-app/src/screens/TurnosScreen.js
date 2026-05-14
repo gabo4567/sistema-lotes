@@ -43,6 +43,7 @@ export default function TurnosScreen() {
   const prevPendingOpsRef = React.useRef(pendingOperations);
   const dispReqRef = React.useRef(0);
   const dispTimerRef = React.useRef(null);
+  const SIMPLE_TURNO_TYPE = "Insumo";
   const toYmdLocal = (d) => {
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
     const yyyy = d.getFullYear();
@@ -790,12 +791,6 @@ export default function TurnosScreen() {
       return;
     }
 
-    // Para insumo, esperar a que se seleccione la categoría antes de verificar
-    if (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo) {
-      setDispLoading(false);
-      return;
-    }
-
     const requestId = ++dispReqRef.current;
     setDispLoading(true);
     dispTimerRef.current = setTimeout(() => {
@@ -846,20 +841,8 @@ export default function TurnosScreen() {
       const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
       if (feriadoLabel) { setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`); return; }
 
-      let tipoNormalizado;
-      if (tipo.toLowerCase().includes('insumo')) {
-        tipoNormalizado = 'insumo';
-      } else if (tipo.toLowerCase().includes('renovación') || tipo.toLowerCase().includes('renov')) {
-        tipoNormalizado = 'carnet';
-      } else {
-        tipoNormalizado = 'otro';
-      }
-
-      const motivoTrim = tipoNormalizado === 'otro' ? String(motivo || '').trim() : "";
-      if (tipoNormalizado === 'otro' && !motivoTrim) {
-        setError('Si el tipo es "Otro", el motivo es obligatorio.');
-        return;
-      }
+      const tipoNormalizado = "insumo";
+      const motivoTrim = "";
 
       const productorId = tokenResult?.claims?.productorId || auth.currentUser?.uid;
       const requestedKey = `${fechaIso} 12:00`;
@@ -933,7 +916,6 @@ export default function TurnosScreen() {
         fechaSolicitada: fechaIso,
         tipoTurno: tipoNormalizado,
         motivo: motivoTrim,
-        ...(tipoNormalizado === 'insumo' && categoriaInsumo ? { categoriaInsumo } : {}),
       };
       
       console.log("📝 Body preparado:", body);
@@ -1269,6 +1251,17 @@ export default function TurnosScreen() {
   const isSolicitarTabActive = view === "form";
   const isVerMisTurnosTabActive = view !== "form";
 
+  const abrirSolicitudSimple = () => {
+    setTurnoEditando(null);
+    setTipo(SIMPLE_TURNO_TYPE);
+    setCategoriaInsumo("");
+    setMotivo("");
+    setMostrarTipos(false);
+    setError("");
+    setSuccess("");
+    setView("form");
+  };
+
   const formatFechaLarga = (date) => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
     const dias = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -1378,7 +1371,7 @@ export default function TurnosScreen() {
         <View style={styles.cardBar}>
           <TouchableOpacity
             style={[styles.btn, styles.primary, styles.topTabBtn, isSolicitarTabActive ? styles.topTabActive : styles.topTabInactive]}
-            onPress={() => setView("form")}
+            onPress={abrirSolicitudSimple}
           >
             <Text style={[styles.btnText, styles.topTabText, isSolicitarTabActive && styles.topTabTextActive]}>Solicitar Turno</Text>
           </TouchableOpacity>
@@ -1481,12 +1474,6 @@ export default function TurnosScreen() {
                           ) : null}
                         </View>
                       </View>
-                      <Text style={styles.turnoTipo}>
-                        Tipo: {getTipoLabel(item.tipoTurno)}{item.categoriaInsumo ? ` · ${item.categoriaInsumo}` : ''}
-                      </Text>
-                      {shouldShowTurnoMotivo(item) ? (
-                        <Text style={styles.turnoMotivo}>Motivo: {formatMotivo(item.motivo)}</Text>
-                      ) : null}
                       {getCancelNotice(item) ? (
                         <View style={[styles.turnoNotice, styles.turnoNoticeCancel]}>
                           <Text style={[styles.turnoNoticeText, styles.turnoNoticeCancelText]}>{getCancelNotice(item)}</Text>
@@ -1564,61 +1551,13 @@ export default function TurnosScreen() {
             </View>
           )}
           {renderFechaPicker()}
-          <TouchableOpacity
-            style={[styles.input, { justifyContent: "center" }, (turnosDisabled || !fechaInput) && styles.inputDisabled]}
-            onPress={() => setMostrarTipos(!mostrarTipos)}
-            disabled={turnosDisabled || !fechaInput}
-          >
-            <Text style={{ color: tipo ? "#2c3e50" : "#95a5a6" }}>{tipo || "Tipo de turno"}</Text>
-          </TouchableOpacity>
-          {!fechaInput ? <Text style={styles.helperText}>Seleccioná primero la fecha</Text> : null}
-          {mostrarTipos && (
-            <View style={styles.dropdown}>
-              {tipoOptions.map(opt => (
-                <TouchableOpacity key={opt} style={styles.option} onPress={() => {
-                  setTipo(opt);
-                  setMostrarTipos(false);
-                  if (!opt.toLowerCase().includes('insumo')) setCategoriaInsumo('');
-                }}>
-                  <Text>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          {normalizeTipoFromLabel(tipo) === "insumo" && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: '600' }}>Categoría de insumo a retirar</Text>
-              <View style={styles.dropdown}>
-                {["Arada", "Almácigo", "Transplante", "Cosecha"].map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.option, categoriaInsumo === cat && { backgroundColor: '#f0fdf4' }]}
-                    onPress={() => setCategoriaInsumo(cat)}
-                  >
-                    <Text style={[{ color: '#2c3e50' }, categoriaInsumo === cat && { color: '#166534', fontWeight: '700' }]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {!categoriaInsumo && <Text style={styles.helperText}>Seleccioná la categoría a retirar</Text>}
-            </View>
-          )}
-          {normalizeTipoFromLabel(tipo) === "otro" ? (
-            <TextInput
-              style={[styles.input, turnosDisabled && styles.inputDisabled]}
-              placeholder={fechaInput ? "Motivo (obligatorio)" : "Motivo"}
-              value={motivo}
-              onChangeText={setMotivo}
-              multiline
-              numberOfLines={3}
-              editable={!turnosDisabled}
-            />
-          ) : null}
+          {!fechaInput ? <Text style={styles.helperText}>Elegí una fecha disponible para pedir el turno.</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {success ? <Text style={styles.success}>{success}</Text> : null}
           {fechaInput && tipo ? (
             <View style={{ marginTop: 2, marginBottom: 8 }}>
               <Text style={styles.dispStatusText}>
-                Disponibilidad: {dispLoading ? "Verificando..." : disp === null ? "-" : disp ? "Sí" : "No"}
+                {dispLoading ? "Verificando si tenes insumos..." : disp === null ? "Verificamos tu turno al elegir la fecha." : disp ? "Tenes insumos para retirar. Podes solicitar el turno." : "No podemos darte turno para esa fecha."}
               </Text>
               {dispHint ? <Text style={styles.dispHintText}>{dispHint}</Text> : null}
             </View>
@@ -1627,7 +1566,7 @@ export default function TurnosScreen() {
             <TouchableOpacity
               style={[
                 styles.btn,
-                (turnosDisabled || !fechaInput || !tipo || dispLoading || disp !== true || (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim()) || (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo)) && styles.btnDisabled,
+                (turnosDisabled || !fechaInput || dispLoading || disp !== true) && styles.btnDisabled,
               ]}
               onPress={solicitarTurno}
               disabled={
@@ -1635,10 +1574,7 @@ export default function TurnosScreen() {
                 dispLoading ||
                 turnosDisabled ||
                 !fechaInput ||
-                !tipo ||
-                disp !== true ||
-                (normalizeTipoFromLabel(tipo) === "otro" && !String(motivo || "").trim()) ||
-                (normalizeTipoFromLabel(tipo) === "insumo" && !categoriaInsumo)
+                disp !== true
               }
             >
               <Text style={styles.btnText}>{actionLoading ? "Solicitando..." : "Solicitar"}</Text>

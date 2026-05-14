@@ -323,6 +323,7 @@ const LotesList = () => {
           "IPT del productor": ipt || "-",
           "Nombre del productor": productor?.nombreCompleto || "-",
           "Nombre del lote": lote?.nombre || "-",
+          "Tierra arada": lote?.loteArado ? "Sí" : "No",
           Coordenadas: coords || "-",
         };
       });
@@ -385,6 +386,7 @@ const LotesList = () => {
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Superficie (ha)</th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Tierra arada</th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Método</th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
@@ -403,6 +405,11 @@ const LotesList = () => {
                       </td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.ipt || '-'}</td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.superficie ? lote.superficie.toFixed(2) : '-'}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                        <span className={`estado-badge ${lote.loteArado ? 'completed' : 'pending'}`}>
+                          {lote.loteArado ? 'Sí' : 'No'}
+                        </span>
+                      </td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.estado || 'Pendiente'}</td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{formatMetodo(lote.metodoMarcado)}</td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>

@@ -99,6 +99,55 @@ const normalizeRole = (r) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
+const normalizeCategoriaInsumo = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO = new Set(["almacigo", "transplante"]);
+const MENSAJE_LOTE_ARADO_REQUERIDO =
+  "Para solicitar turno de Almácigo o Transplante, primero marcá un lote como tierra arada.";
+
+const disponibilidadRequiereLoteArado = (disp, categoriaInsumo) => {
+  const categoriaSolicitada = normalizeCategoriaInsumo(categoriaInsumo);
+  if (categoriaSolicitada) {
+    return CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO.has(categoriaSolicitada);
+  }
+
+  const porCategoria = disp?.porCategoria && typeof disp.porCategoria === "object" ? disp.porCategoria : {};
+  return Object.entries(porCategoria).some(([categoria, info]) => {
+    const disponible = Number(info?.disponible || 0);
+    return disponible > 0 && CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO.has(normalizeCategoriaInsumo(categoria));
+  });
+};
+
+const productorTieneLoteArado = async ({ productorId, ipt }) => {
+  const queries = [];
+  const iptNorm = String(ipt || "").trim();
+  const productorIdNorm = String(productorId || "").trim();
+
+  if (iptNorm) {
+    queries.push(db.collection("lotes").where("ipt", "==", iptNorm).where("activo", "==", true).get());
+  }
+  if (productorIdNorm) {
+    queries.push(db.collection("lotes").where("productorId", "==", productorIdNorm).where("activo", "==", true).get());
+  }
+  if (queries.length === 0) return false;
+
+  const snaps = await Promise.all(queries);
+  const seen = new Set();
+  return snaps.some((snap) =>
+    snap.docs.some((doc) => {
+      if (seen.has(doc.id)) return false;
+      seen.add(doc.id);
+      const lote = doc.data() || {};
+      return lote.activo !== false && lote.loteArado === true;
+    })
+  );
+};
+
 const isAdminRequest = (req) => {
   const role = normalizeRole(req?.user?.role);
   return role === "administrador" || role === "admin";
@@ -612,6 +661,12 @@ export const crearTurno = async (req, res) => {
       const disp = await getDisponibilidadInsumos(productorId);
       if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "Usted no tiene insumos disponibles.", estadoActual });
+      }
+      if (disponibilidadRequiereLoteArado(disp, categoriaInsumo)) {
+        const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
+        if (!tieneLoteArado) {
+          return res.status(400).json({ message: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual });
+        }
       }
       // Si se especificó categoría, verificar que esa categoría tiene stock disponible
       if (categoriaInsumo) {
@@ -1493,6 +1548,12 @@ export const disponibilidadTurno = async (req, res) => {
             const disp = await getDisponibilidadInsumos(productorId);
             if (!disp?.tieneDisponible) {
               return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles.", estadoActual: true });
+            }
+            if (disponibilidadRequiereLoteArado(disp, categoriaInsumo)) {
+              const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
+              if (!tieneLoteArado) {
+                return res.json({ disponible: false, motivo: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual: true });
+              }
             }
             // Si se especificó categoría, verificar disponibilidad de esa categoría en particular
             if (categoriaInsumo) {

@@ -59,6 +59,10 @@ const LoteDetail = () => {
               <div className="detail-item__label">Método</div>
               <div className="detail-item__value">{formatMetodo(lote.metodoMarcado)}</div>
             </div>
+            <div className="detail-item">
+              <div className="detail-item__label">Tierra arada</div>
+              <div className="detail-item__value">{lote.loteArado ? "Sí" : "No"}</div>
+            </div>
           </div>
 
           <div className="map-card" style={{ marginTop: 0 }}>

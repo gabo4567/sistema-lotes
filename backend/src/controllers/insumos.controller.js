@@ -74,13 +74,20 @@ const buildNormalizePatchProductorInsumo = (raw) => {
 export const getDisponibilidadInsumos = async (productorId) => {
   const pid = String(productorId || "").trim();
   if (!pid) {
-    return { totalAsignado: 0, totalEntregado: 0, totalDisponible: 0, tieneDisponible: false };
+    return { totalAsignado: 0, totalEntregado: 0, totalDisponible: 0, tieneDisponible: false, porCategoria: {} };
   }
 
-  const snap = await db.collection("productorInsumos").where("productorId", "==", pid).get();
+  const [snap, insumosSnap] = await Promise.all([
+    db.collection("productorInsumos").where("productorId", "==", pid).get(),
+    db.collection("insumos").get(),
+  ]);
+  const insumoMap = {};
+  insumosSnap.docs.forEach((d) => { insumoMap[d.id] = d.data()?.nombre || d.id; });
+
   let totalAsignado = 0;
   let totalEntregado = 0;
   let totalDisponible = 0;
+  const porCategoria = {};
 
   snap.docs.forEach((d) => {
     const raw = d.data() || {};
@@ -91,7 +98,16 @@ export const getDisponibilidadInsumos = async (productorId) => {
     if (asig <= 0) return;
     totalAsignado += asig;
     totalEntregado += ent;
-    totalDisponible += Math.max(0, asig - ent);
+    const disponible = Math.max(0, asig - ent);
+    totalDisponible += disponible;
+
+    const categoria = insumoMap[normalized.insumoId] || null;
+    if (categoria) {
+      if (!porCategoria[categoria]) porCategoria[categoria] = { asignado: 0, entregado: 0, disponible: 0 };
+      porCategoria[categoria].asignado += asig;
+      porCategoria[categoria].entregado += ent;
+      porCategoria[categoria].disponible += disponible;
+    }
   });
 
   return {
@@ -99,6 +115,7 @@ export const getDisponibilidadInsumos = async (productorId) => {
     totalEntregado,
     totalDisponible,
     tieneDisponible: totalDisponible > 0,
+    porCategoria,
   };
 };
 

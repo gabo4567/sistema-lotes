@@ -305,6 +305,15 @@ useEffect(() => {
 }, [cfgModalOpen])
 
   const turnosFiltrados = useMemo(() => {
+    const getProductorNombreOrden = (t) => {
+      const pInfo = prodMap.get(String(t?.productorId || ''))
+      return String(t?.productorNombre || pInfo?.nombre || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+    }
+
     return turnos.filter(t => {
       if (viewMode === 'historial' && filtros.temporada !== 'todas') {
         if (getTurnoTemporada(t) !== filtros.temporada) return false
@@ -352,6 +361,11 @@ useEffect(() => {
       
       return true
     }).sort((a, b) => {
+      if (filtros.orden === 'nombre_az' || filtros.orden === 'nombre_za') {
+        const byName = getProductorNombreOrden(a).localeCompare(getProductorNombreOrden(b), 'es', { sensitivity: 'base' })
+        if (byName !== 0) return filtros.orden === 'nombre_za' ? -byName : byName
+      }
+
       const aMs = toDateSafe(a?.fechaTurno || a?.fecha)?.getTime() ?? null
       const bMs = toDateSafe(b?.fechaTurno || b?.fecha)?.getTime() ?? null
       if (aMs === null && bMs === null) return 0
@@ -1508,15 +1522,17 @@ return (
       width: '100%'
     }}>
       <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
-        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Ordenar</label>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Ordenar por</label>
         <select 
           className="select-inst" 
           value={filtros.orden}
           onChange={e => setFiltros({ ...filtros, orden: e.target.value })}
           style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', minWidth: 'auto' }}
         >
-          <option value="proximos">Más próximos</option>
-          <option value="lejanos">Más lejanos</option>
+          <option value="proximos">Fecha: más próximos</option>
+          <option value="lejanos">Fecha: más lejanos</option>
+          <option value="nombre_az">Productor: A-Z</option>
+          <option value="nombre_za">Productor: Z-A</option>
         </select>
       </div>
 

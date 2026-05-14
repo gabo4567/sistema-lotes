@@ -1351,14 +1351,14 @@ body.sidebar-open{
   overflow: hidden;
 }
 .sidebar-brand{
-  width: 176px;
+  width: 174px;
   min-height: 74px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 0 54px 44px 0;
+  margin: 0 0 36px auto;
   padding-top: 2px;
   color: #2d3437;
 }
@@ -1532,8 +1532,8 @@ body.sidebar-open{
 }
 .sidebar-menu-btn{
   position: absolute;
-  top: 22px;
-  right: 14px;
+  top: 36px;
+  left: 22px;
 }
 .mobile-menu-btn{
   position: fixed;
@@ -1834,8 +1834,12 @@ body.sidebar-open{
   .sidebar-brand{
     width: 154px;
     min-height: 66px;
-    margin-right: 48px;
+    margin-left: auto;
     margin-bottom: 34px;
+  }
+  .sidebar-menu-btn{
+    top: 31px;
+    left: 18px;
   }
   .sidebar-brand__mark{
     font-size: 48px;
