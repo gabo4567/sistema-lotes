@@ -265,6 +265,18 @@ export const historialIngresos = async (req, res) => {
   }
 };
 
+// Activar productor
+export const activarProductor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("productores").doc(id).update({ activo: true });
+    res.json({ message: "✅ Productor activado correctamente" });
+  } catch (error) {
+    console.error("Error al activar productor:", error);
+    res.status(500).json({ error: "Error al activar productor" });
+  }
+};
+
 export const setPushToken = async (req, res) => {
   try {
     const { ipt } = req.params;

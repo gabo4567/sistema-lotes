@@ -7,6 +7,7 @@ export const getProductorById = (id) => api.get(`/productores/${id}`);
 export const updateProductor = (id, data) => api.put(`/productores/${id}`, data);
 export const createProductor = (data) => api.post(`/productores`, data);
 export const deleteProductor = (id) => api.delete(`/productores/${id}`);
+export const activateProductor = (id) => api.post(`/productores/${id}/activar`);
 export const resetPasswordProductor = (ipt) => api.post(`/productores/reset-password/${ipt}`);
 export const marcarReempadronado = (ipt) => api.post(`/productores/reempadronado/${ipt}`);
 export const getHistorialIngresos = (ipt) => api.get(`/productores/${ipt}/historial`);
