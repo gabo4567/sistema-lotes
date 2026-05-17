@@ -11,7 +11,9 @@ const ProductoresList = () => {
   const [error, setError] = useState("");
   const [iptFilter, setIptFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [importing, setImporting] = useState(false);
+  const PAGE_SIZE = 20;
 
   const load = async () => {
     setLoading(true);
@@ -64,11 +66,29 @@ const ProductoresList = () => {
     return new Set((items || []).map((p) => normalizeIpt(p?.ipt)).filter(Boolean));
   }, [items]);
 
-  const viewItems = items.filter(p => {
-    const okIpt = iptFilter ? String(p.ipt||"").includes(String(iptFilter)) : true;
-    const okName = nameFilter ? normalize(p.nombreCompleto||p.nombre||"").includes(normalize(nameFilter)) : true;
-    return okIpt && okName;
-  });
+  const viewItems = useMemo(() => {
+    return items.filter(p => {
+      const okIpt = iptFilter ? String(p.ipt||"").includes(String(iptFilter)) : true;
+      const okName = nameFilter ? normalize(p.nombreCompleto||p.nombre||"").includes(normalize(nameFilter)) : true;
+      return okIpt && okName;
+    });
+  }, [items, iptFilter, nameFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(viewItems.length / PAGE_SIZE));
+  const pagedItems = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return viewItems.slice(start, start + PAGE_SIZE);
+  }, [viewItems, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount);
+    }
+  }, [currentPage, pageCount]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [iptFilter, nameFilter]);
 
   const onClickImport = () => {
     if (importing) return;
@@ -330,9 +350,9 @@ const ProductoresList = () => {
               </tr>
             </thead>
             <tbody>
-              {viewItems.length === 0 ? (
+              {pagedItems.length === 0 ? (
                 <tr><td colSpan={7} style={{ border: '1px solid #ddd', padding: '12px', textAlign:'center' }}>Sin resultados</td></tr>
-              ) : viewItems.map((p) => (
+              ) : pagedItems.map((p) => (
                 <tr key={p.id}>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.ipt || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.nombreCompleto || ''}>{p.nombreCompleto || '-'}</td>
@@ -369,6 +389,32 @@ const ProductoresList = () => {
               ))}
             </tbody>
           </table>
+          {pageCount > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
+              <div style={{ color: '#475569', fontSize: 14 }}>
+                Mostrando {pagedItems.length} de {viewItems.length} productores
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  className="btn secondary"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                  style={{ minWidth: 90, borderRadius: 8 }}
+                >
+                  Anterior
+                </button>
+                <span style={{ color: '#334155', fontWeight: 600 }}>{currentPage} / {pageCount}</span>
+                <button
+                  className="btn secondary"
+                  onClick={() => setCurrentPage(prev => Math.min(pageCount, prev + 1))}
+                  disabled={currentPage >= pageCount}
+                  style={{ minWidth: 90, borderRadius: 8 }}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

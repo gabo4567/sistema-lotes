@@ -21,6 +21,7 @@ const InsumosList = () => {
   const [insumoNames, setInsumoNames] = useState({})
   const [filterActivo, setFilterActivo] = useState('activos')
   const [producerSearchTerm, setProducerSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [showProducerResults, setShowProducerResults] = useState(false)
   const [resumenAsignaciones, setResumenAsignaciones] = useState({ productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
   const [productoresConInsumos, setProductoresConInsumos] = useState([])
@@ -84,6 +85,28 @@ const InsumosList = () => {
       return haystack.includes(term);
     });
   }, [productoresConInsumos, producerSearchTerm]);
+
+  const PAGE_SIZE = 20
+  const pageCount = useMemo(() => {
+    const total = Array.isArray(filteredProducers) ? filteredProducers.length : 0
+    return Math.max(1, Math.ceil(total / PAGE_SIZE))
+  }, [filteredProducers.length])
+
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount)
+    }
+  }, [currentPage, pageCount])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [producerSearchTerm, filteredProducers.length])
+
+  const paginatedProducers = useMemo(() => {
+    const list = Array.isArray(filteredProducers) ? filteredProducers : []
+    const start = (currentPage - 1) * PAGE_SIZE
+    return list.slice(start, start + PAGE_SIZE)
+  }, [filteredProducers, currentPage])
 
   useEffect(()=>{ load() },[])
 
@@ -433,15 +456,198 @@ const InsumosList = () => {
             className="input-inst"
             placeholder="Buscar por IPT, productor, CUIL, paraje o telefono..."
             value={producerSearchTerm}
-            onChange={e => setProducerSearchTerm(e.target.value)}
+            onChange={e => { setProducerSearchTerm(e.target.value); setCurrentPage(1) }}
             style={{ flex: '1 1 320px', margin: 0, padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
           />
           {selectedProd ? (
-            <button className="btn secondary" onClick={() => setSelectedProd('')} style={{ height: 40, whiteSpace: 'nowrap', borderRadius: 8 }}>
+            <button className="btn secondary" onClick={() => { setSelectedProd(''); setProducerSearchTerm('') }} style={{ height: 40, whiteSpace: 'nowrap', borderRadius: 8 }}>
               Cerrar detalle
             </button>
           ) : null}
         </div>
+        {selectedProd && (
+          <div style={{ marginTop: 20 }}>
+            <div className="insumos-assignment-header" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#f0fdf4',
+              padding: '12px 20px', 
+              borderRadius: '12px 12px 0 0',
+              border: '1px solid #dcfce7',
+              borderBottom: 'none'
+            }}>
+              <span className="insumos-assignment-title" style={{ color: '#166534', fontWeight: 600 }}>
+                Asignaciones para: {productoresConInsumos.find(p => String(p.ipt || '') === String(selectedProd || ''))?.productorNombre || productores.find(p => String(p.ipt || '') === String(selectedProd || ''))?.nombreCompleto || 'Productor'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span className="insumos-assignment-ipt" style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
+                  IPT: {selectedProd || '-'}
+                </span>
+                <button
+                  onClick={refreshAsignacionesProductor}
+                  disabled={loadingAsign}
+                  title="Recargar insumos del productor"
+                  style={{ fontSize: 18, fontWeight: 800, color: '#166534', background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, width: 34, height: 30, cursor: loadingAsign ? 'default' : 'pointer', lineHeight: 1 }}
+                >
+                  {loadingAsign ? '...' : '↻'}
+                </button>
+                <button
+                  onClick={onEliminarAsignaciones}
+                  className="insumos-delete-assignments"
+                  style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+                >
+                  Eliminar todas las asignaciones
+                </button>
+              </div>
+            </div>
+
+            <div className="insumos-assignment-summary" style={{
+              border: '1px solid #e2e8f0',
+              borderTop: 'none',
+              padding: '10px 20px',
+              background: '#fff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap'
+            }}>
+              <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+                Asignado: <span style={{ color: '#0f172a' }}>{resumenProd.asignado}</span>
+              </div>
+              <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+                Entregado: <span style={{ color: '#0f172a' }}>{resumenProd.entregado}</span>
+              </div>
+              <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
+                Disponible: <span style={{ color: resumenProd.tieneDisponible ? '#166534' : '#b91c1c' }}>{resumenProd.disponible}</span>
+              </div>
+              {!resumenProd.tieneDisponible && (
+                <div className="insumos-empty-pill" style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  fontSize: 12
+                }}>
+                  Sin insumos disponibles
+                </div>
+              )}
+            </div>
+
+            <div className="table-wrap insumos-assignment-table-wrap" style={{
+              border: '1px solid #e2e8f0',
+              borderRadius: '0 0 12px 12px',
+              backgroundColor: '#fff',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch'
+            }}>
+              {loadingAsign ? (
+                <div className="insumos-loading-state" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+                  <div className="spinner" style={{ marginBottom: 12 }}></div>
+                  Cargando asignaciones del productor…
+                </div>
+              ) : asignacionesProd.length === 0 ? (
+                <div className="insumos-empty-state" style={{
+                  padding: '60px 20px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 12
+                }}>
+                  <div style={{ 
+                    width: 64, 
+                    height: 64, 
+                    borderRadius: 32, 
+                    backgroundColor: '#f1f5f9', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    marginBottom: 8
+                  }}>
+                    <span style={{ fontSize: 24 }}>📦</span>
+                  </div>
+                  <div style={{ fontWeight: 600, color: '#334155', fontSize: 16 }}>No hay insumos asignados</div>
+                  <div style={{ color: '#64748b', fontSize: 14, maxWidth: 300 }}>
+                    Este productor aún no tiene insumos registrados en su cuenta.
+                  </div>
+                </div>
+              ) : (
+                <table className="table-inst" style={{ width:'100%', minWidth: 700, borderCollapse:'collapse', margin: 0 }}>
+                  <thead>
+                    <tr style={{ background:'#f8fafc' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Insumo</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Asignado</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Entregado</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Disponible</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', minWidth: 200 }}>Descripción</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', minWidth: 280 }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {asignacionesProd.map(a=> {
+                      const ins = items.find(i=> i.id === a.insumoId) || {}
+                      const nombreInsumo = ins.nombre || insumoNames[a.insumoId] || ''
+                      const unidadIns = ins.unidad || 'bolsas'
+                      const asignado = Number(a?.cantidadAsignada ?? 0)
+                      const entregado = Number(a?.cantidadEntregada ?? (String(a?.estado || '').toLowerCase() === 'entregado' ? asignado : 0))
+                      const disponible = Math.max(0, asignado - entregado)
+                      return (
+                        <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 500 }}>{nombreInsumo || '-'}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <span style={{
+                              backgroundColor: '#f1f5f9',
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontWeight: 600,
+                              color: '#475569'
+                            }}>
+                              {asignado} {unidadIns}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <span style={{
+                              backgroundColor: '#f1f5f9',
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontWeight: 600,
+                              color: '#475569'
+                            }}>
+                              {entregado} {unidadIns}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <span style={{
+                              backgroundColor: disponible > 0 ? '#f0fdf4' : '#fef2f2',
+                              border: `1px solid ${disponible > 0 ? '#dcfce7' : '#fecaca'}`,
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontWeight: 700,
+                              color: disponible > 0 ? '#166534' : '#991b1b'
+                            }}>
+                              {disponible} {unidadIns}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#64748b', fontSize: 13 }}>{a.descripcion || '-'}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                              <button className="btn-icon" title="Aumentar" onClick={()=>onQuickAdjust(a, +1)} style={{ ...miniBtnStyle }}>+1</button>
+                              <button className="btn-icon" title="Disminuir" onClick={()=>onQuickAdjust(a, -1)} style={{ ...miniBtnStyle }}>-1</button>
+                              <button className="btn-compact" onClick={()=>setModal({ type:'assign-edit', asign: a })} style={{ ...actionBtnStyle }}>Cantidad</button>
+                              <button className="btn-compact" onClick={()=>setModal({ type:'assign-desc', asign: a })} style={{ ...actionBtnStyle }}>Nota</button>
+                            </div>
+                          </td>
+                        </tr>
+                    )})}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
         <div className="table-wrap insumos-assignment-table-wrap" style={{ border: '1px solid #e2e8f0', borderRadius: 12, backgroundColor: '#fff', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="table-inst" style={{ width:'100%', minWidth: 980, borderCollapse:'collapse', margin: 0 }}>
             <thead>
@@ -459,7 +665,7 @@ const InsumosList = () => {
             <tbody>
               {filteredProducers.length === 0 ? (
                 <tr><td colSpan={8} style={{ padding: 18, textAlign: 'center', color: '#64748b' }}>No hay productores con insumos para mostrar.</td></tr>
-              ) : filteredProducers.map(p => {
+              ) : paginatedProducers.map(p => {
                 const isSelected = String(selectedProd || '') === String(p.ipt || '')
                 return (
                   <tr key={p.ipt} className={isSelected ? 'is-selected' : ''} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -480,6 +686,32 @@ const InsumosList = () => {
               })}
             </tbody>
           </table>
+          {pageCount > 1 && (
+            <div style={{ marginTop: 12, padding: '0 14px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ color: '#475569', fontSize: 14 }}>
+                Mostrando {paginatedProducers.length} de {filteredProducers.length} productores
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="btn secondary"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                  style={{ minWidth: 90, borderRadius: 8 }}
+                >
+                  Anterior
+                </button>
+                <span style={{ color: '#334155', fontWeight: 600 }}>{currentPage} / {pageCount}</span>
+                <button
+                  className="btn secondary"
+                  onClick={() => setCurrentPage(prev => Math.min(pageCount, prev + 1))}
+                  disabled={currentPage >= pageCount}
+                  style={{ minWidth: 90, borderRadius: 8 }}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <div className="filters-bar insumos-producer-search" style={{
@@ -581,189 +813,6 @@ const InsumosList = () => {
           </>
         )}
       </div>
-      {selectedProd && (
-        <div style={{ marginTop: 20 }}>
-          <div className="insumos-assignment-header" style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: '#f0fdf4',
-            padding: '12px 20px', 
-            borderRadius: '12px 12px 0 0',
-            border: '1px solid #dcfce7',
-            borderBottom: 'none'
-          }}>
-            <span className="insumos-assignment-title" style={{ color: '#166534', fontWeight: 600 }}>
-              Asignaciones para: {productoresConInsumos.find(p => String(p.ipt || '') === String(selectedProd || ''))?.productorNombre || productores.find(p => String(p.ipt || '') === String(selectedProd || ''))?.nombreCompleto || 'Productor'}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="insumos-assignment-ipt" style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
-                IPT: {selectedProd || '-'}
-              </span>
-              <button
-                onClick={refreshAsignacionesProductor}
-                disabled={loadingAsign}
-                title="Recargar insumos del productor"
-                style={{ fontSize: 18, fontWeight: 800, color: '#166534', background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, width: 34, height: 30, cursor: loadingAsign ? 'default' : 'pointer', lineHeight: 1 }}
-              >
-                {loadingAsign ? '...' : '↻'}
-              </button>
-              <button
-                onClick={onEliminarAsignaciones}
-                className="insumos-delete-assignments"
-                style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
-              >
-                Eliminar todas las asignaciones
-              </button>
-            </div>
-          </div>
-
-          <div className="insumos-assignment-summary" style={{
-            border: '1px solid #e2e8f0',
-            borderTop: 'none',
-            padding: '10px 20px',
-            background: '#fff',
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap'
-          }}>
-            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
-              Asignado: <span style={{ color: '#0f172a' }}>{resumenProd.asignado}</span>
-            </div>
-            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
-              Entregado: <span style={{ color: '#0f172a' }}>{resumenProd.entregado}</span>
-            </div>
-            <div className="insumos-summary-item" style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>
-              Disponible: <span style={{ color: resumenProd.tieneDisponible ? '#166534' : '#b91c1c' }}>{resumenProd.disponible}</span>
-            </div>
-            {!resumenProd.tieneDisponible && (
-              <div className="insumos-empty-pill" style={{
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                color: '#991b1b',
-                padding: '4px 10px',
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: 12
-              }}>
-                Sin insumos disponibles
-              </div>
-            )}
-          </div>
-          
-          <div className="table-wrap insumos-assignment-table-wrap" style={{
-            border: '1px solid #e2e8f0',
-            borderRadius: '0 0 12px 12px',
-            backgroundColor: '#fff',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch'
-          }}>
-            {loadingAsign ? (
-              <div className="insumos-loading-state" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                <div className="spinner" style={{ marginBottom: 12 }}></div>
-                Cargando asignaciones del productor…
-              </div>
-            ) : asignacionesProd.length === 0 ? (
-              <div className="insumos-empty-state" style={{
-                padding: '60px 20px',
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 12
-              }}>
-                <div style={{ 
-                  width: 64, 
-                  height: 64, 
-                  borderRadius: 32, 
-                  backgroundColor: '#f1f5f9', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  marginBottom: 8
-                }}>
-                  <span style={{ fontSize: 24 }}>📦</span>
-                </div>
-                <div style={{ fontWeight: 600, color: '#334155', fontSize: 16 }}>No hay insumos asignados</div>
-                <div style={{ color: '#64748b', fontSize: 14, maxWidth: 300 }}>
-                  Este productor aún no tiene insumos registrados en su cuenta.
-                </div>
-              </div>
-            ) : (
-              <table className="table-inst" style={{ width:'100%', minWidth: 700, borderCollapse:'collapse', margin: 0 }}>
-                <thead>
-                  <tr style={{ background:'#f8fafc' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Insumo</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Asignado</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Entregado</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Disponible</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', minWidth: 200 }}>Descripción</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', minWidth: 280 }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {asignacionesProd.map(a=> {
-                    const ins = items.find(i=> i.id === a.insumoId) || {}
-                    const nombreInsumo = ins.nombre || insumoNames[a.insumoId] || ''
-                    const unidadIns = ins.unidad || 'bolsas'
-                    const asignado = Number(a?.cantidadAsignada ?? 0)
-                    const entregado = Number(a?.cantidadEntregada ?? (String(a?.estado || '').toLowerCase() === 'entregado' ? asignado : 0))
-                    const disponible = Math.max(0, asignado - entregado)
-                    return (
-                      <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px 16px', fontWeight: 500 }}>{nombreInsumo || '-'}</td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <span style={{
-                            backgroundColor: '#f1f5f9',
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontWeight: 600,
-                            color: '#475569'
-                          }}>
-                            {asignado} {unidadIns}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <span style={{
-                            backgroundColor: '#f1f5f9',
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontWeight: 600,
-                            color: '#475569'
-                          }}>
-                            {entregado} {unidadIns}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <span style={{
-                            backgroundColor: disponible > 0 ? '#f0fdf4' : '#fef2f2',
-                            border: `1px solid ${disponible > 0 ? '#dcfce7' : '#fecaca'}`,
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            fontWeight: 700,
-                            color: disponible > 0 ? '#166534' : '#991b1b'
-                          }}>
-                            {disponible} {unidadIns}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#64748b', fontSize: 13 }}>{a.descripcion || '-'}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                            <button className="btn-icon" title="Aumentar" onClick={()=>onQuickAdjust(a, +1)} style={{ ...miniBtnStyle }}>+1</button>
-                            <button className="btn-icon" title="Disminuir" onClick={()=>onQuickAdjust(a, -1)} style={{ ...miniBtnStyle }}>-1</button>
-                            <button className="btn-compact" onClick={()=>setModal({ type:'assign-edit', asign: a })} style={{ ...actionBtnStyle }}>Cantidad</button>
-                            <button className="btn-compact" onClick={()=>setModal({ type:'assign-desc', asign: a })} style={{ ...actionBtnStyle }}>Nota</button>
-                          </div>
-                        </td>
-                      </tr>
-                  )})}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
 
       {modal && (
         <div className="insumos-modal-backdrop" onMouseDown={(e)=>{ if (e.target === e.currentTarget) setModal(null) }}>
