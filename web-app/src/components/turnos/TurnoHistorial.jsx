@@ -97,7 +97,7 @@ const getNombreDisplay = (item) => {
 const getRolLabel = (item) => {
   const rol = String(item?.realizadoPor?.rol || '').toLowerCase()
   if (rol === 'sistema' || rol === '' || !rol) return null
-  if (rol.includes('admin')) return 'Administrador'
+  if (rol.includes('administrador')) return 'Administrador'
   if (rol.includes('prod')) return 'Productor'
   return rol.charAt(0).toUpperCase() + rol.slice(1)
 }

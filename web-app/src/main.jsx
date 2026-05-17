@@ -72,67 +72,67 @@ const router = createBrowserRouter([
       { path: "/home", element: <Home /> },
       { path: "/", element: <Home /> },
       { path: "/lotes", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="lotes">
           <LotesList />
         </ProtectedRoute>
       ) },
       { path: "/lotes/mapa", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="lotes">
           <LotesMapaGeneral />
         </ProtectedRoute>
       ) },
       { path: "/lotes/nuevo", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="lotes">
           <LoteAdminForm />
         </ProtectedRoute>
       ) },
       { path: "/lotes/:id", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="lotes">
           <LoteDetail />
         </ProtectedRoute>
       ) },
       { path: "/lotes/:id/editar", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="lotes">
           <LoteAdminForm />
         </ProtectedRoute>
       ) },
       { path: "/turnos", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="turnos">
           <TurnosList />
         </ProtectedRoute>
       ) },
       { path: "/insumos", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="insumos">
           <InsumosList />
         </ProtectedRoute>
       ) },
       { path: "/productores", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="productores">
           <ProductoresList />
         </ProtectedRoute>
       ) },
       { path: "/productores/nuevo", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="productores">
           <ProductorForm />
         </ProtectedRoute>
       ) },
       { path: "/productores/:id", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="productores">
           <ProductorDetail />
         </ProtectedRoute>
       ) },
       { path: "/productores/:id/editar", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="productores">
           <ProductorForm />
         </ProtectedRoute>
       ) },
       { path: "/informes", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador", "administrador limitado"]} requiredPermission="informes">
           <Informes />
         </ProtectedRoute>
       ) },
       { path: "/users", element: (
-        <ProtectedRoute allowedRoles={["Administrador"]}>
+        <ProtectedRoute allowedRoles={["administrador"]} requiredPermission="users">
           <UsersList />
         </ProtectedRoute>
       ) },

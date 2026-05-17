@@ -10,6 +10,7 @@ import {
   buildOrigen,
 } from "../services/auditoriaTurnos.service.js";
 import { sendExpoPush } from "../utils/expoPush.js";
+import { getProductorBloqueo } from "../utils/productorAccess.js";
 
 const DEFAULT_TURNOS_CAPACIDAD_DIA = 50;
 const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
@@ -38,6 +39,15 @@ const toTurnoTimestamp = (input) => {
   }
 
   const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+};
+
+const toManualTurnoTimestamp = ({ fecha, hora }) => {
+  const ymd = String(fecha || "").trim();
+  const hm = String(hora || "").trim();
+  if (!isValidYmd(ymd)) return null;
+  if (!/^\d{2}:\d{2}$/.test(hm)) return null;
+  const d = new Date(`${ymd}T${hm}:00-03:00`);
   return isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
 };
 
@@ -149,7 +159,7 @@ const productorTieneLoteArado = async ({ productorId, ipt }) => {
 
 const isAdminRequest = (req) => {
   const role = normalizeRole(req?.user?.role);
-  return role === "administrador" || role === "admin";
+  return String(role || "").includes("administrador");
 };
 
 const getAuthOwnershipIds = (req) => {
@@ -193,6 +203,18 @@ const resolveProductorForRequest = async (req, bodyIpt) => {
     if (productor) return productor;
   }
   return null;
+};
+
+const assertProductorPuedeOperar = (productor) => {
+  const bloqueo = getProductorBloqueo(productor?.data || productor || {});
+  return bloqueo ? { status: 403, message: bloqueo.message, code: bloqueo.code } : null;
+};
+
+const assertTurnoProductorPuedeOperar = async (req, turno) => {
+  if (isAdminRequest(req)) return null;
+  const productor = await resolveProductorForRequest(req, turno?.ipt || turno?.productorId);
+  if (!productor) return { status: 403, message: "Productor no encontrado.", code: "PRODUCTOR_NO_ENCONTRADO" };
+  return assertProductorPuedeOperar(productor);
 };
 
 const collectTurnoDocsForProductor = async ({ ipt }) => {
@@ -547,7 +569,7 @@ export const crearTurno = async (req, res) => {
       ipt = req.user.firebaseClaims.ipt;
     }
 
-    // Validar que el productor existe y está activo
+    // Validar que el productor existe y puede operar
     const resolvedProductor = await resolveProductorForRequest(req, ipt);
     if (resolvedProductor) {
       ipt = normalizeIpt(resolvedProductor.ipt || ipt);
@@ -557,8 +579,13 @@ export const crearTurno = async (req, res) => {
     if (!resolvedProductor) {
       return res.status(403).json({ message: "Productor no encontrado.", estadoActual });
     }
-    if (resolvedProductor.data?.activo === false) {
-      return res.status(403).json({ message: "El productor no está activo.", estadoActual });
+    const bloqueoProductor = assertProductorPuedeOperar(resolvedProductor);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({
+        message: bloqueoProductor.message,
+        code: bloqueoProductor.code,
+        estadoActual,
+      });
     }
 
     const restriccionBloqueante = isRestriccionTurnosBloqueante(resolvedProductor.data);
@@ -867,6 +894,85 @@ export const crearTurno = async (req, res) => {
 
 
 // 📋 Obtener todos los turnos (con filtros de activo/inactivo y paginación)
+export const crearTurnoManual = async (req, res) => {
+  try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ message: "Solo administradores pueden crear turnos manuales." });
+    }
+
+    const ipt = normalizeIpt(req.body?.ipt);
+    const fecha = normalizeYmdOrNull(req.body?.fecha || req.body?.fechaSolicitada);
+    const hora = String(req.body?.hora || "").trim();
+    const observacion = String(req.body?.observacion || req.body?.observaciones || "").trim();
+
+    if (!ipt) return res.status(400).json({ message: "Debe seleccionar un productor." });
+    if (!fecha) return res.status(400).json({ message: "Fecha invalida." });
+
+    const ts = toManualTurnoTimestamp({ fecha, hora });
+    if (!ts) return res.status(400).json({ message: "Hora invalida." });
+
+    const date = ts.toDate();
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const turnoDia = new Date(date);
+    turnoDia.setHours(0, 0, 0, 0);
+    if (turnoDia.getTime() < hoy.getTime()) {
+      return res.status(400).json({ message: "No se puede crear un turno con fecha pasada." });
+    }
+    if (date.getTime() < Date.now()) {
+      return res.status(400).json({ message: "No se puede crear un turno con horario pasado." });
+    }
+
+    const productor = await resolveProductorByIdentifier(ipt);
+    if (!productor) return res.status(404).json({ message: "Productor no encontrado." });
+
+    const bloqueoProductor = assertProductorPuedeOperar(productor);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
+    }
+
+    const turno = {
+      productorId: productor.ipt,
+      ipt: productor.ipt,
+      productorNombre: productor.data?.nombreCompleto || productor.data?.nombre || "",
+      tipoTurno: "insumo",
+      fecha: date.toISOString(),
+      fechaTurno: ts,
+      temporada: temporadaFromDate(date),
+      estado: "pendiente",
+      activo: true,
+      motivo: "",
+      observacionAdmin: observacion,
+      createdBy: req.user?.uid || "sistema",
+      createdAt: Timestamp.now(),
+      creadoEn: new Date().toISOString(),
+      updatedAt: Timestamp.now(),
+      origen: "manual_admin",
+    };
+
+    const docRef = await db.collection("turnos").add(turno);
+
+    registrarAuditoriaTurno({
+      turnoId: docRef.id,
+      accion: "turno_manual_creado",
+      estadoAnterior: null,
+      estadoNuevo: "pendiente",
+      motivo: observacion || null,
+      realizadoPor: buildRealizadoPor(req),
+      origen: buildOrigen(req),
+      automatico: false,
+    });
+
+    return res.status(201).json({
+      message: "Turno creado correctamente",
+      turno: { id: docRef.id, ...convertirTimestamps(turno) },
+    });
+  } catch (error) {
+    console.error("Error al crear turno manual:", error);
+    return res.status(500).json({ message: "Error al crear turno manual" });
+  }
+};
+
 export const registrarAsistenciaTurno = async (req, res) => {
   try {
     if (!isAdminRequest(req)) {
@@ -1135,6 +1241,10 @@ export const actualizarTurno = async (req, res) => {
     if (!canModifyTurno(req, current)) {
       return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
     }
+    const bloqueoProductor = await assertTurnoProductorPuedeOperar(req, current);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
+    }
     const now = new Date();
     const hoy = new Date(now); hoy.setHours(0,0,0,0);
     const vencidoUpdate = applyVencidoIfNeeded(current, now);
@@ -1279,6 +1389,10 @@ export const cambiarEstadoTurno = async (req, res) => {
     const current = snap.data();
     if (!canModifyTurno(req, current)) {
       return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
+    }
+    const bloqueoProductor = await assertTurnoProductorPuedeOperar(req, current);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
     }
     const vencidoUpdate = applyVencidoIfNeeded(current, new Date());
 
@@ -1481,6 +1595,11 @@ export const eliminarTurno = async (req, res) => {
       return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
     }
     
+    const bloqueoProductor = await assertTurnoProductorPuedeOperar(req, turno);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
+    }
+
     const updateData = {
       activo: false,
       desactivadoEn: Timestamp.now(),
@@ -1515,6 +1634,13 @@ export const restaurarTurno = async (req, res) => {
     const doc = await db.collection("turnos").doc(id).get();
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const turnoRestaurado = doc.data();
+    if (!canModifyTurno(req, turnoRestaurado)) {
+      return res.status(403).json({ message: "No tenÃ©s permiso para modificar este turno" });
+    }
+    const bloqueoProductor = await assertTurnoProductorPuedeOperar(req, turnoRestaurado);
+    if (bloqueoProductor) {
+      return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
+    }
 
     await db.collection("turnos").doc(id).update({
       activo: true,
@@ -1773,6 +1899,23 @@ export const disponibilidadTurno = async (req, res) => {
     if (ipt) {
       try {
         const productor = await resolveProductorByIdentifier(ipt);
+        if (!productor) {
+          return res.json({
+            disponible: false,
+            motivo: "Productor no encontrado.",
+            code: "PRODUCTOR_NO_ENCONTRADO",
+            estadoActual: true,
+          });
+        }
+        const bloqueoProductor = productor ? assertProductorPuedeOperar(productor) : null;
+        if (bloqueoProductor) {
+          return res.json({
+            disponible: false,
+            motivo: bloqueoProductor.message,
+            code: bloqueoProductor.code,
+            estadoActual: true,
+          });
+        }
         const restriccion = productor ? isRestriccionTurnosBloqueante(productor.data) : null;
         if (restriccion) {
           const hasta = restriccion.hasta ? ` hasta el ${restriccion.hasta}` : "";

@@ -84,7 +84,9 @@ export const createProductor = async (req, res) => {
       telefono: telefono || "",
       domicilioCasa: domicilioCasa || "",
       domicilioIngresoCoord: domicilioIngresoCoord || null,
-      estado: estado || "Nuevo",
+      estado: estado || "Nuevo", // LEO: tipo de productor
+      estadoCarnet: "Vigente", // LEO: estado administrativo del carnet
+      fechaVencimientoCarnet: null, // LEO: fecha de vencimiento futura
       requiereCambioContrasena: true,
       historialIngresos: 0,
       fechaRegistro: new Date(),
@@ -168,30 +170,118 @@ const findProductorByIpt = async (ipt) => {
 // Obtener productor por IPT
 export const getProductorById = async (req, res) => {
   try {
+
     const { id } = req.params;
+
     const doc = await findProductorByIpt(id);
-    if (!doc) return res.status(404).json({ error: "Productor no encontrado" });
-    if (!doc.exists || doc.data().activo === false) 
-      return res.status(404).json({ error: "Productor no encontrado" });
-    res.json({ id: doc.id, ...doc.data() });
+
+    if (!doc) {
+      return res.status(404).json({
+        error: "Productor no encontrado",
+      });
+    }
+
+    const data = doc.data();
+
+    // LEO: validación automática de vencimiento de carnet
+    if (data.fechaVencimientoCarnet) {
+
+      const hoy = new Date();
+      const vencimiento = new Date(data.fechaVencimientoCarnet);
+
+      hoy.setHours(0, 0, 0, 0);
+      vencimiento.setHours(0, 0, 0, 0);
+
+      if (vencimiento < hoy) {
+        data.estadoCarnet = "Vencido";
+      } else {
+        data.estadoCarnet = "Vigente";
+      }
+    }
+
+    // productor inactivo
+    if (data.activo === false) {
+      return res.status(404).json({
+        error: "Productor no encontrado",
+      });
+    }
+
+    res.json({
+      id: doc.id,
+      ...data,
+    });
+
   } catch (error) {
-    console.error("Error al obtener productor:", error);
-    res.status(500).json({ error: "Error al obtener productor" });
+
+    console.error(
+      "Error al obtener productor:",
+      error
+    );
+
+    res.status(500).json({
+      error: "Error al obtener productor",
+    });
   }
 };
 
 export const getProductorByIpt = async (req, res) => {
   try {
+
     const { ipt } = req.params;
-    const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
-    if (snap.empty) return res.status(404).json({ error: "Productor no encontrado" });
+
+    const snap = await db
+      .collection("productores")
+      .where("ipt", "==", String(ipt))
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      return res.status(404).json({
+        error: "Productor no encontrado",
+      });
+    }
+
     const doc = snap.docs[0];
     const data = doc.data();
-    if (data.activo === false) return res.status(404).json({ error: "Productor no activo" });
-    res.json({ id: doc.id, ...data });
+
+    // LEO: validación automática de vencimiento de carnet
+    if (data.fechaVencimientoCarnet) {
+
+      const hoy = new Date();
+      const vencimiento = new Date(data.fechaVencimientoCarnet);
+
+      hoy.setHours(0, 0, 0, 0);
+      vencimiento.setHours(0, 0, 0, 0);
+
+      if (vencimiento < hoy) {
+        data.estadoCarnet = "Vencido";
+      } else {
+        data.estadoCarnet = "Vigente";
+      }
+    }
+
+    // productor inactivo
+    if (data.activo === false) {
+      return res.status(404).json({
+        error: "Productor no activo",
+      });
+    }
+
+    res.json({
+      id: doc.id,
+      ...data,
+    });
+
   } catch (error) {
-    console.error("Error al obtener productor por IPT:", error);
-    res.status(500).json({ error: "Error al obtener productor por IPT" });
+
+    console.error(
+      "Error al obtener productor por IPT:",
+      error
+    );
+
+    res.status(500).json({
+      error: "Error al obtener productor por IPT",
+    });
   }
 };
 

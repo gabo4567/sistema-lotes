@@ -79,7 +79,10 @@ const Login = () => {
         idToken,
       });
 
-      login(res.data.token);
+      login(res.data.token, {
+        permisos: res.data.permisos || {},
+        role: res.data.role || "administrador",
+      });
       navigate("/home");
 
     } catch (err) {

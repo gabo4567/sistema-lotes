@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
-import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig } from '../services/turnos.service'
+import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig, crearTurnoManual } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { isTurnosHabilitados } from '../utils/turnos.utils'
@@ -149,9 +149,22 @@ const getDisplayEstado = (t) => {
   return est || 'pendiente'
 }
 
+const getDefaultManualTurnoForm = () => {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return {
+    productorSearch: '',
+    ipt: '',
+    fecha: toYmdLocal(d),
+    hora: '09:00',
+    observacion: '',
+  }
+}
+
 const TurnosList = () => {
 const [turnos, setTurnos] = useState([])
 const [prodMap, setProdMap] = useState(new Map())
+const [productoresList, setProductoresList] = useState([])
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState('')
 const [viewMode, setViewMode] = useState('activos') // 'activos', 'historial'
@@ -161,6 +174,11 @@ const [expandedId, setExpandedId] = useState(null)
 const [insumosDispByProd, setInsumosDispByProd] = useState({})
 
 const [historialModal, setHistorialModal] = useState({ open: false, turnoId: null })
+
+const [manualModalOpen, setManualModalOpen] = useState(false)
+const [manualForm, setManualForm] = useState(getDefaultManualTurnoForm)
+const [manualSaving, setManualSaving] = useState(false)
+const [manualError, setManualError] = useState('')
 
 const [capModalOpen, setCapModalOpen] = useState(false)
 const [capFecha, setCapFecha] = useState(toYmdLocal(new Date()))
@@ -212,6 +230,7 @@ const loadData = useCallback(async ({ showLoading = true } = {}) => {
         const { data: productores } = await getProductores()
         const map = new Map()
         const productoresList = Array.isArray(productores) ? productores : []
+        setProductoresList(productoresList)
         productoresList.forEach(p=>{ 
           map.set(String(p.ipt || ''), { 
             nombre: p.nombreCompleto || p.nombre || '', 
@@ -381,6 +400,17 @@ const temporadasArchivadas = useMemo(() => {
   const list = Array.from(new Set(turnos.map(getTurnoTemporada).filter(Boolean)))
   return list.sort((a, b) => b.localeCompare(a))
 }, [turnos])
+
+const productoresManualFiltrados = useMemo(() => {
+  const search = String(manualForm.productorSearch || '').toLowerCase().trim()
+  const list = Array.isArray(productoresList) ? productoresList : []
+  if (!search) return list.slice(0, 12)
+  return list.filter((p) => {
+    const ipt = String(p?.ipt || '').toLowerCase()
+    const nombre = String(p?.nombreCompleto || p?.nombre || '').toLowerCase()
+    return ipt.includes(search) || nombre.includes(search)
+  }).slice(0, 12)
+}, [manualForm.productorSearch, productoresList])
 
 const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
   if (updatingId === id) {
@@ -802,6 +832,79 @@ const closeConfigModal = () => {
   setCfgModalOpen(false)
 }
 
+const openManualTurnoModal = () => {
+  setManualForm(getDefaultManualTurnoForm())
+  setManualError('')
+  setManualModalOpen(true)
+}
+
+const closeManualTurnoModal = () => {
+  if (manualSaving) return
+  setManualModalOpen(false)
+  setManualError('')
+}
+
+const selectManualProductor = (p) => {
+  setManualForm({
+    ...manualForm,
+    ipt: String(p?.ipt || ''),
+    productorSearch: `${p?.ipt || ''} - ${p?.nombreCompleto || p?.nombre || 'Sin nombre'}`,
+  })
+  setManualError('')
+}
+
+const saveManualTurno = async () => {
+  const ipt = String(manualForm.ipt || '').trim()
+  const fecha = String(manualForm.fecha || '').trim()
+  const hora = String(manualForm.hora || '').trim()
+
+  if (!ipt) {
+    setManualError('Seleccioná un productor.')
+    return
+  }
+  if (!isValidYmd(fecha)) {
+    setManualError('Seleccioná una fecha válida.')
+    return
+  }
+  if (!/^\d{2}:\d{2}$/.test(hora)) {
+    setManualError('Seleccioná una hora válida.')
+    return
+  }
+  const today = toYmdLocal(new Date())
+  if (fecha < today) {
+    setManualError('No se puede crear un turno con fecha pasada.')
+    return
+  }
+  if (fecha === today) {
+    const selectedDate = new Date(`${fecha}T${hora}:00`)
+    if (selectedDate.getTime() < Date.now()) {
+      setManualError('No se puede crear un turno con horario pasado.')
+      return
+    }
+  }
+
+  setManualSaving(true)
+  setManualError('')
+  try {
+    await crearTurnoManual({
+      ipt,
+      fecha,
+      hora,
+      observacion: manualForm.observacion,
+    })
+    notify({ title: 'Turno creado correctamente', icon: 'success' })
+    setManualModalOpen(false)
+    setViewMode('activos')
+    await loadData({ showLoading: false })
+  } catch (e) {
+    const message = e?.response?.data?.message || e?.message || 'No se pudo crear el turno.'
+    setManualError(message)
+    notify({ title: message, icon: 'error' })
+  } finally {
+    setManualSaving(false)
+  }
+}
+
 const applyDraftRange = () => {
   if (cfgSaving || cfgLoading) return
   if (cfgRangeIntentOpen) return
@@ -1007,6 +1110,121 @@ return (
         turnoId={historialModal.turnoId}
         onClose={() => setHistorialModal({ open: false, turnoId: null })}
       />
+    ) : null}
+
+    {manualModalOpen ? (
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999,
+        }}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) closeManualTurnoModal()
+        }}
+      >
+        <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 620, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Nuevo turno</div>
+            <button className="btn secondary" onClick={closeManualTurnoModal} disabled={manualSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
+          </div>
+          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Productor</label>
+              <input
+                type="text"
+                className="input-inst"
+                value={manualForm.productorSearch}
+                onChange={(e) => setManualForm({ ...manualForm, productorSearch: e.target.value, ipt: '' })}
+                disabled={manualSaving}
+                placeholder="Buscar por IPT o nombre"
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              />
+              <div style={{ display: 'grid', gap: 6, maxHeight: 170, overflowY: 'auto' }}>
+                {productoresManualFiltrados.map((p) => {
+                  const ipt = String(p?.ipt || '')
+                  const active = manualForm.ipt && manualForm.ipt === ipt
+                  return (
+                    <button
+                      key={p.id || ipt}
+                      type="button"
+                      className={`btn ${active ? 'primary' : 'secondary'}`}
+                      onClick={() => selectManualProductor(p)}
+                      disabled={manualSaving}
+                      style={{ padding: '7px 10px', justifyContent: 'flex-start', textAlign: 'left' }}
+                    >
+                      {ipt} - {p?.nombreCompleto || p?.nombre || 'Sin nombre'}
+                    </button>
+                  )
+                })}
+                {productoresManualFiltrados.length === 0 ? (
+                  <div style={{ fontSize: 14, color: '#6b7280' }}>No se encontraron productores.</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Fecha</label>
+                <input
+                  type="date"
+                  className="input-inst"
+                  value={manualForm.fecha}
+                  onChange={(e) => setManualForm({ ...manualForm, fecha: e.target.value })}
+                  disabled={manualSaving}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                />
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Hora</label>
+                <input
+                  type="time"
+                  className="input-inst"
+                  value={manualForm.hora}
+                  onChange={(e) => setManualForm({ ...manualForm, hora: e.target.value })}
+                  disabled={manualSaving}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Observación opcional</label>
+              <textarea
+                className="input-inst"
+                value={manualForm.observacion}
+                onChange={(e) => setManualForm({ ...manualForm, observacion: e.target.value })}
+                disabled={manualSaving}
+                rows={3}
+                placeholder="Motivo interno o aclaración para este turno"
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 72, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ fontSize: 14, color: '#6b7280' }}>
+              Estado inicial: <strong>Pendiente</strong>
+            </div>
+            {manualError ? (
+              <div className="turnos-config-alert turnos-config-alert--error" style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+                {manualError}
+              </div>
+            ) : null}
+          </div>
+          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn secondary" onClick={closeManualTurnoModal} disabled={manualSaving}>Cancelar</button>
+            <button className="btn primary" onClick={saveManualTurno} disabled={manualSaving}>
+              {manualSaving ? 'Guardando...' : 'Guardar turno'}
+            </button>
+          </div>
+        </div>
+      </div>
     ) : null}
 
     {capModalOpen ? (
@@ -1460,6 +1678,14 @@ return (
       </div>
 
       <div className="turnos-toolbar__right">
+        <button
+          className="btn primary"
+          onClick={openManualTurnoModal}
+          disabled={loading}
+          style={{ padding: '6px 12px' }}
+        >
+          + Nuevo turno
+        </button>
         <button
           className="btn secondary"
           onClick={openConfigModal}

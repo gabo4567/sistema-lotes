@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { makeToken } from "../middlewares/auth.js";
 import { logServerError, sendInternalError } from "../utils/httpErrors.js";
 import { sendResetPasswordEmail } from "../utils/email.js";
+import { getProductorBloqueo } from "../utils/productorAccess.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -67,9 +68,106 @@ const normalizeRole = (role) => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
-  if (!v) return "";
-  if (v === "productor") return "Productor";
-  return "Administrador";
+
+  if (v === "productor") return "productor";
+  if (v.includes("limitado")) return "administrador limitado";
+
+  return "administrador";
+};
+
+const DEFAULT_ADMIN_PERMISOS = {
+  turnos: true,
+  productores: true,
+  insumos: true,
+  lotes: true,
+  users: true,
+  informes: true,
+};
+
+const DEFAULT_LIMITED_ADMIN_PERMISOS = {
+  turnos: false,
+  productores: false,
+  insumos: false,
+  lotes: false,
+  users: false,
+  informes: false,
+};
+
+const hasPermisos = (data) => {
+  return Boolean(
+    data?.permisos &&
+    typeof data.permisos === "object" &&
+    Object.keys(data.permisos).length > 0
+  );
+};
+
+const resolvePermisos = ({ role, permisos }) => {
+  if (hasPermisos({ permisos })) return permisos;
+  return normalizeRole(role).includes("limitado")
+    ? DEFAULT_LIMITED_ADMIN_PERMISOS
+    : DEFAULT_ADMIN_PERMISOS;
+};
+
+const resolveLoginUserDoc = async ({ uid, emailNormalized }) => {
+  const candidates = new Map();
+  const uidDoc = await db.collection("users").doc(uid).get();
+
+  if (uidDoc.exists) {
+    candidates.set(uidDoc.id, {
+      id: uidDoc.id,
+      ref: uidDoc.ref,
+      data: uidDoc.data(),
+    });
+  }
+
+  if (emailNormalized) {
+    const emailSnap = await db.collection("users").where("email", "==", emailNormalized).get();
+    emailSnap.docs.forEach((doc) => {
+      candidates.set(doc.id, {
+        id: doc.id,
+        ref: doc.ref,
+        data: doc.data(),
+      });
+    });
+  }
+
+  const docs = Array.from(candidates.values());
+  if (!docs.length) return null;
+
+  const selected =
+    docs.find((doc) => doc.id === uid && hasPermisos(doc.data)) ||
+    docs.find((doc) => hasPermisos(doc.data)) ||
+    docs.find((doc) => doc.id === uid) ||
+    docs[0];
+
+  const resolvedUserData = {
+    ...selected.data,
+    email: emailNormalized || selected.data.email || "",
+    permisos: resolvePermisos({
+      role: selected.data.role,
+      permisos: selected.data.permisos,
+    }),
+  };
+
+  return {
+    resolvedUid: uid,
+    resolvedUserData,
+    duplicateRefs: docs
+      .filter((doc) => doc.id !== uid)
+      .map((doc) => doc.ref),
+  };
+};
+
+const canonicalizeLoginUserDoc = async ({ uid, resolvedUserData, duplicateRefs = [] }) => {
+  const canonicalRef = db.collection("users").doc(uid);
+  const batch = db.batch();
+
+  batch.set(canonicalRef, resolvedUserData, { merge: true });
+  duplicateRefs.forEach((ref) => {
+    batch.delete(ref);
+  });
+
+  await batch.commit();
 };
 
 const FIREBASE_SIGN_IN_ERRORS = {
@@ -151,16 +249,24 @@ export const registerUser = async (req, res) => {
       displayName: nombre,
     });
 
-    const finalRole = "Administrador";
+    const normalizedRole = normalizeRole(role);
+    const finalRole = normalizedRole.includes("limitado")
+      ? "administrador limitado"
+      : "administrador";
+
+    const permisos = resolvePermisos({ role: finalRole });
+
     await db.collection("users").doc(userRecord.uid).set({
       email: emailNormalized,
       nombre,
       role: finalRole,
+      permisos,
+      activo: true,
       createdAt: new Date(),
     });
 
     res.json({
-      message: "âœ… Usuario creado correctamente",
+      message: "✅ Usuario creado correctamente",
       user: {
         uid: userRecord.uid,
         email: userRecord.email,
@@ -328,52 +434,54 @@ export const loginUser = async (req, res) => {
     const emailNormalized = normalizeEmail(firebaseEmail);
 
     // 2. El panel web solo permite administradores registrados en Firestore/users.
-    let role = "";
-    let resolvedUid = uid;
-    let resolvedUserData = null;
+    const resolvedUser = await resolveLoginUserDoc({ uid, emailNormalized });
 
-    const userDoc = await db.collection("users").doc(uid).get();
-    if (userDoc.exists) {
-      const data = userDoc.data();
-      if (data.activo === false) {
-        return res.status(403).json({ error: "Usuario inactivo" });
-      }
-      resolvedUserData = data;
-      role = normalizeRole(data.role) || "Administrador";
-    } else if (emailNormalized) {
-      // Fallback: buscar por email (usuarios registrados antes de indexar por UID)
-      const snap = await db.collection("users").where("email", "==", emailNormalized).limit(1).get();
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
-        if (data.activo === false) {
-          return res.status(403).json({ error: "Usuario inactivo" });
-        }
-        resolvedUserData = data;
-        role = normalizeRole(data.role) || "Administrador";
-        resolvedUid = snap.docs[0].id;
-      }
+    if (!resolvedUser?.resolvedUserData) {
+      return res.status(403).json({ error: "Usuario administrador no registrado" });
     }
 
-    if (!resolvedUserData) {
-      return res.status(403).json({ error: "Usuario administrador no registrado" });
+    const { resolvedUid, resolvedUserData } = resolvedUser;
+    const role = normalizeRole(resolvedUserData.role) || "administrador";
+
+    if (resolvedUserData.activo === false) {
+      return res.status(403).json({ error: "Usuario inactivo" });
     }
 
     const looksLikeProductor = Boolean(resolvedUserData.ipt);
 
     // 3. Los productores usan la app móvil — no el panel web
-    if (looksLikeProductor || normalizeRole(role) === "Productor") {
+    if (looksLikeProductor || role === "productor") {
       return res.status(403).json({ error: "Los productores deben usar la aplicación móvil" });
     }
+
+    await canonicalizeLoginUserDoc({
+      uid: resolvedUid,
+      resolvedUserData,
+      duplicateRefs: resolvedUser.duplicateRefs,
+    });
 
     // 4. Actualizar último acceso
     await db.collection("users").doc(resolvedUid).set({
       email: emailNormalized,
-      role: "Administrador",
       ultimoAcceso: new Date(),
     }, { merge: true });
 
-    const webToken = makeToken({ uid: resolvedUid, email: emailNormalized, role: "Administrador" });
-    res.json({ token: webToken, role: "Administrador" });
+    console.log("USER DOC:", resolvedUserData);
+    console.log("PERMISOS:", resolvedUserData?.permisos);
+    console.log("UID:", resolvedUid);
+
+    const webToken = makeToken({
+      uid: resolvedUid,
+      email: emailNormalized,
+      role,
+      permisos: resolvedUserData.permisos || {},
+      nombre: resolvedUserData.nombre || "",
+    });
+    res.json({
+      token: webToken,
+      role,
+      permisos: resolvedUserData.permisos || {},
+    });
   } catch (error) {
     logServerError("Error al hacer login", error);
     res.status(500).json({ error: "No se pudo iniciar sesión" });
@@ -396,9 +504,9 @@ export const loginProductor = async (req, res) => {
     }
     const doc = snap.docs[0];
     const data = doc.data();
-    const estado = data.estado || "Nuevo";
-    if (["Vencido"].includes(estado)) {
-      return res.status(403).json({ error: "Estado no permite ingreso" });
+    const bloqueo = getProductorBloqueo(data);
+    if (bloqueo) {
+      return res.status(403).json({ error: bloqueo.message, code: bloqueo.code });
     }
     const requiereCambio = Boolean(data.requiereCambioContrasena);
     let ok = false;

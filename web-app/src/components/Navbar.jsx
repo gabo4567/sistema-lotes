@@ -5,7 +5,7 @@ import { confirmDialog } from "../utils/alerts";
 
 const Navbar = () => {
   const location = useLocation();
-  const { logout } = useContext(AuthContext);
+  const { logout, user } = useContext(AuthContext);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -41,82 +41,115 @@ const Navbar = () => {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
-  const menuItems = useMemo(() => ([
-    {
-      label: "Inicio",
-      path: "/home",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M3 10.8 12 3l9 7.8"></path>
-          <path d="M5.5 9.2V21h13V9.2"></path>
-          <path d="M9.5 21v-6h5v6"></path>
-        </svg>
-      ),
-    },
-    {
-      label: "Turnos",
-      path: "/turnos",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="3" y="4.5" width="18" height="16.5" rx="2.5"></rect>
-          <path d="M8 3v4M16 3v4M3 10h18"></path>
-          <path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01"></path>
-        </svg>
-      ),
-    },
-    {
-      label: "Insumos",
-      path: "/insumos",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M11 20h2v-6.6c2.7-.2 5.2-1.6 6.8-3.8.3-.4 0-.9-.5-.9-3 0-5.3 1-6.9 3.1C11.1 8.7 8.7 7 5.2 7c-.5 0-.8.6-.5 1 1.6 2.6 3.7 4.3 6.3 5v7Z"></path>
-          <path d="M6.5 21h11c.5 0 .8-.4.8-.8s-.4-.8-.8-.8h-11c-.5 0-.8.4-.8.8s.3.8.8.8Z"></path>
-        </svg>
-      ),
-    },
-    {
-      label: "Lotes",
-      path: "/lotes",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M3 18.9c4.1-4 8.6-5.5 14.8-5.1L21 14c-4.2 1.2-7.9 3.1-11.2 5.6H4.1c-.9 0-1.4-.4-1.1-.7Z"></path>
-          <path d="M3.2 15.3c3.8-3.1 8.2-4.7 13.7-4.7l3.5.1c.5 0 .7.6.3.9l-1.4 1.1c-6.4-.9-11.6.4-15.9 4.2-.6.5-1.1-1.1-.2-1.6Z"></path>
-          <path d="M4.5 11.9c3.4-2.2 7.1-3.3 11.2-3.3h2c.5 0 .7.6.3.9l-.9.8c-5.2-.1-9.6 1.1-13.2 3.8-.5.4-.5-1.8.6-2.2Z"></path>
-        </svg>
-      ),
-    },
-    {
-      label: "Productores",
-      path: "/productores",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M16 20v-1.5a4 4 0 0 0-4-4H6.5a4 4 0 0 0-4 4V20"></path>
-          <circle cx="9.2" cy="7.5" r="3.4"></circle>
-          <path d="M21.5 20v-1.2a3.4 3.4 0 0 0-2.8-3.3M16.5 4.3a3.3 3.3 0 0 1 0 6.4"></path>
-        </svg>
-      ),
-    },
-    {
-      label: "Usuarios",
-      path: "/users",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M19 20v-1.4a4.2 4.2 0 0 0-4.2-4.2H9.2A4.2 4.2 0 0 0 5 18.6V20"></path>
-          <circle cx="12" cy="7.5" r="3.4"></circle>
-        </svg>
-      ),
-    },
-    {
-      label: "Informes",
-      path: "/informes",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 20V10M10.5 20V5M17 20v-8"></path>
-          <path d="M3 20h18"></path>
-        </svg>
-      ),
-    },
-  ]), [location.pathname]);
+  const permisos = user?.permisos || {};
+  const role = String(user?.role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  const menuItems = useMemo(() => {
+    const items = [
+      {
+        label: "Inicio",
+        path: "/home",
+        visible: true,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 10.8 12 3l9 7.8"></path>
+            <path d="M5.5 9.2V21h13V9.2"></path>
+            <path d="M9.5 21v-6h5v6"></path>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Turnos",
+        path: "/turnos",
+        visible: permisos.turnos,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4.5" width="18" height="16.5" rx="2.5"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18"></path>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01"></path>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Insumos",
+        path: "/insumos",
+        visible: permisos.insumos,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M11 20h2v-6.6c2.7-.2 5.2-1.6 6.8-3.8.3-.4 0-.9-.5-.9-3 0-5.3 1-6.9 3.1C11.1 8.7 8.7 7 5.2 7c-.5 0-.8.6-.5 1 1.6 2.6 3.7 4.3 6.3 5v7Z"></path>
+            <path d="M6.5 21h11c.5 0 .8-.4.8-.8s-.4-.8-.8-.8h-11c-.5 0-.8.4-.8.8s.3.8.8.8Z"></path>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Lotes",
+        path: "/lotes",
+        visible: permisos.lotes,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 18.9c4.1-4 8.6-5.5 14.8-5.1L21 14c-4.2 1.2-7.9 3.1-11.2 5.6H4.1c-.9 0-1.4-.4-1.1-.7Z"></path>
+            <path d="M3.2 15.3c3.8-3.1 8.2-4.7 13.7-4.7l3.5.1c.5 0 .7.6.3.9l-1.4 1.1c-6.4-.9-11.6.4-15.9 4.2-.6.5-1.1-1.1-.2-1.6Z"></path>
+            <path d="M4.5 11.9c3.4-2.2 7.1-3.3 11.2-3.3h2c.5 0 .7.6.3.9l-.9.8c-5.2-.1-9.6 1.1-13.2 3.8-.5.4-.5-1.8.6-2.2Z"></path>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Productores",
+        path: "/productores",
+        visible: permisos.productores,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M16 20v-1.5a4 4 0 0 0-4-4H6.5a4 4 0 0 0-4 4V20"></path>
+            <circle cx="9.2" cy="7.5" r="3.4"></circle>
+            <path d="M21.5 20v-1.2a3.4 3.4 0 0 0-2.8-3.3M16.5 4.3a3.3 3.3 0 0 1 0 6.4"></path>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Usuarios",
+        path: "/users",
+        visible: role === "administrador" && permisos.users,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M19 20v-1.4a4.2 4.2 0 0 0-4.2-4.2H9.2A4.2 4.2 0 0 0 5 18.6V20"></path>
+            <circle cx="12" cy="7.5" r="3.4"></circle>
+          </svg>
+        ),
+      },
+
+      {
+        label: "Informes",
+        path: "/informes",
+        visible: permisos.informes,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 20V10"></path>
+            <path d="M10.5 20V5M17 20v-8"></path>
+            <path d="M3 20h18"></path>
+          </svg>
+        ),
+      },
+    ];
+
+    return items.filter((i) => i.visible);
+  }, [
+    permisos.informes,
+    permisos.insumos,
+    permisos.lotes,
+    permisos.productores,
+    permisos.turnos,
+    permisos.users,
+    role,
+  ]);
 
   const toggleMenu = () => {
     const isMobile = window.matchMedia("(max-width: 900px)").matches;

@@ -5,6 +5,8 @@ import {
   deactivateUser,
   getUsers,
   resetPasswordUser,
+  updateUserPermisos,
+  updateUserRole,
   updateUser,
 } from "../services/users.service";
 import { notify, confirmDialog } from "../utils/alerts";
@@ -12,9 +14,49 @@ import { AuthContext } from "../contexts/AuthContextBase";
 
 const emptyCreateForm = { nombre: "", email: "", password: "", activo: true };
 
+const PERMISSION_KEYS = ["turnos", "productores", "insumos", "lotes", "users", "informes"];
+const PERMISSION_LABELS = {
+  turnos: "Turnos",
+  productores: "Productores",
+  insumos: "Insumos",
+  lotes: "Lotes",
+  users: "Usuarios",
+  informes: "Informes",
+};
+const FULL_ADMIN_PERMISOS = {
+  turnos: true,
+  productores: true,
+  insumos: true,
+  lotes: true,
+  users: true,
+  informes: true,
+};
+
+const normalizeRole = (role) => {
+  return String(role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+};
+
+const normalizePermisos = (permisos = {}) => {
+  return PERMISSION_KEYS.reduce((acc, key) => {
+    acc[key] = Boolean(permisos?.[key]);
+    return acc;
+  }, {});
+};
+
+const getRoleLabel = (role) => {
+  const normalized = normalizeRole(role);
+  if (normalized === "administrador limitado") return "Administrador limitado";
+  return "Administrador";
+};
+
 const UsersList = () => {
   const { user } = useContext(AuthContext);
   const currentUid = user?.uid;
+  const canManageAccess = normalizeRole(user?.role) === "administrador" && user?.permisos?.users === true;
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,6 +65,8 @@ const UsersList = () => {
   const [modal, setModal] = useState(null);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [editForm, setEditForm] = useState({ uid: "", nombre: "", activo: true });
+  const [permissionsForm, setPermissionsForm] = useState({ uid: "", permisos: normalizePermisos() });
+  const [roleForm, setRoleForm] = useState({ uid: "", role: "administrador" });
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +108,28 @@ const UsersList = () => {
     setEditForm({ uid: u.id, nombre: u.nombre || "", activo: u.activo !== false });
     setFormError("");
     setModal("edit");
+  };
+
+  const openPermissions = (u) => {
+    setPermissionsForm({
+      uid: u.id,
+      permisos: normalizeRole(u.role) === "administrador"
+        ? { ...FULL_ADMIN_PERMISOS }
+        : normalizePermisos(u.permisos),
+    });
+    setFormError("");
+    setModal("permissions");
+  };
+
+  const openRole = (u) => {
+    setRoleForm({
+      uid: u.id,
+      role: normalizeRole(u.role) === "administrador limitado"
+        ? "administrador limitado"
+        : "administrador",
+    });
+    setFormError("");
+    setModal("role");
   };
 
   const closeModal = () => {
@@ -111,6 +177,57 @@ const UsersList = () => {
       setModal(null);
     } catch (e) {
       setFormError(e?.message || "No se pudo actualizar el administrador");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSavePermissions = async () => {
+    const target = items.find((u) => u.id === permissionsForm.uid);
+    if (!target) return setFormError("Usuario no encontrado.");
+    if (permissionsForm.uid === currentUid) {
+      return setFormError("No puede editar sus propios permisos.");
+    }
+    if (normalizeRole(target.role) === "administrador") {
+      return setFormError("Los permisos de un administrador completo no se editan manualmente.");
+    }
+
+    setSaving(true);
+    setFormError("");
+    try {
+      const res = await updateUserPermisos(permissionsForm.uid, permissionsForm.permisos);
+      setItems(items.map((u) => (
+        u.id === permissionsForm.uid
+          ? { ...u, permisos: normalizePermisos(res.permisos || permissionsForm.permisos) }
+          : u
+      )));
+      setMsg("Permisos actualizados");
+      setModal(null);
+    } catch (e) {
+      setFormError(e?.message || "No se pudieron actualizar los permisos");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSaveRole = async () => {
+    if (roleForm.uid === currentUid) {
+      return setFormError("No puede editar su propio rol.");
+    }
+
+    setSaving(true);
+    setFormError("");
+    try {
+      const res = await updateUserRole(roleForm.uid, roleForm.role);
+      setItems(items.map((u) => (
+        u.id === roleForm.uid
+          ? { ...u, role: res.role || roleForm.role, permisos: normalizePermisos(res.permisos || u.permisos) }
+          : u
+      )));
+      setMsg("Rol actualizado");
+      setModal(null);
+    } catch (e) {
+      setFormError(e?.message || "No se pudo actualizar el rol");
     } finally {
       setSaving(false);
     }
@@ -255,12 +372,41 @@ const UsersList = () => {
                   <tr key={u.id}>
                     <td style={{ border: "1px solid #ddd", padding: "8px 12px", textAlign: "center" }}>{u.nombre || "Sin nombre"}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{u.email}</td>
-                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Administrador</td>
+                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{getRoleLabel(u.role)}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{u.activo !== false ? "Activo" : "Inactivo"}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{formatTimestamp(u.ultimoAcceso)}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                         <button className="btn btn-compact" onClick={() => openEdit(u)} style={{ minWidth: 212 }}>Editar</button>
+                        {u.activo === false ? (
+                          <button className="btn btn-compact secondary" onClick={() => onActivate(u.id, u.activo !== false)} style={{ minWidth: 212 }}>
+                            Activar
+                          </button>
+                        ) : (
+                          <button className="btn btn-compact secondary" onClick={() => onDeactivate(u.id)} disabled={u.id === currentUid} style={{ minWidth: 212 }}>
+                            Desactivar
+                          </button>
+                        )}
+                        {canManageAccess ? (
+                          <>
+                            <button
+                              className="btn btn-compact secondary"
+                              onClick={() => openRole(u)}
+                              disabled={u.id === currentUid}
+                              style={{ minWidth: 212 }}
+                            >
+                              Cambiar rol
+                            </button>
+                            <button
+                              className="btn btn-compact secondary"
+                              onClick={() => openPermissions(u)}
+                              disabled={u.id === currentUid || normalizeRole(u.role) === "administrador"}
+                              style={{ minWidth: 212 }}
+                            >
+                              Editar permisos
+                            </button>
+                          </>
+                        ) : null}
                         <button className="btn btn-compact" onClick={() => onResetPassword(u.id)} style={{ minWidth: 212 }}>
                           Restablecer contraseña
                         </button>
@@ -298,7 +444,7 @@ const UsersList = () => {
                   <button type="button" onClick={onCreate} disabled={saving}>{saving ? "Guardando..." : "Crear"}</button>
                 </div>
               </div>
-            ) : (
+            ) : modal === "edit" ? (
               <div>
                 <h3 style={{ marginTop: 0 }}>Editar administrador</h3>
                 <div>
@@ -316,6 +462,62 @@ const UsersList = () => {
                 <div className="form-actions" style={{ marginTop: 8 }}>
                   <button type="button" onClick={closeModal} disabled={saving}>Cancelar</button>
                   <button type="button" onClick={onSaveEdit} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+                </div>
+              </div>
+            ) : modal === "permissions" ? (
+              <div>
+                <h3 style={{ marginTop: 0 }}>Editar permisos</h3>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {PERMISSION_KEYS.map((key) => (
+                    <label key={key} style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 700, color: "#334155" }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(permissionsForm.permisos[key])}
+                        onChange={(e) => {
+                          setPermissionsForm({
+                            ...permissionsForm,
+                            permisos: {
+                              ...permissionsForm.permisos,
+                              [key]: e.target.checked,
+                            },
+                          });
+                          setFormError("");
+                        }}
+                      />
+                      {PERMISSION_LABELS[key]}
+                    </label>
+                  ))}
+                </div>
+                {formError ? <div style={{ gridColumn: "1 / -1", color: "#b91c1c", fontSize: 13, fontWeight: 700, marginTop: 10 }}>{formError}</div> : null}
+                <div className="form-actions" style={{ marginTop: 12 }}>
+                  <button type="button" onClick={closeModal} disabled={saving}>Cancelar</button>
+                  <button type="button" onClick={onSavePermissions} disabled={saving}>{saving ? "Guardando..." : "Guardar permisos"}</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h3 style={{ marginTop: 0 }}>Cambiar rol</h3>
+                <div>
+                  <label style={{ display: "block", marginBottom: 5, fontSize: 12, fontWeight: 700, color: "#64748b" }}>Rol</label>
+                  <select
+                    className="select-inst"
+                    value={roleForm.role}
+                    onChange={(e) => {
+                      setRoleForm({ ...roleForm, role: e.target.value });
+                      setFormError("");
+                    }}
+                  >
+                    <option value="administrador">Administrador</option>
+                    <option value="administrador limitado">Administrador limitado</option>
+                  </select>
+                </div>
+                <p className="section-subtitle" style={{ marginTop: 10 }}>
+                  Administrador recibe todos los permisos automaticamente. Administrador limitado usa permisos personalizados.
+                </p>
+                {formError ? <div style={{ gridColumn: "1 / -1", color: "#b91c1c", fontSize: 13, fontWeight: 700 }}>{formError}</div> : null}
+                <div className="form-actions" style={{ marginTop: 8 }}>
+                  <button type="button" onClick={closeModal} disabled={saving}>Cancelar</button>
+                  <button type="button" onClick={onSaveRole} disabled={saving}>{saving ? "Guardando..." : "Guardar rol"}</button>
                 </div>
               </div>
             )}

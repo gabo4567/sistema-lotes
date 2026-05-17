@@ -17,6 +17,7 @@ import {
   obtenerTurnosPorProductor,
   obtenerTurnosPorRangoFechas,
   disponibilidadTurno,
+  crearTurnoManual,
   registrarAsistenciaTurno,
   obtenerHistorialTurno,
   obtenerTimelineTurno,
@@ -51,6 +52,7 @@ router.get("/disponibilidad", disponibilidadLimiter, disponibilidadTurno);
 // CRUD principal - requiere autenticación
 router.post("/", crearTurnoLimiter, idempotency(), crearTurno);
 router.get("/", obtenerTurnos);
+router.post("/manual", idempotency(), crearTurnoManual);
 router.get("/config", obtenerConfigTurnos);
 router.put("/config", idempotency(), upsertConfigTurnos);
 router.get("/capacidad", obtenerCapacidadTurnoDia);

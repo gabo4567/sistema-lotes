@@ -20,6 +20,16 @@ export const updateUser = async (uid, data) => {
   return res.data;
 };
 
+export const updateUserPermisos = async (uid, permisos) => {
+  const res = await api.put(`/users/${uid}/permisos`, { permisos });
+  return res.data;
+};
+
+export const updateUserRole = async (uid, role) => {
+  const res = await api.put(`/users/${uid}/role`, { role });
+  return res.data;
+};
+
 export const deactivateUser = async (uid) => {
   const res = await api.post(`/users/${uid}/deactivate`);
   return res.data;

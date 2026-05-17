@@ -2,6 +2,7 @@
 import { db } from "../utils/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 import { sendValidationOrInternalError } from "../utils/httpErrors.js";
+import { getProductorBloqueo } from "../utils/productorAccess.js";
 
 const METERS_PER_DEGREE_LAT = 111320;
 
@@ -64,6 +65,46 @@ const normalizeBoolean = (value, fallback = false) => {
   if (["true", "1", "si", "sí", "yes"].includes(s)) return true;
   if (["false", "0", "no"].includes(s)) return false;
   return fallback;
+};
+
+const isAdminRequest = (req) => {
+  const role = String(req?.user?.role || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  return role.includes("administrador");
+};
+
+const getRequestProductorIpt = (req) => {
+  return normalizeText(req?.user?.firebaseClaims?.ipt || req?.user?.uid);
+};
+
+const findProductorByIpt = async (ipt) => {
+  const iptNorm = normalizeText(ipt);
+  if (!iptNorm) return null;
+  const snap = await db.collection("productores").where("ipt", "==", iptNorm).limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ref: doc.ref, data: doc.data() || {} };
+};
+
+const assertProductorPuedeModificarLote = async (req, ipt) => {
+  if (isAdminRequest(req)) return null;
+
+  const iptNorm = normalizeText(ipt);
+  const authIpt = getRequestProductorIpt(req);
+  if (!iptNorm || !authIpt || iptNorm !== authIpt) {
+    return { status: 403, error: "No tenes permiso para modificar lotes de otro productor" };
+  }
+
+  const productor = await findProductorByIpt(iptNorm);
+  if (!productor) return { status: 403, error: "Productor no encontrado" };
+
+  const bloqueo = getProductorBloqueo(productor.data);
+  if (bloqueo) return { status: 403, error: bloqueo.message, code: bloqueo.code };
+
+  return null;
 };
 
 const normalizePolygon = (polygon) => {
@@ -171,8 +212,12 @@ const buildLotePayload = (source, current = {}) => {
 export const createLote = async (req, res) => {
   try {
     const usuarioId = req.user?.uid || "sistema";
+    const payload = buildLotePayload(req.body);
+    const bloqueo = await assertProductorPuedeModificarLote(req, payload.ipt);
+    if (bloqueo) return res.status(bloqueo.status).json({ error: bloqueo.error, code: bloqueo.code });
+
     const newLote = {
-      ...buildLotePayload(req.body),
+      ...payload,
       fechaCreacion: new Date(),
       createdBy: usuarioId,
       estado: "Pendiente",
@@ -303,6 +348,9 @@ export const updateLote = async (req, res) => {
     if (current.estado === "Validado") {
       return res.status(403).json({ error: "No se puede editar un lote validado" });
     }
+    const bloqueo = await assertProductorPuedeModificarLote(req, current.ipt);
+    if (bloqueo) return res.status(bloqueo.status).json({ error: bloqueo.error, code: bloqueo.code });
+
     const usuarioId = req.user?.uid || "sistema";
     const nextPayload = buildLotePayload(req.body, current);
     await ref.update({ ...nextPayload, updatedAt: new Date(), updatedBy: usuarioId });
@@ -333,6 +381,9 @@ export const deleteLote = async (req, res) => {
     if (current.estado === "Validado") {
       return res.status(403).json({ error: "No se puede eliminar un lote validado" });
     }
+    const bloqueo = await assertProductorPuedeModificarLote(req, current.ipt);
+    if (bloqueo) return res.status(bloqueo.status).json({ error: bloqueo.error, code: bloqueo.code });
+
     const usuarioId = req.user?.uid || "sistema";
     await ref.update({ activo: false, updatedAt: new Date(), deletedBy: usuarioId });
     logLoteHistorial({
@@ -379,6 +430,9 @@ export const cambiarEstadoLote = async (req, res) => {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "Lote no encontrado" });
     const lote = snap.data();
+    const bloqueo = await assertProductorPuedeModificarLote(req, lote.ipt);
+    if (bloqueo) return res.status(bloqueo.status).json({ error: bloqueo.error, code: bloqueo.code });
+
     const usuarioId = req.user?.uid || "sistema";
     await ref.update({ 
       estado, 

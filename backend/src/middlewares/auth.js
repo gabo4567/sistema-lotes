@@ -108,7 +108,11 @@ export const requireRole = (roles) => (req, res, next) => {
   try {
     if (!req.user) return res.status(401).json({ error: "No autenticado" });
     const role = normalizeRole(req.user.role) || req.user.role;
-    if (!roles.includes(role)) return res.status(403).json({ error: "Acceso denegado" });
+    const normRole = String(role||"").toLowerCase();
+    const allowed = Array.isArray(roles)
+      ? roles.map((r) => String(normalizeRole(r) || r).toLowerCase())
+      : [];
+    if (!allowed.includes(normRole)) return res.status(403).json({ error: "Acceso denegado" });
     next();
   } catch (e) {
     return res.status(403).json({ error: "Acceso denegado" });

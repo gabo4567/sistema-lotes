@@ -753,7 +753,7 @@ export default function TurnosScreen() {
           : "otra";
       const query =
         `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` +
-        (tipoParam === "insumo" && ipt ? `&ipt=${encodeURIComponent(ipt)}` : "") +
+        (ipt ? `&ipt=${encodeURIComponent(ipt)}` : "") +
         (tipoParam === "insumo" && categoriaInsumoValue ? `&categoriaInsumo=${encodeURIComponent(categoriaInsumoValue)}` : "");
       const resp = await apiFetch(`${API_URL}/turnos/disponibilidad?${query}`);
       const responseText = await resp.text();
@@ -844,7 +844,7 @@ export default function TurnosScreen() {
       const feriadoLabel = getArgentinaHolidayLabel(fechaIso);
       if (feriadoLabel) { setError(`No se permiten turnos en feriados nacionales (${feriadoLabel}).`); return; }
 
-      const tipoNormalizado = "insumo";
+      const tipoNormalizado = normalizeTipoFromLabel(tipo);
       const motivoTrim = "";
 
       const productorId = ipt || auth.currentUser?.uid;
@@ -919,6 +919,7 @@ export default function TurnosScreen() {
         fechaSolicitada: fechaIso,
         tipoTurno: tipoNormalizado,
         motivo: motivoTrim,
+        ...(tipoNormalizado === "insumo" && categoriaInsumo ? { categoriaInsumo } : {}),
       };
       
       console.log("📝 Body preparado:", body);
@@ -1557,7 +1558,13 @@ export default function TurnosScreen() {
           {fechaInput && tipo ? (
             <View style={{ marginTop: 2, marginBottom: 8 }}>
               <Text style={styles.dispStatusText}>
-                {dispLoading ? "Verificando si tenes insumos..." : disp === null ? "Verificamos tu turno al elegir la fecha." : disp ? "Tenes insumos para retirar. Podes solicitar el turno." : "No podemos darte turno para esa fecha."}
+                {dispLoading
+                  ? (normalizeTipoFromLabel(tipo) === "insumo" ? "Verificando si tenes insumos..." : "Verificando disponibilidad...")
+                  : disp === null
+                    ? "Verificamos tu turno al elegir la fecha."
+                    : disp
+                      ? (normalizeTipoFromLabel(tipo) === "insumo" ? "Tenes insumos para retirar. Podes solicitar el turno." : "Podes solicitar el turno.")
+                      : "No podemos darte turno para esa fecha."}
               </Text>
               {dispHint ? <Text style={styles.dispHintText}>{dispHint}</Text> : null}
             </View>

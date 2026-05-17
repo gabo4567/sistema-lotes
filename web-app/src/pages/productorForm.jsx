@@ -13,7 +13,28 @@ const ProductorForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const [form, setForm] = useState({ ipt:"", nombreCompleto:"", cuil:"", email:"", telefono:"", domicilioCasa:"", domicilioIngresoCampoLat:"", domicilioIngresoCampoLng:"", estado:"Nuevo", requiereCambioContrasena:true });
+
+  const [form, setForm] = useState({
+    ipt:"",
+    nombreCompleto:"",
+    cuil:"",
+    email:"",
+    telefono:"",
+    domicilioCasa:"",
+    domicilioIngresoCampoLat:"",
+    domicilioIngresoCampoLng:"",
+
+    estado:"Nuevo",
+
+    // LEO: nuevo estado del carnet
+    estadoCarnet: "Vigente",
+
+    // LEO: fecha vencimiento carnet
+    fechaVencimientoCarnet: "",
+
+    requiereCambioContrasena:true
+  });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,6 +42,7 @@ const ProductorForm = () => {
     if (isEdit) {
       try {
         const { data } = await getProductorById(id);
+
         setForm({
           ipt: data.ipt || "",
           nombreCompleto: data.nombreCompleto || "",
@@ -30,9 +52,18 @@ const ProductorForm = () => {
           domicilioCasa: data.domicilioCasa || "",
           domicilioIngresoCampoLat: data.domicilioIngresoCampo?.lat ?? "",
           domicilioIngresoCampoLng: data.domicilioIngresoCampo?.lng ?? "",
+
           estado: data.estado || "Nuevo",
+
+          // LEO: estado carnet desde firestore/backend
+          estadoCarnet: data.estadoCarnet || "Vigente",
+
+          // LEO: fecha vencimiento carnet
+          fechaVencimientoCarnet: data.fechaVencimientoCarnet || "",
+
           requiereCambioContrasena: Boolean(data.requiereCambioContrasena),
         });
+
       } catch {
         setError("No se pudo cargar productor");
       }
@@ -43,24 +74,29 @@ const ProductorForm = () => {
 
   const onTelChange = (v) => {
     const onlyNums = v.replace(/\D/g, "");
+
     if (onlyNums.length <= 13) {
       onChange("telefono", onlyNums);
     }
   };
 
   const onSubmit = async (e) => {
-    e.preventDefault(); setError(""); setLoading(true);
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (form.email && !emailRegex.test(form.email)) {
-      setError("Ingrese un correo electr\u00f3nico v\u00e1lido.");
+      setError("Ingrese un correo electrónico válido.");
       setLoading(false);
       return;
     }
 
     const telRegex = /^\d{10,13}$/;
+
     if (form.telefono && !telRegex.test(form.telefono)) {
-      setError("El n\u00famero debe contener solo d\u00edgitos (10 a 13 n\u00fameros).");
+      setError("El número debe contener solo dígitos (10 a 13 números).");
       setLoading(false);
       return;
     }
@@ -70,88 +106,209 @@ const ProductorForm = () => {
         ipt: String(form.ipt),
         nombreCompleto: form.nombreCompleto,
         cuil: String(form.cuil),
+
         email: form.email || null,
         telefono: form.telefono || null,
         domicilioCasa: form.domicilioCasa || null,
-        domicilioIngresoCampo: (form.domicilioIngresoCampoLat && form.domicilioIngresoCampoLng) ? { lat: Number(form.domicilioIngresoCampoLat), lng: Number(form.domicilioIngresoCampoLng) } : null,
+
+        domicilioIngresoCampo:
+          (form.domicilioIngresoCampoLat && form.domicilioIngresoCampoLng)
+            ? {
+                lat: Number(form.domicilioIngresoCampoLat),
+                lng: Number(form.domicilioIngresoCampoLng)
+              }
+            : null,
+
         estado: form.estado,
+
+        // LEO: nuevo estado carnet
+        estadoCarnet: form.estadoCarnet,
+
+        // LEO: fecha vencimiento carnet
+        fechaVencimientoCarnet: form.fechaVencimientoCarnet || null,
+
         requiereCambioContrasena: Boolean(form.requiereCambioContrasena),
       };
+
       if (isEdit) {
         await updateProductor(id, payload);
       } else {
         await createProductor(payload);
       }
+
       navigate('/productores');
+
     } catch (err) {
       setError(err?.response?.data?.error || err.message);
-    } finally { setLoading(false); }
+
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="section-card prod-form page-container">
-      <h2 className="users-title">{isEdit ? 'Editar productor' : 'Nuevo productor'}</h2>
+      <h2 className="users-title">
+        {isEdit ? 'Editar productor' : 'Nuevo productor'}
+      </h2>
+
       <form onSubmit={onSubmit} className="form-grid">
+
         <FormField label="IPT">
-          <input className="input-inst" placeholder="IPT" value={form.ipt} onChange={e=>onChange('ipt', e.target.value)} />
+          <input
+            className="input-inst"
+            placeholder="IPT"
+            value={form.ipt}
+            onChange={e=>onChange('ipt', e.target.value)}
+          />
         </FormField>
 
         <FormField label="Nombre completo">
-          <input className="input-inst" placeholder="Nombre completo" value={form.nombreCompleto} onChange={e=>onChange('nombreCompleto', e.target.value)} />
+          <input
+            className="input-inst"
+            placeholder="Nombre completo"
+            value={form.nombreCompleto}
+            onChange={e=>onChange('nombreCompleto', e.target.value)}
+          />
         </FormField>
 
         <FormField label="CUIL">
-          <input className="input-inst" placeholder="CUIL" value={form.cuil} onChange={e=>onChange('cuil', e.target.value)} />
+          <input
+            className="input-inst"
+            placeholder="CUIL"
+            value={form.cuil}
+            onChange={e=>onChange('cuil', e.target.value)}
+          />
         </FormField>
 
         <FormField label="Email">
-          <input className="input-inst" placeholder="Email" value={form.email} onChange={e=>onChange('email', e.target.value)} />
+          <input
+            className="input-inst"
+            placeholder="Email"
+            value={form.email}
+            onChange={e=>onChange('email', e.target.value)}
+          />
         </FormField>
 
-        <FormField label={"Tel\u00e9fono"}>
-          <input className="input-inst" placeholder={"Tel\u00e9fono"} value={form.telefono} onChange={e=>onTelChange(e.target.value)} />
+        <FormField label="Teléfono">
+          <input
+            className="input-inst"
+            placeholder="Teléfono"
+            value={form.telefono}
+            onChange={e=>onTelChange(e.target.value)}
+          />
         </FormField>
 
         <FormField label="Localidad">
-          <input className="input-inst" placeholder="Localidad" value={form.domicilioCasa} onChange={e=>onChange('domicilioCasa', e.target.value)} />
+          <input
+            className="input-inst"
+            placeholder="Localidad"
+            value={form.domicilioCasa}
+            onChange={e=>onChange('domicilioCasa', e.target.value)}
+          />
         </FormField>
 
         {isEdit && (
           <>
             <FormField label="Ingreso campo latitud">
-              <input className="input-inst" placeholder="Ingreso campo lat" value={form.domicilioIngresoCampoLat} onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)} />
+              <input
+                className="input-inst"
+                placeholder="Ingreso campo lat"
+                value={form.domicilioIngresoCampoLat}
+                onChange={e=>onChange('domicilioIngresoCampoLat', e.target.value)}
+              />
             </FormField>
 
             <FormField label="Ingreso campo longitud">
-              <input className="input-inst" placeholder="Ingreso campo lng" value={form.domicilioIngresoCampoLng} onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)} />
+              <input
+                className="input-inst"
+                placeholder="Ingreso campo lng"
+                value={form.domicilioIngresoCampoLng}
+                onChange={e=>onChange('domicilioIngresoCampoLng', e.target.value)}
+              />
             </FormField>
           </>
         )}
 
         {isEdit && (
-          <FormField label="Estado">
-            <select className="select-inst" value={form.estado} onChange={e=>onChange('estado', e.target.value)}>
-              <option value="Nuevo">Nuevo</option>
-              <option value="Vigente">Vigente</option>
-              <option value="Vencido">Vencido</option>
-              <option value="Re-empadronado">Re-empadronado</option>
-            </select>
-          </FormField>
+          <>
+            <FormField label="Tipo de Productor">
+              <select
+                className="select-inst"
+                value={form.estado}
+                onChange={e=>onChange('estado', e.target.value)}
+              >
+                <option value="Nuevo">Nuevo</option>
+                <option value="Reempadronado">Reempadronado</option>
+                <option value="Renovado">Renovado</option>
+              </select>
+            </FormField>
+
+            {/* LEO: nuevo select estado carnet */}
+            <FormField label="Estado carnet">
+              <select
+                className="select-inst"
+                value={form.estadoCarnet}
+                onChange={e=>onChange('estadoCarnet', e.target.value)}
+              >
+                <option value="Vigente">Vigente</option>
+                <option value="Vencido">Vencido</option>
+              </select>
+            </FormField>
+
+            {/* LEO: fecha vencimiento carnet */}
+            <FormField label="Vencimiento carnet">
+              <input
+                type="date"
+                className="input-inst"
+                value={form.fechaVencimientoCarnet}
+                onChange={e=>onChange('fechaVencimientoCarnet', e.target.value)}
+              />
+            </FormField>
+          </>
         )}
 
         <label className="producer-field">
           <span className="producer-field__label">Acceso</span>
+
           <span className="producer-checkbox-card">
-            <input type="checkbox" checked={form.requiereCambioContrasena} onChange={e=>onChange('requiereCambioContrasena', e.target.checked)} />
-            {"Requiere cambio de contrase\u00f1a"}
+            <input
+              type="checkbox"
+              checked={form.requiereCambioContrasena}
+              onChange={e=>onChange('requiereCambioContrasena', e.target.checked)}
+            />
+
+            {"Requiere cambio de contraseña"}
           </span>
         </label>
 
-        {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
+        {error && (
+          <div
+            className="users-msg err"
+            style={{ gridColumn: '1 / -1' }}
+          >
+            {error}
+          </div>
+        )}
+
         <div className="form-actions">
-          <button type="button" className="btn" onClick={()=>navigate('/productores')}>Cancelar</button>
-          <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+          <button
+            type="button"
+            className="btn"
+            onClick={()=>navigate('/productores')}
+          >
+            Cancelar
+          </button>
+
+          <button
+            className="btn"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? 'Guardando...' : 'Guardar'}
+          </button>
         </div>
+
       </form>
     </div>
   );
