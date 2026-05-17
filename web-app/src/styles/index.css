@@ -2215,9 +2215,28 @@ body.dark-mode .insumos-delete-assignments:hover{
 }
 body.dark-mode .insumos-assignment-table-wrap tbody tr{
   border-bottom-color: #263449 !important;
+  background: #111827 !important;
+}
+body.dark-mode .insumos-assignment-table-wrap tbody tr:nth-child(even){
+  background: #101b2d !important;
+}
+body.dark-mode .insumos-assignment-table-wrap tbody tr.is-selected,
+body.dark-mode .insumos-assignment-table-wrap tbody tr.is-selected td{
+  background: #173425 !important;
+}
+body.dark-mode .insumos-assignment-table-wrap tbody tr:hover,
+body.dark-mode .insumos-assignment-table-wrap tbody tr:hover td{
+  background: #172033 !important;
 }
 body.dark-mode .insumos-assignment-table-wrap td{
   color: #dce7f3 !important;
+  border-bottom-color: #263449 !important;
+}
+body.dark-mode .insumos-assignment-table-wrap .insumos-available-cell{
+  color: #86efac !important;
+}
+body.dark-mode .insumos-assignment-table-wrap .insumos-muted-cell{
+  color: #94a3b8 !important;
 }
 body.dark-mode .insumos-assignment-table-wrap td span{
   background: #172033 !important;

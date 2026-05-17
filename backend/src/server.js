@@ -1,22 +1,15 @@
 // src/server.js
 
 import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Rutas
 import usersRoutes from "./routes/users.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import lotesRoutes from "./routes/lotes.routes.js";
 import productoresRoutes from "./routes/productores.routes.js";
-import ordenesRoutes from "./routes/ordenes.routes.js";
 import insumosRoutes from "./routes/insumos.routes.js";
 import turnosRoutes from "./routes/turnos.routes.js";
 import informesRoutes from "./routes/informes.routes.js";
-import uploadRoutes from "./routes/upload.routes.js";
 import { disponibilidadTurno } from "./controllers/turnos.controller.js";
 import testRoutes from "./routes/test.routes.js";
 import { requireAuth, requireRole, requireFirebaseAuth } from "./middlewares/auth.js";
@@ -106,31 +99,15 @@ const turnoDateFromRaw = (raw) => {
   return null;
 };
 
-const deriveIptFromUid = (uid) => {
-  if (!uid) return null;
-  const match = String(uid).match(/^prod_(.+)$/i);
-  return match ? match[1] : null;
-};
-
 const getExpoTokensForTurno = async (turno) => {
-  const pid = String(turno?.productorId || "").trim();
+  const ipt = String(turno?.ipt || turno?.productorId || "").trim();
   let prodDoc = null;
 
-  if (pid) {
+  if (ipt) {
     try {
-      const byId = await db.collection("productores").doc(pid).get();
-      if (byId.exists) prodDoc = byId;
+      const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+      if (!snap.empty) prodDoc = snap.docs[0];
     } catch {}
-  }
-
-  if (!prodDoc && pid) {
-    const ipt = deriveIptFromUid(pid);
-    if (ipt) {
-      try {
-        const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
-        if (!snap.empty) prodDoc = snap.docs[0];
-      } catch {}
-    }
   }
 
   if (!prodDoc) return { tokens: [], productorRef: null };
@@ -382,7 +359,7 @@ const isOriginAllowed = (origin) => {
   return allowedOriginMatchers.some((matcher) => matcher(origin));
 };
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -417,7 +394,6 @@ app.use("/api/users", requireAuth, requireRole(["Administrador"]), usersRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/lotes", requireFirebaseAuth, lotesRoutes);
 app.use("/api/productores", requireFirebaseAuth, productoresRoutes);
-app.use("/api/ordenes", requireFirebaseAuth, ordenesRoutes);
 app.use("/api/insumos", requireFirebaseAuth, insumosRoutes);
 
 // Primero registramos el endpoint público de disponibilidad CON RUTA COMPLETA
@@ -445,11 +421,9 @@ app.use("/api/turnos", requireFirebaseAuth, turnosRoutes);
 app.use("/api/informes", requireFirebaseAuth, informesRoutes);
 
 // 📸 Ruta para uploads de imágenes
-app.use("/api/upload", requireFirebaseAuth, uploadRoutes);
 
 // 📁 Servir archivos estáticos (imágenes subidas)
 // Servir archivos estáticos desde uploads
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/", (req, res) => {
   res.send("Servidor del Sistema de Lotes funcionando correctamente 🚀");

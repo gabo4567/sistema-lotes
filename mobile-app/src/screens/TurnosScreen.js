@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useFocusEffect } from "@react-navigation/native";
 import { auth } from "../services/firebase";
 import { API_URL } from "../utils/constants";
-import { apiFetch, authFetch } from "../api/api";
+import { apiFetch, authFetch, getCurrentAuthContext } from "../api/api";
 import { offlineTurnosOperations } from "../utils/offlineOperations";
 import { useOffline } from "../hooks/useOffline";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -134,7 +134,10 @@ export default function TurnosScreen() {
     try {
       setListLoading(true);
       const currentUid = auth.currentUser?.uid ? String(auth.currentUser.uid) : "";
-      const cacheKey = `cache_turnos_${currentUid || "unknown"}_${listMode}`;
+      const authCtx = await getCurrentAuthContext().catch(() => null);
+      const currentIpt = authCtx?.ipt || "";
+      const productorKey = currentIpt || currentUid || "unknown";
+      const cacheKey = `cache_turnos_${productorKey}_${listMode}`;
       if (!isOnline) {
         try {
           const raw = await AsyncStorage.getItem(cacheKey);
@@ -157,7 +160,8 @@ export default function TurnosScreen() {
                   estado: "pendiente",
                   fecha: fechaTurno,
                   fechaTurno,
-                  productorId: currentUid || auth.currentUser?.uid,
+                  productorId: currentIpt || currentUid || auth.currentUser?.uid,
+                  ipt: currentIpt || undefined,
                   tipoTurno: op?.data?.tipoTurno,
                   motivo: op?.data?.motivo || "",
                   _isOffline: true,
@@ -189,12 +193,11 @@ export default function TurnosScreen() {
         return;
       }
       setShowingOfflineData(false);
-      const tokenResult = await auth.currentUser?.getIdTokenResult();
       const idToken = await auth.currentUser?.getIdToken();
       
-      if (!currentUid || !idToken) return;
+      if (!productorKey || !idToken) return;
       
-      const productorId = tokenResult?.claims?.productorId || currentUid;
+      const productorId = currentIpt || currentUid;
       const activo = listMode === "activos";
       
       const resp = await authFetch(`${API_URL}/turnos/productor/${productorId}?activo=${activo}`);
@@ -662,7 +665,7 @@ export default function TurnosScreen() {
 
   const isEstadoFinal = (est) => {
     const e = normalizeEstado(est);
-    return e === "cancelado" || e === "completado" || e === "vencido";
+    return e === "cancelado" || e === "completado" || e === "vencido" || e === "ausente";
   };
 
   const normalizeTipoFromLabel = (label) => {
@@ -844,7 +847,7 @@ export default function TurnosScreen() {
       const tipoNormalizado = "insumo";
       const motivoTrim = "";
 
-      const productorId = tokenResult?.claims?.productorId || auth.currentUser?.uid;
+      const productorId = ipt || auth.currentUser?.uid;
       const requestedKey = `${fechaIso} 12:00`;
       const isEstadoBloqueante = (estadoRaw) => {
         const st = String(estadoRaw || '').toLowerCase();
@@ -931,7 +934,8 @@ export default function TurnosScreen() {
           estado: "pendiente",
           fecha: `${fechaIso}T12:00:00.000Z`,
           fechaTurno: `${fechaIso}T12:00:00.000Z`,
-          productorId: auth.currentUser?.uid,
+          productorId: ipt || auth.currentUser?.uid,
+          ipt: ipt || undefined,
           tipoTurno: tipoNormalizado,
           motivo: body.motivo || "",
           _isOffline: true,
@@ -1011,7 +1015,8 @@ export default function TurnosScreen() {
         return;
       }
 
-      const productorId = (await auth.currentUser?.getIdTokenResult())?.claims?.productorId || auth.currentUser?.uid;
+      const { ipt } = await getCurrentAuthContext();
+      const productorId = ipt || auth.currentUser?.uid;
       const requestedKey = fechaIso;
       const isEstadoBloqueante = (estadoRaw) => {
         const st = String(estadoRaw || '').toLowerCase();
@@ -1169,7 +1174,7 @@ export default function TurnosScreen() {
   const confirmarArchivarTurno = (turno) => {
     const st = getDisplayEstado(turno);
     if (!isEstadoFinal(st)) {
-      Alert.alert("No permitido", "Solo se pueden archivar turnos cancelados, completados o vencidos.");
+      Alert.alert("No permitido", "Solo se pueden archivar turnos cancelados, completados, vencidos o ausentes.");
       return;
     }
     if (!isOnline) {
@@ -1192,7 +1197,7 @@ export default function TurnosScreen() {
     setActionLoading(true);
     try {
       const st = getDisplayEstado(turno);
-      if (!isEstadoFinal(st)) throw new Error("Solo se pueden archivar turnos cancelados, completados o vencidos.");
+      if (!isEstadoFinal(st)) throw new Error("Solo se pueden archivar turnos cancelados, completados, vencidos o ausentes.");
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error("No estás autenticado");
       const resp = await authFetch(`${API_URL}/turnos/${turno.id}`, {
@@ -1408,7 +1413,7 @@ export default function TurnosScreen() {
             <View style={styles.filterContainer}>
               <Text style={styles.filterLabel}>Filtrar por estado:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-                {["todos", "pendiente", "confirmado", "cancelado", "completado", "vencido"].map(est => (
+                {["todos", "pendiente", "confirmado", "cancelado", "completado", "vencido", "ausente"].map(est => (
                   <TouchableOpacity 
                     key={est}
                     style={[styles.filterBadge, filtroEstado === est && styles.filterBadgeActive]}
@@ -1859,6 +1864,7 @@ const styles = StyleSheet.create({
       case 'cancelado': return '#dc2626';
       case 'completado': return '#16a34a';
       case 'vencido': return '#6b7280';
+      case 'ausente': return '#7c2d12';
       default: return '#95a5a6';
     }
   };

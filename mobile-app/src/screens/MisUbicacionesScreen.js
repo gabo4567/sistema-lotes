@@ -96,7 +96,7 @@ export default function MisUbicacionesScreen({ navigation }) {
 
   const persistCampos = async ({ campos, campoActivoId, ubicaciones }) => {
     await offlineUbicacionesOperations.updateUbicacion({
-      productorId: productor?.id,
+      productorId: productor?.ipt,
       campos,
       campoActivoId,
       ubicaciones,

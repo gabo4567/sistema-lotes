@@ -166,7 +166,6 @@ const main = async () => {
     turnos: 0,
     lotes: 0,
     asignaciones: 0,
-    ordenes: 0,
     ingresos: 0,
     users: 0,
     auth: 0,
@@ -175,13 +174,12 @@ const main = async () => {
   for (const p of toDelete) {
     const ipt = normalizeIpt(p.ipt);
     const docId = p.id;
-    const authUid = ipt ? `prod_${ipt}` : null;
+    const authUid = ipt || null;
 
     console.log(`\n🔄 Procesando → IPT=${ipt || "(vacío)"} | docId=${docId}`);
 
     const turnoRefs = uniqRefs([
       ...(await collectDocRefs(db.collection("turnos").where("productorId", "==", docId))),
-      ...(authUid ? await collectDocRefs(db.collection("turnos").where("productorId", "==", authUid)) : []),
       ...(ipt ? await collectDocRefs(db.collection("turnos").where("ipt", "==", ipt)) : []),
     ]);
 
@@ -191,12 +189,6 @@ const main = async () => {
 
     const asignRefs = uniqRefs([
       ...(await collectDocRefs(db.collection("productorInsumos").where("productorId", "==", docId))),
-      ...(authUid ? await collectDocRefs(db.collection("productorInsumos").where("productorId", "==", authUid)) : []),
-    ]);
-
-    const ordenRefs = uniqRefs([
-      ...(await collectDocRefs(db.collection("ordenes").where("productorId", "==", docId))),
-      ...(authUid ? await collectDocRefs(db.collection("ordenes").where("productorId", "==", authUid)) : []),
     ]);
 
     const ingresoRefs = uniqRefs([
@@ -208,7 +200,7 @@ const main = async () => {
     const userSnap = userRef ? await userRef.get() : null;
 
     console.log(
-      `[PLAN] turnos=${turnoRefs.length}, lotes=${loteRefs.length}, asign=${asignRefs.length}, ordenes=${ordenRefs.length}, ingresos=${ingresoRefs.length}, userDoc=${userSnap?.exists ? 1 : 0}, auth=${authUid ? 1 : 0}`
+      `[PLAN] turnos=${turnoRefs.length}, lotes=${loteRefs.length}, asign=${asignRefs.length}, ingresos=${ingresoRefs.length}, userDoc=${userSnap?.exists ? 1 : 0}, auth=${authUid ? 1 : 0}`
     );
 
     if (!execute) continue;
@@ -216,7 +208,6 @@ const main = async () => {
     total.turnos += await deleteRefsInBatches(turnoRefs, "turnos");
     total.lotes += await deleteRefsInBatches(loteRefs, "lotes");
     total.asignaciones += await deleteRefsInBatches(asignRefs, "asignaciones");
-    total.ordenes += await deleteRefsInBatches(ordenRefs, "ordenes");
     total.ingresos += await deleteRefsInBatches(ingresoRefs, "ingresos");
 
     if (userSnap?.exists) {

@@ -151,7 +151,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
       };
       const updatedCampos = campos.map((c) => (c.id === selectedCampo?.id ? { ...c, ubicaciones: updatedCampoUbicaciones } : c));
       const result = await offlineUbicacionesOperations.updateUbicacion({
-        productorId: productor.id,
+        productorId: productor.ipt,
         campos: updatedCampos,
         campoActivoId: selectedCampo?.id,
         ubicaciones: updatedCampoUbicaciones,
@@ -176,7 +176,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
       };
       const updatedCampos = campos.map((c) => (c.id === selectedCampo?.id ? { ...c, ubicaciones: updatedCampoUbicaciones } : c));
       const result = await offlineUbicacionesOperations.updateUbicacion({
-        productorId: productor.id,
+        productorId: productor.ipt,
         campos: updatedCampos,
         campoActivoId: selectedCampo?.id,
         ubicaciones: updatedCampoUbicaciones,

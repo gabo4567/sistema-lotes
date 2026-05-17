@@ -22,7 +22,7 @@ const normalizeRoleValue = (role) => {
 const resolveRole = (data, docId) => {
   const normalized = normalizeRoleValue(data?.role);
   if (normalized) return normalized;
-  const looksLikeProductor = Boolean(data?.ipt) || String(docId || "").startsWith("prod_");
+  const looksLikeProductor = Boolean(data?.ipt);
   return looksLikeProductor ? "Productor" : "Administrador";
 };
 

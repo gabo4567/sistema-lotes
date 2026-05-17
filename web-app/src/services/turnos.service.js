@@ -20,6 +20,10 @@ export const setEstadoTurno = async (id, estado, motivoEstado, options)=>{
   const res = await api.patch(`/turnos/${id}/estado`, body)
   return res.data
 }
+export const registrarAsistenciaTurno = async (payload)=>{
+  const res = await api.post(`/turnos/asistencia`, payload)
+  return res.data
+}
 export const eliminarTurno = async (id, userId)=>{ const res = await api.delete(`/turnos/${id}`, { data: { userId } }); return res.data }
 export const restaurarTurno = async (id)=>{ const res = await api.patch(`/turnos/${id}/restaurar`); return res.data }
 export const getTurnosPorProductor = async (ipt, activo)=>{ 

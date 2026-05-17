@@ -9,6 +9,8 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const isValidEmail = (value) => EMAIL_REGEX.test(value);
+const normalizeIpt = (value) => String(value || "").trim();
+const getProductorAuthUid = (ipt) => normalizeIpt(ipt);
 
 const normalizeIngresoMetadata = (body = {}) => {
   const plataforma = String(body.plataforma || "").trim().toLowerCase();
@@ -29,6 +31,34 @@ const registrarIngresoProductor = async ({ ipt, productorId, metadata = {} }) =>
     fecha: new Date(),
     ...normalizeIngresoMetadata(metadata),
   });
+};
+
+const ensureProductorAuthUser = async ({ ipt, nombreCompleto, email }) => {
+  const uid = getProductorAuthUid(ipt);
+  if (!uid) throw new Error("IPT requerido para crear usuario productor");
+
+  try {
+    await admin.auth().getUser(uid);
+    return uid;
+  } catch (e) {
+    if (e?.code !== "auth/user-not-found") throw e;
+  }
+
+  const authData = {
+    uid,
+    displayName: nombreCompleto,
+  };
+  if (email) {
+    try {
+      await admin.auth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        authData.email = email;
+      }
+    }
+  }
+  await admin.auth().createUser(authData);
+  return uid;
 };
 
 const normalizeRole = (role) => {
@@ -226,33 +256,10 @@ export const registerProductor = async (req, res) => {
 
     const docRef = await db.collection("productores").add(newProductor);
 
-    const authUid = `prod_${String(ipt)}`;
+    const authUid = getProductorAuthUid(ipt);
 
     // Asegurar que exista un usuario en Firebase Auth con ese UID
-    try {
-      await admin.auth().getUser(authUid);
-    } catch (e) {
-      if (e && e.code === "auth/user-not-found") {
-        const authData = {
-          uid: authUid,
-          displayName: nombreCompleto,
-        };
-        // Si hay email, intentar asignarlo (puede fallar si ya existe)
-        if (email) {
-          try {
-            await admin.auth().getUserByEmail(email);
-            // Si no lanza error, el email ya está en uso. No lo asignamos a este Auth Record.
-          } catch (err) {
-            if (err.code === 'auth/user-not-found') {
-              authData.email = email;
-            }
-          }
-        }
-        await admin.auth().createUser(authData);
-      } else {
-        throw e;
-      }
-    }
+    await ensureProductorAuthUser({ ipt, nombreCompleto, email });
 
     // Asignar claims útiles para posteriores autorizaciones
     await admin.auth().setCustomUserClaims(authUid, {
@@ -260,7 +267,7 @@ export const registerProductor = async (req, res) => {
       ipt: String(ipt),
       nombre: nombreCompleto,
       email: email || undefined,
-      productorId: docRef.id,
+      productorId: String(ipt),
     });
 
     return res.json({
@@ -351,7 +358,7 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({ error: "Usuario administrador no registrado" });
     }
 
-    const looksLikeProductor = Boolean(resolvedUserData.ipt) || String(resolvedUid || "").startsWith("prod_");
+    const looksLikeProductor = Boolean(resolvedUserData.ipt);
 
     // 3. Los productores usan la app móvil — no el panel web
     if (looksLikeProductor || normalizeRole(role) === "Productor") {
@@ -405,7 +412,8 @@ export const loginProductor = async (req, res) => {
     if (!ok) {
       return res.status(401).json({ error: "Credenciales invÃ¡lidas" });
     }
-    const uid = `prod_${String(ipt)}`;
+    const uid = getProductorAuthUid(ipt);
+    await ensureProductorAuthUser({ ipt, nombreCompleto: data.nombreCompleto || data.nombre, email: data.email });
     
     // Actualizar claims del usuario con datos completos del productor
     await admin.auth().setCustomUserClaims(uid, {
@@ -413,7 +421,7 @@ export const loginProductor = async (req, res) => {
       role: "productor",
       nombre: data.nombreCompleto || data.nombre,
       email: data.email,
-      productorId: doc.id // ID del documento en Firestore
+      productorId: String(ipt)
     });
     
     const token = await admin.auth().createCustomToken(uid, { 
@@ -421,7 +429,7 @@ export const loginProductor = async (req, res) => {
       ipt: String(ipt),
       nombre: data.nombreCompleto || data.nombre,
       email: data.email,
-      productorId: doc.id
+      productorId: String(ipt)
     });
     try {
       await doc.ref.update({ ultimoIngreso: new Date() });
@@ -434,7 +442,7 @@ export const loginProductor = async (req, res) => {
       ultimoIngreso: new Date()
     });
     try {
-      await registrarIngresoProductor({ ipt, productorId: doc.id, metadata: req.body });
+      await registrarIngresoProductor({ ipt, productorId: String(ipt), metadata: req.body });
     } catch (e) {
       logServerError("No se pudo registrar ingresoProductor", e);
     }
@@ -476,7 +484,8 @@ export const cambiarPasswordProductor = async (req, res) => {
     const salt = String(data.ipt);
     const newHash = hashPassword(String(newPassword), salt);
     await doc.ref.update({ passwordHash: newHash, requiereCambioContrasena: false });
-    const uid = `prod_${String(ipt)}`;
+    const uid = getProductorAuthUid(ipt);
+    await ensureProductorAuthUser({ ipt, nombreCompleto: data.nombreCompleto || data.nombre, email: data.email });
     
     // Actualizar claims del usuario con datos completos del productor
     await admin.auth().setCustomUserClaims(uid, {
@@ -484,7 +493,7 @@ export const cambiarPasswordProductor = async (req, res) => {
       role: "productor",
       nombre: data.nombreCompleto || data.nombre,
       email: data.email,
-      productorId: doc.id // ID del documento en Firestore
+      productorId: String(ipt)
     });
     
     const token = await admin.auth().createCustomToken(uid, { 
@@ -492,10 +501,10 @@ export const cambiarPasswordProductor = async (req, res) => {
       ipt: String(ipt),
       nombre: data.nombreCompleto || data.nombre,
       email: data.email,
-      productorId: doc.id
+      productorId: String(ipt)
     });
     try {
-      await registrarIngresoProductor({ ipt, productorId: doc.id, metadata: req.body });
+      await registrarIngresoProductor({ ipt, productorId: String(ipt), metadata: req.body });
     } catch (e) {
       logServerError("No se pudo registrar ingresoProductor luego de cambio de contraseÃ±a", e);
     }

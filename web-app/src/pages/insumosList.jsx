@@ -1,15 +1,16 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { insumosService } from '../services/insumos.service'
 import { getProductores } from '../services/productores.service'
 import { notify, confirmDialog } from '../utils/alerts'
 
 
 const InsumosList = () => {
+  const RUBROS_INSUMOS = ['Plastico', 'Media sombra', 'Complementarios', 'Fertilizantes', 'Remedios', 'Hilos']
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modal, setModal] = useState(null)
-  const [form, setForm] = useState({ nombre:'Arada', cantidadDisponible:'', unidad:'', descripcion:'', estado:'disponible' })
+  const [form, setForm] = useState({ nombre:'', rubro:'Complementarios', unidad:'unidades', descripcion:'', activo: true })
   const [productores, setProductores] = useState([])
   const [asignar, setAsignar] = useState({ productorId:'', cantidadAsignada:'' })
   const [assignError, setAssignError] = useState('')
@@ -21,6 +22,11 @@ const InsumosList = () => {
   const [filterActivo, setFilterActivo] = useState('activos')
   const [producerSearchTerm, setProducerSearchTerm] = useState('')
   const [showProducerResults, setShowProducerResults] = useState(false)
+  const [resumenAsignaciones, setResumenAsignaciones] = useState({ productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
+  const [productoresConInsumos, setProductoresConInsumos] = useState([])
+  const importInputRef = useRef(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   const resumenProd = useMemo(() => {
     const list = Array.isArray(asignacionesProd) ? asignacionesProd : []
@@ -39,9 +45,14 @@ const InsumosList = () => {
   const load = async ()=>{
     try {
       setLoading(true)
-      const data = await insumosService.getInsumos()
+      const [data, resumenData] = await Promise.all([
+        insumosService.getInsumos(),
+        insumosService.resumenAsignacionesPorProductor().catch(() => null),
+      ])
       setItems(Array.isArray(data)? data: [])
       setInsumoNames(Array.isArray(data) ? Object.fromEntries(data.map(i=>[i.id, i.nombre])) : {})
+      setResumenAsignaciones(resumenData?.resumen || { productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
+      setProductoresConInsumos(Array.isArray(resumenData?.productores) ? resumenData.productores : [])
       setError('')
     } catch (e) {
       console.error(e)
@@ -59,19 +70,155 @@ const InsumosList = () => {
   }, [items, filterActivo]);
 
   const filteredProducers = useMemo(() => {
-    if (!producerSearchTerm) return [];
-    const term = producerSearchTerm.toLowerCase();
-    return productores.filter(p => 
-      String(p.ipt || '').toLowerCase().includes(term) ||
-      String(p.nombreCompleto || '').toLowerCase().includes(term)
-    ).slice(0, 8); // Limitar a 8 resultados
-  }, [productores, producerSearchTerm]);
+    const source = Array.isArray(productoresConInsumos) ? productoresConInsumos : [];
+    const term = producerSearchTerm
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    if (!term) return source;
+    return source.filter(p => {
+      const haystack = [p.ipt, p.productorNombre, p.cuil, p.telefono, p.paraje]
+        .map(v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+        .join(' ');
+      return haystack.includes(term);
+    });
+  }, [productoresConInsumos, producerSearchTerm]);
 
   useEffect(()=>{ load() },[])
 
   useEffect(()=>{ (async()=>{ try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null } })() }, [])
 
   useEffect(()=>{ (async()=>{ if(!selectedProd) { setAsignacionesProd([]); return } ; setLoadingAsign(true); try{ const list = await insumosService.asignacionesPorProductor(selectedProd); setAsignacionesProd(Array.isArray(list)? list: []) }catch{ setAsignacionesProd([]) } finally{ setLoadingAsign(false) } })() }, [selectedProd])
+
+  const normalizeHeader = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+
+  const guessRubro = (nombre) => {
+    const n = normalizeHeader(nombre)
+    if (n.includes('media sombra')) return 'Media sombra'
+    if (n.includes('fertiliz') || n.includes('nitrato')) return 'Fertilizantes'
+    if (n.includes('hilo')) return 'Hilos'
+    if (n.includes('bifentrin') || n.includes('command') || n.includes('confidor') || n.includes('debrot')) return 'Remedios'
+    if (n.includes('carpa') || n.includes('plastico')) return 'Plastico'
+    return 'Complementarios'
+  }
+
+  const parseExcelNumber = (value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+    const s = String(value ?? '').trim()
+    if (!s) return 0
+    const n = Number(s.replace(/\./g, '').replace(',', '.'))
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const onClickImport = () => {
+    if (importing) return
+    importInputRef.current?.click()
+  }
+
+  const onImportExcel = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || importing) return
+    const lower = String(file.name || '').toLowerCase()
+    if (!lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+      await notify({ title: 'Archivo invalido', text: 'Selecciona un archivo .xls o .xlsx', icon: 'error' })
+      return
+    }
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const XLSX = await import('xlsx')
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
+      const headerIndex = rows.findIndex(row => {
+        const first = normalizeHeader(row?.[0])
+        return first === 'fet' || first === 'ipt fet' || first === 'ipt'
+      })
+      if (headerIndex < 0) throw new Error('No se encontro la columna IPT/FET')
+      const headers = rows[headerIndex].map(h => String(h || '').trim())
+      const headerKeys = headers.map(normalizeHeader)
+      const col = (...names) => {
+        const keys = names.map(normalizeHeader)
+        return headerKeys.findIndex(h => keys.includes(h))
+      }
+      const iptCol = col('IPT/FET', 'FET', 'IPT')
+      const cuilCol = col('CUIL')
+      const nombreCol = col('Apellido y Nombre', 'Nombre', 'Productor')
+      const parajeCol = col('Paraje')
+      const telefonoCol = col('Telefono', 'Teléfono')
+      const emailCol = col('Email', 'Correo')
+      const domicilioCol = col('Domicilio')
+      const activoCol = col('Activo')
+      const estadoProductorCol = col('Estado productor', 'Estado')
+      const firstInsumoIndex = Math.max(
+        iptCol,
+        cuilCol,
+        nombreCol,
+        parajeCol,
+        telefonoCol,
+        emailCol,
+        domicilioCol,
+        activoCol,
+        estadoProductorCol,
+      ) + 1
+      const insumoHeaders = headers
+        .map((name, index) => ({ name, index }))
+        .filter(h => h.index >= firstInsumoIndex && h.name)
+      const parsedRows = rows.slice(headerIndex + 1)
+        .map(row => {
+          const ipt = String(row?.[iptCol] || '').trim()
+          const productorNombre = String(nombreCol >= 0 ? row?.[nombreCol] : '').trim()
+          const paraje = String(parajeCol >= 0 ? row?.[parajeCol] : '').trim()
+          const insumos = insumoHeaders
+            .map(h => ({
+              nombre: h.name,
+              rubro: guessRubro(h.name),
+              unidad: 'unidades',
+              cantidad: parseExcelNumber(row?.[h.index]),
+            }))
+            .filter(i => i.cantidad > 0)
+          return {
+            ipt,
+            cuil: String(cuilCol >= 0 ? row?.[cuilCol] : '').trim(),
+            productorNombre,
+            paraje,
+            telefono: String(telefonoCol >= 0 ? row?.[telefonoCol] : '').trim(),
+            email: String(emailCol >= 0 ? row?.[emailCol] : '').trim(),
+            domicilio: String(domicilioCol >= 0 ? row?.[domicilioCol] : '').trim(),
+            activo: String(activoCol >= 0 ? row?.[activoCol] : 'SI').trim(),
+            estadoProductor: String(estadoProductorCol >= 0 ? row?.[estadoProductorCol] : 'Nuevo').trim(),
+            insumos,
+          }
+        })
+        .filter(row => row.ipt && row.insumos.length > 0)
+      if (parsedRows.length === 0) throw new Error('No se encontraron asignaciones con cantidad mayor a cero')
+      const result = await insumosService.importarAsignaciones({
+        campania: '2025-2026',
+        fuente: file.name || 'excel',
+        rows: parsedRows,
+      })
+      setImportResult(result)
+      await notify({
+        title: 'Importacion completada',
+        text: `${result?.asignacionesCreadasOActualizadas ?? 0} asignaciones procesadas.`,
+        icon: 'success',
+      })
+      await load()
+      if (selectedProd) await refreshAsignacionesProductor()
+    } catch (e) {
+      await notify({ title: 'Error al importar', text: e?.response?.data?.error || e?.message || 'No se pudo importar el Excel', icon: 'error' })
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const refreshAsignacionesProductor = async () => {
     if (!selectedProd || loadingAsign) return;
@@ -89,13 +236,13 @@ const InsumosList = () => {
   };
 
   const selectProducer = (p) => {
-    setSelectedProd(p.id);
-    setProducerSearchTerm(p.ipt ? `IPT: ${p.ipt} - ${p.nombreCompleto || p.nombre || ''}` : (p.nombreCompleto || p.nombre || p.id));
-    setShowProducerResults(false);
+    const ipt = String(p.ipt || p.productorId || '');
+    setSelectedProd(ipt);
+    setProducerSearchTerm('');
   };
 
-  const openAdd = ()=>{ setForm({ nombre:'Arada', cantidadDisponible:'', unidad:'', descripcion:'', estado:'disponible', activo: true }); setModal({ type:'add' }) }
-  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'Arada', cantidadDisponible:insumo.cantidadDisponible??'', unidad:insumo.unidad||'bolsas', descripcion:insumo.descripcion||'', estado:insumo.estado||'disponible', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
+  const openAdd = ()=>{ setForm({ nombre:'', rubro:'Complementarios', unidad:'unidades', descripcion:'', activo: true }); setModal({ type:'add' }) }
+  const openEdit = (insumo)=>{ setForm({ nombre:insumo.nombre||'', rubro:insumo.rubro||'Complementarios', unidad:insumo.unidad||'unidades', descripcion:insumo.descripcion||'', activo: insumo.activo !== false }); setModal({ type:'edit', insumo }) }
   const openAssign = async (insumo)=>{
     try{ const { data } = await getProductores(); setProductores(data||[]) }catch{ null }
     setAsignar({ productorId:'', cantidadAsignada:'' })
@@ -104,11 +251,11 @@ const InsumosList = () => {
   }
 
   const onSubmitAdd = async ()=>{
-    try{ await insumosService.createInsumo({ nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:form.unidad||'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
+    try{ await insumosService.createInsumo({ nombre:form.nombre, rubro:form.rubro, unidad:form.unidad||'unidades', descripcion:form.descripcion, activo: form.activo !== false }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al agregar insumo') }
   }
   const onSubmitEdit = async ()=>{
-    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, cantidadDisponible:Number(form.cantidadDisponible||0), unidad:form.unidad||'bolsas', descripcion:form.descripcion, estado: form.estado, activo: form.activo !== false }); setModal(null); load(); }
+    try{ await insumosService.updateInsumo(modal.insumo.id, { nombre:form.nombre, rubro:form.rubro, unidad:form.unidad||'unidades', descripcion:form.descripcion, activo: form.activo !== false }); setModal(null); load(); }
     catch(e){ setError(e?.response?.data?.error||'Error al modificar insumo') }
   }
   const onDelete = async (insumo)=>{
@@ -145,11 +292,11 @@ const InsumosList = () => {
   }
 
   const onEliminarAsignaciones = async ()=>{
-    const prod = productores.find(p => p.id === selectedProd)
+    const prod = productores.find(p => String(p.ipt || '') === String(selectedProd || ''))
     const ipt = prod?.ipt
     if (!ipt) { await notify({ title: 'El productor no tiene IPT registrado', icon: 'error' }); return }
     const nombre = prod?.nombreCompleto || prod?.nombre || 'este productor'
-    const ok = await confirmDialog({ title: `¿Eliminar todas las asignaciones de ${nombre}?`, text: 'Esta acción no se puede deshacer. Los insumos disponibles serán restituidos al stock del IPT si corresponde.', icon: 'warning', confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar' })
+    const ok = await confirmDialog({ title: `¿Eliminar todas las asignaciones de ${nombre}?`, text: 'Esta acción no se puede deshacer.', icon: 'warning', confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar' })
     if (!ok) return
     try{
       const res = await insumosService.eliminarAsignacionesPorIpt(ipt)
@@ -160,10 +307,7 @@ const InsumosList = () => {
   }
 
   const estadoLabel = (i)=> {
-    const est = String(i.estado||'').toLowerCase();
-    if (est==='no_disponible') return 'No disponible';
-    if (est==='disponible') return 'Disponible';
-    return (Number(i.cantidadDisponible||0) > 0 ? 'Disponible' : 'No disponible')
+    return i.activo === false ? 'Inactivo' : 'Activo'
   }
   const buttonStyle = { border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }
   const miniBtnStyle = { border:'1px solid #cbd5e1', color:'#475569', background:'#fff', padding:'4px 8px', borderRadius:6, cursor:'pointer', fontSize:13 }
@@ -174,15 +318,26 @@ const InsumosList = () => {
       <div className="insumos-hero">
         <div>
           <h2>Gestion de Insumos</h2>
-          <p className="section-subtitle">Administrá los insumos disponibles y su stock.</p>
+          <p className="section-subtitle">Administra el catalogo de insumos y sus asignaciones por productor.</p>
         </div>
-        <button className="btn insumos-primary-action" onClick={openAdd}>Agregar insumo</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn secondary" onClick={onClickImport} disabled={importing} style={{ minHeight: 42, padding: '0 14px' }}>
+            {importing ? 'Importando...' : 'Importar Excel'}
+          </button>
+          <button className="btn insumos-primary-action" onClick={openAdd}>Agregar insumo</button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xls,.xlsx"
+            style={{ display: 'none' }}
+            onChange={onImportExcel}
+          />
+        </div>
       </div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
-      <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Insumos disponibles del IPT</div>
+      <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Catalogo de insumos del IPT</div>
       {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
       <div className="insumos-toolbar" style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button className="btn secondary" onClick={openAdd} style={{ minHeight: 42, padding: '0 14px' }}>Agregar insumo</button>
         <div className="insumos-filter-panel" style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
           <label style={{ fontSize: 15, fontWeight: 600 }}>Mostrar:</label>
           <select 
@@ -197,16 +352,40 @@ const InsumosList = () => {
           </select>
         </div>
       </div>
+      {importResult ? (
+        <div className="users-msg ok" style={{ marginBottom: 12 }}>
+          Importacion: {importResult.asignacionesCreadasOActualizadas ?? 0} asignaciones, {importResult.insumosCreadosOActualizados ?? 0} insumos, {importResult.productoresCreados ?? 0} productores creados.
+        </div>
+      ) : null}
+      {importing ? (
+        <div style={{
+          marginBottom: 12,
+          padding: '16px 18px',
+          border: '1px solid #bbf7d0',
+          borderRadius: 12,
+          background: '#f0fdf4',
+          color: '#14532d',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <div className="spinner" style={{ width: 24, height: 24, margin: 0 }} />
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>Importando</div>
+            <div style={{ fontSize: 14, color: '#166534', marginTop: 2 }}>Espere unos segundos</div>
+          </div>
+        </div>
+      ) : null}
       {loading ? (<div>Cargando…</div>) : (
         <div className="table-wrap admin-data-table-wrap">
           <table className="table-inst admin-data-table" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: 980 }}>
             <thead>
               <tr style={{ background:'#f0fdf4' }}>
-                <th style={{ textAlign:'center', width:'20%' }}>Nombre</th>
-                <th style={{ textAlign:'center', width:'16%' }}>Cantidad disponible</th>
+                <th style={{ textAlign:'center', width:'24%' }}>Nombre</th>
+                <th style={{ textAlign:'center', width:'16%' }}>Rubro</th>
                 <th style={{ textAlign:'center', width:'20%' }}>Cantidad asignada por productor</th>
-                <th style={{ textAlign:'center', width:'14%' }}>Estado</th>
-                <th style={{ textAlign:'center', width:'18%' }}>Descripción</th>
+                <th style={{ textAlign:'center', width:'12%' }}>Estado</th>
+                <th style={{ textAlign:'center', width:'16%' }}>Descripcion</th>
                 <th style={{ textAlign:'center', width:'12%' }}>Acciones</th>
               </tr>
             </thead>
@@ -222,7 +401,7 @@ const InsumosList = () => {
               ) : itemsFiltrados.map(i=> (
                 <tr key={i.id}>
                   <td style={{ textAlign:'center' }}>{i.nombre}</td>
-                  <td style={{ textAlign:'center' }}>{i.cantidadDisponible ?? 0} {i.unidad || 'bolsas'}</td>
+                  <td style={{ textAlign:'center' }}>{i.rubro || '-'}</td>
                   <td style={{ textAlign:'center' }}><InsumoAsignadoCell insumoId={i.id} unidad={i.unidad} /></td>
                   <td style={{ textAlign:'center' }}>{estadoLabel(i)}</td>
                   <td style={{ textAlign:'center' }}>{i.descripcion || '-'}</td>
@@ -241,8 +420,70 @@ const InsumosList = () => {
       )}
 
       <div className="insumos-section-title" style={{ marginTop: 24, color:'#14532d', fontWeight: 600, marginBottom: 12 }}>Insumos asignados por productor</div>
+      <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
+        <div className="insumos-assignment-summary" style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 16px', background: '#fff', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <div className="insumos-summary-item">Productores: <span>{resumenAsignaciones.productores}</span></div>
+          <div className="insumos-summary-item">Asignaciones: <span>{resumenAsignaciones.asignaciones}</span></div>
+          <div className="insumos-summary-item">Asignado: <span>{resumenAsignaciones.totalAsignado}</span></div>
+          <div className="insumos-summary-item">Entregado: <span>{resumenAsignaciones.totalEntregado}</span></div>
+          <div className="insumos-summary-item">Disponible: <span style={{ color: Number(resumenAsignaciones.totalDisponible || 0) > 0 ? '#166534' : '#6b7280' }}>{resumenAsignaciones.totalDisponible}</span></div>
+        </div>
+        <div className="filters-bar insumos-producer-search" style={{ display: 'flex', gap: 12, backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: 12, border: '1px solid #e2e8f0', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            className="input-inst"
+            placeholder="Buscar por IPT, productor, CUIL, paraje o telefono..."
+            value={producerSearchTerm}
+            onChange={e => setProducerSearchTerm(e.target.value)}
+            style={{ flex: '1 1 320px', margin: 0, padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+          />
+          {selectedProd ? (
+            <button className="btn secondary" onClick={() => setSelectedProd('')} style={{ height: 40, whiteSpace: 'nowrap', borderRadius: 8 }}>
+              Cerrar detalle
+            </button>
+          ) : null}
+        </div>
+        <div className="table-wrap insumos-assignment-table-wrap" style={{ border: '1px solid #e2e8f0', borderRadius: 12, backgroundColor: '#fff', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="table-inst" style={{ width:'100%', minWidth: 980, borderCollapse:'collapse', margin: 0 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding: '12px 14px', textAlign: 'left' }}>Productor</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>IPT</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Paraje</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Asignado</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Entregado</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Disponible</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Asignaciones</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProducers.length === 0 ? (
+                <tr><td colSpan={8} style={{ padding: 18, textAlign: 'center', color: '#64748b' }}>No hay productores con insumos para mostrar.</td></tr>
+              ) : filteredProducers.map(p => {
+                const isSelected = String(selectedProd || '') === String(p.ipt || '')
+                return (
+                  <tr key={p.ipt} className={isSelected ? 'is-selected' : ''} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 700 }}>{p.productorNombre || 'Sin nombre'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>{p.ipt}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>{p.paraje || '-'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>{p.totalAsignado}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>{p.totalEntregado}</td>
+                    <td className={Number(p.totalDisponible || 0) > 0 ? 'insumos-available-cell' : 'insumos-muted-cell'} style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800 }}>{p.totalDisponible}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>{p.asignaciones}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <button className="btn-compact" onClick={() => selectProducer(p)} style={{ ...actionBtnStyle }}>
+                        Ver detalle
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
       <div className="filters-bar insumos-producer-search" style={{
-        display: 'flex',
+        display: 'none',
         gap: 12,
         backgroundColor: '#f8fafc',
         padding: '12px 16px',
@@ -353,11 +594,11 @@ const InsumosList = () => {
             borderBottom: 'none'
           }}>
             <span className="insumos-assignment-title" style={{ color: '#166534', fontWeight: 600 }}>
-              Asignaciones para: {productores.find(p => p.id === selectedProd)?.nombreCompleto || 'Productor'}
+              Asignaciones para: {productoresConInsumos.find(p => String(p.ipt || '') === String(selectedProd || ''))?.productorNombre || productores.find(p => String(p.ipt || '') === String(selectedProd || ''))?.nombreCompleto || 'Productor'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="insumos-assignment-ipt" style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>
-                IPT: {productores.find(p => p.id === selectedProd)?.ipt || '-'}
+                IPT: {selectedProd || '-'}
               </span>
               <button
                 onClick={refreshAsignacionesProductor}
@@ -530,16 +771,12 @@ const InsumosList = () => {
             {modal.type==='add' && (
               <div>
                 <h3 style={{ marginTop:0 }}>Agregar insumo</h3>
-                <select className="select-inst" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })}>
-                  {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
+                <input className="input-inst" placeholder="Nombre del insumo" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })} />
+                <select className="select-inst" value={form.rubro} onChange={e=>setForm({ ...form, rubro:e.target.value })}>
+                  {RUBROS_INSUMOS.map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
-                <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <input className="input-inst" placeholder="Unidad de medida" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
-                <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
-                  <option value="disponible">Disponible</option>
-                  <option value="no_disponible">No disponible</option>
-                </select>
                 <select className="select-inst" value={form.activo} onChange={e=>setForm({ ...form, activo: e.target.value === 'true' })}>
                   <option value="true">Activo</option>
                   <option value="false">Inactivo</option>
@@ -553,16 +790,12 @@ const InsumosList = () => {
             {modal.type==='edit' && (
               <div>
                 <h3 style={{ marginTop:0 }}>Modificar insumo</h3>
-                <select className="select-inst" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })}>
-                  {['Arada','Almácigo','Transplante','Cosecha'].map(n=> <option key={n} value={n}>{n}</option>)}
+                <input className="input-inst" placeholder="Nombre del insumo" value={form.nombre} onChange={e=>setForm({ ...form, nombre:e.target.value })} />
+                <select className="select-inst" value={form.rubro} onChange={e=>setForm({ ...form, rubro:e.target.value })}>
+                  {RUBROS_INSUMOS.map(n=> <option key={n} value={n}>{n}</option>)}
                 </select>
-                <input className="input-inst" placeholder="Cantidad disponible" value={form.cantidadDisponible} onChange={e=>setForm({ ...form, cantidadDisponible:e.target.value })} />
                 <input className="input-inst" placeholder="Unidad de medida" value={form.unidad} onChange={e=>setForm({ ...form, unidad:e.target.value })} />
                 <textarea className="input-inst" placeholder="Descripción" value={form.descripcion} onChange={e=>setForm({ ...form, descripcion:e.target.value })} />
-                <select className="select-inst" value={form.estado} onChange={e=>setForm({ ...form, estado: e.target.value })}>
-                  <option value="disponible">Disponible</option>
-                  <option value="no_disponible">No disponible</option>
-                </select>
                 <select className="select-inst" value={form.activo} onChange={e=>setForm({ ...form, activo: e.target.value === 'true' })}>
                   <option value="true">Activo</option>
                   <option value="false">Inactivo</option>
@@ -581,7 +814,7 @@ const InsumosList = () => {
                   <select className="select-inst" value={asignar.productorId} onChange={e=>{ setAsignar({ ...asignar, productorId:e.target.value }); setAssignError('') }}>
                     <option value="">Seleccione productor</option>
                     {productores.filter(p=> iptSearch ? String(p.ipt||'').includes(String(iptSearch)) : true).map(p=> (
-                      <option key={p.id} value={p.id}>{p.nombreCompleto || p.ipt || p.id} {p.ipt ? `· ${p.ipt}`:''}</option>
+                      <option key={p.id} value={p.ipt || ''}>{p.nombreCompleto || p.ipt || p.id} {p.ipt ? `· ${p.ipt}`:''}</option>
                     ))}
                   </select>
                 </div>

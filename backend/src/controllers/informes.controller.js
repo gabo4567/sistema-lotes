@@ -10,11 +10,10 @@ export const obtenerResumenGeneral = async (req, res) => {
     const { fechaInicio, fechaFin } = req.query;
     const start = fechaInicio ? new Date(`${fechaInicio}T00:00:00.000Z`) : null;
     const end = fechaFin ? new Date(`${fechaFin}T23:59:59.999Z`) : null;
-    const [usuariosSnap, productoresSnap, lotesSnap, ordenesSnap, turnosSnap, insumosSnap, asignSnap, ingresosSnap] = await Promise.all([
+    const [usuariosSnap, productoresSnap, lotesSnap, turnosSnap, insumosSnap, asignSnap, ingresosSnap] = await Promise.all([
       db.collection("users").get(),
       db.collection("productores").where("activo", "==", true).get(),
       db.collection("lotes").where("activo", "==", true).get(),
-      db.collection("ordenes").where("activo", "==", true).get(),
       db.collection("turnos").where("activo", "==", true).get(),
       db.collection("insumos").get(),
       db.collection("productorInsumos").get(),
@@ -31,7 +30,6 @@ export const obtenerResumenGeneral = async (req, res) => {
 
     const totalLotesActivos = lotesSnap.docs.filter(doc => inRange(doc.data().fechaCreacion || doc.data().createdAt)).length;
     const totalTurnosActivos = turnosSnap.docs.filter(doc => inRange(doc.data().fechaTurno || doc.data().fecha || doc.data().creadoEn)).length;
-    const totalMedicionesRegistradas = 0;
 
     // Usuarios detallados (nombre, email, role, ipt si corresponde)
     const usuariosRaw = usuariosSnap.docs.map(d => {
@@ -117,26 +115,25 @@ export const obtenerResumenGeneral = async (req, res) => {
 
     // Insumos asignados a productores (detalle)
     const insNombreById = new Map(insumosDisponibles.map(i => [i.id, i.nombre]));
-    const prodById = new Map();
-    productoresSnap.docs.forEach(p => {
-      const d = p.data();
-      prodById.set(p.id, { ipt: String(d.ipt || ''), nombre: d.nombreCompleto || d.nombre || '' });
-    });
     const insumosAsignadosDetalle = asignSnap.docs
       .map(a => ({ id: a.id, ...a.data() }))
       .filter(a => inRange(a.fechaAsignacion))
-      .map(a => ({
-        tipo: insNombreById.get(String(a.insumoId)) || String(a.insumoId),
-        cantidadAsignada: Number(a.cantidadAsignada || 0),
-        productorIpt: (prodById.get(String(a.productorId))?.ipt) || '',
-        productorNombre: (prodById.get(String(a.productorId))?.nombre) || '',
-      }));
+      .map(a => {
+        const productorIpt = String(a.productorId || "");
+        const prod = prodByIpt.get(productorIpt);
+        return {
+          tipo: insNombreById.get(String(a.insumoId)) || String(a.insumoId),
+          cantidadAsignada: Number(a.cantidadAsignada || 0),
+          productorIpt,
+          productorNombre: prod?.nombre || "",
+        };
+      });
 
     // Actividad móvil por productor
     const actividadMap = new Map();
     const ensureAct = (ipt, nombre) => {
       const key = String(ipt||'');
-      if (!actividadMap.has(key)) actividadMap.set(key, { productorIpt: key, productorNombre: nombre||'', ingresosApp: 0, medicionesRegistradas: 0, lotesCreados: 0, lotesModificados: 0, turnosSolicitados: 0 });
+      if (!actividadMap.has(key)) actividadMap.set(key, { productorIpt: key, productorNombre: nombre||'', ingresosApp: 0, lotesCreados: 0, lotesModificados: 0, turnosSolicitados: 0 });
       return actividadMap.get(key);
     };
     productoresSnap.docs.forEach(p=>{
@@ -175,7 +172,7 @@ export const obtenerResumenGeneral = async (req, res) => {
     }
     lotesSnap.docs.forEach(doc=>{
       const d = doc.data();
-      const ipt = d.ipt ? String(d.ipt) : (d.productorId ? (prodById.get(String(d.productorId))?.ipt || '') : '');
+      const ipt = d.ipt ? String(d.ipt) : String(d.productorId || '');
       const nombre = ipt ? (prodByIpt.get(ipt)?.nombre || '') : '';
       const createdOk = inRange(d.fechaCreacion || d.createdAt);
       const updatedOk = inRange(d.updatedAt);
@@ -186,7 +183,7 @@ export const obtenerResumenGeneral = async (req, res) => {
       const t = tdoc.data();
       const fechaT = t.fechaTurno || t.fecha || t.creadoEn;
       if (!inRange(fechaT)) return;
-      const ipt = t.ipt ? String(t.ipt) : (t.productorId ? (prodById.get(String(t.productorId))?.ipt || '') : '');
+      const ipt = t.ipt ? String(t.ipt) : String(t.productorId || '');
       const nombre = ipt ? (prodByIpt.get(ipt)?.nombre || '') : '';
       if (ipt) ensureAct(ipt, nombre).turnosSolicitados++;
     });
@@ -197,7 +194,7 @@ export const obtenerResumenGeneral = async (req, res) => {
       .map(tdoc => ({ id: tdoc.id, ...tdoc.data() }))
       .filter(t => inRange(t.fechaTurno || t.fecha || t.creadoEn))
       .map(t => {
-        const ipt = t.ipt ? String(t.ipt) : (t.productorId ? (prodById.get(String(t.productorId))?.ipt || '') : '');
+        const ipt = t.ipt ? String(t.ipt) : String(t.productorId || '');
         const productorNombre = ipt ? (prodByIpt.get(ipt)?.nombre || '') : '';
         const f = t.fechaTurno || t.fecha || t.creadoEn;
         let fechaOut = '';
@@ -226,8 +223,6 @@ export const obtenerResumenGeneral = async (req, res) => {
     // Ocultar registro específico solicitado: IPT 123456, productor Juan Gabriel Pared, fecha 11/12/2025, 21:00
     turnosLista = turnosLista.filter(r => !(String(r.productorIpt) === '123456' && String(r.productorNombre).trim() === 'Juan Gabriel Pared' && String(r.fecha) === '11/12/2025, 21:00'));
 
-    const medicionesResumen = { porTipo: {}, lista: [] };
-
     const pad = (n) => String(n).padStart(2, '0');
     const now = new Date();
     const ultima = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -236,14 +231,12 @@ export const obtenerResumenGeneral = async (req, res) => {
       totalProductoresActivos: productoresSnap.size,
       totalLotesActivos,
       totalTurnosActivos,
-      totalMedicionesRegistradas,
       ultimaActualizacion: ultima,
       usuarios,
       lotesConDueno,
       insumosDisponibles,
       insumosAsignadosDetalle,
       actividadMovil,
-      medicionesResumen,
       turnosLista,
     };
 
@@ -274,11 +267,10 @@ export const obtenerProductoresActivos = async (req, res) => {
       const productor = { id: doc.id, ...doc.data() };
       const iptProd = String(productor.ipt || "");
 
-      const [lotesSnap, turnosByProdSnap, turnosByIptSnap] = await Promise.all([
+      const [lotesSnap, turnosByIptSnap] = await Promise.all([
         iptProd
           ? db.collection("lotes").where("ipt", "==", iptProd).where("activo", "==", true).get()
-          : db.collection("lotes").where("productorId", "==", doc.id).get(),
-        db.collection("turnos").where("productorId", "==", doc.id).where("activo", "==", true).get(),
+          : Promise.resolve({ docs: [] }),
         iptProd ? db.collection("turnos").where("ipt", "==", iptProd).where("activo", "==", true).get() : Promise.resolve({ docs: [] }),
       ]);
 
@@ -332,7 +324,7 @@ export const obtenerProductoresActivos = async (req, res) => {
           observacionesProductor: d.data().observacionesProductor || '',
           poligono: Array.isArray(d.data().poligono) ? d.data().poligono.map(p=>({ lat: Number(p.lat), lng: Number(p.lng) })) : [],
         }));
-      const turnosDocs = [...turnosByProdSnap.docs, ...turnosByIptSnap.docs];
+      const turnosDocs = [...turnosByIptSnap.docs];
       const seenTurno = new Set();
       const turnos = turnosDocs
         .filter(d => { if (seenTurno.has(d.id)) return false; seenTurno.add(d.id); return true; })
@@ -404,26 +396,6 @@ export const obtenerProductoresActivos = async (req, res) => {
 };
 
 // 🧾 Órdenes agrupadas por mes
-export const obtenerOrdenesPorMes = async (req, res) => {
-  try {
-    const ordenesSnap = await db.collection("ordenes").where("activo", "==", true).get();
-    const conteoPorMes = {};
-
-    ordenesSnap.forEach((doc) => {
-      const orden = doc.data();
-      const fecha = new Date(orden.fecha);
-      const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
-      conteoPorMes[mes] = (conteoPorMes[mes] || 0) + 1;
-    });
-
-    const resultado = Object.entries(conteoPorMes).map(([mes, ordenes]) => ({ mes, ordenes }));
-    res.json(resultado);
-  } catch (error) {
-    logServerError("Error al obtener órdenes por mes", error);
-    sendInternalError(res, "Error al obtener órdenes por mes");
-  }
-};
-
 // 📊 Turnos agrupados por estado con total y porcentaje
 export const obtenerTurnosPorEstado = async (req, res) => {
   try {
@@ -436,6 +408,7 @@ export const obtenerTurnosPorEstado = async (req, res) => {
       cancelados: 0,
       completados: 0,
       vencidos: 0,
+      ausentes: 0,
     };
 
     // Contamos los turnos según su estado
@@ -488,10 +461,11 @@ export const obtenerInsumosResumen = async (req, res) => {
     let totalAsignado = 0, totalEntregado = 0, totalPendiente = 0;
     const porInsumo = {};
     const porProductor = {};
-    const prodById = new Map();
+    const prodByIpt = new Map();
     prodSnap.docs.forEach(d => {
       const x = d.data();
-      prodById.set(d.id, { nombre: x.nombreCompleto || x.nombre || '', ipt: String(x.ipt || '') });
+      const ipt = String(x.ipt || "");
+      if (ipt) prodByIpt.set(ipt, { nombre: x.nombreCompleto || x.nombre || '', ipt });
     });
     asnap.docs.forEach(doc => {
       const a = doc.data();
@@ -506,7 +480,7 @@ export const obtenerInsumosResumen = async (req, res) => {
       if (estado === 'entregado') porInsumo[nombre].entregado += cant; else porInsumo[nombre].pendiente += cant;
       const pid = String(a.productorId);
       if (!porProductor[pid]) {
-        const info = prodById.get(pid) || { nombre: pid, ipt: '' };
+        const info = prodByIpt.get(pid) || { nombre: pid, ipt: pid };
         porProductor[pid] = { asignado: 0, entregado: 0, pendiente: 0, productorNombre: info.nombre, productorIpt: info.ipt };
       }
       porProductor[pid].asignado += cant;
@@ -532,7 +506,7 @@ export const obtenerTurnosEficiencia = async (req, res) => {
     const start = fechaInicio ? new Date(`${fechaInicio}T00:00:00.000Z`) : null;
     const end = fechaFin ? new Date(`${fechaFin}T23:59:59.999Z`) : null;
     const snap = await db.collection("turnos").where("activo", "==", true).get();
-    const conteo = { pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0 };
+    const conteo = { pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0, ausente: 0 };
     let sumaLeadDias = 0, leadCount = 0;
     snap.docs.forEach(d => {
       const t = d.data();

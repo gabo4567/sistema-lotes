@@ -140,7 +140,7 @@ const getCompletarPolicy = (turno) => {
 
 const getDisplayEstado = (t) => {
   const est = normalizeEstado(t?.estado)
-  if (est === 'completado' || est === 'cancelado' || est === 'vencido') return est
+  if (est === 'completado' || est === 'cancelado' || est === 'vencido' || est === 'ausente') return est
   const dt = toDateSafe(t?.fechaTurno || t?.fecha)
   if (!dt) return est || 'pendiente'
   const hoy = startOfDayLocal(new Date())
@@ -174,6 +174,7 @@ const [cfgLoading, setCfgLoading] = useState(false)
 const [cfgSaving, setCfgSaving] = useState(false)
 const [cfgModo, setCfgModo] = useState('manual') // 'manual' | 'rango'
 const [cfgHabilitado, setCfgHabilitado] = useState(true)
+const [cfgRequiereLoteArado, setCfgRequiereLoteArado] = useState(true)
 const [cfgEstadoActual, setCfgEstadoActual] = useState(null)
 const [cfgMensaje, setCfgMensaje] = useState('')
 const [cfgDesde, setCfgDesde] = useState('')
@@ -212,7 +213,7 @@ const loadData = useCallback(async ({ showLoading = true } = {}) => {
         const map = new Map()
         const productoresList = Array.isArray(productores) ? productores : []
         productoresList.forEach(p=>{ 
-          map.set(String(p.id), { 
+          map.set(String(p.ipt || ''), { 
             nombre: p.nombreCompleto || p.nombre || '', 
             ipt: String(p.ipt||''),
             iptNum: p.ipt
@@ -286,6 +287,7 @@ useEffect(() => {
       const modo = modoRaw === 'manual' || modoRaw === 'rango' ? modoRaw : (hasRange ? 'rango' : 'manual')
       setCfgModo(modo)
       setCfgHabilitado(Boolean(data?.habilitado))
+      setCfgRequiereLoteArado(typeof data?.requiereLoteArado === 'boolean' ? data.requiereLoteArado : true)
       setCfgEstadoActual(typeof data?.estadoActual === 'boolean' ? data.estadoActual : null)
       setCfgMensaje(String(data?.mensaje || ''))
       const d = String(data?.desde || '')
@@ -386,7 +388,7 @@ const handleCambioEstado = async (id, nuevo, { onCancel } = {})=>{
     return
   }
 
-  const labels = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido' }
+  const labels = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido', ausente: 'Ausente' }
   const normalizedNuevo = normalizeEstado(nuevo)
   const displayNuevo = labels[normalizedNuevo] || String(nuevo || '').trim() || labels[normalizedNuevo] || 'Pendiente'
 
@@ -490,9 +492,9 @@ const handleArchivar = async (id) => {
   if (updatingId === id) return
   const currentTurno = turnos.find(t => t.id === id)
   const currentEstado = currentTurno ? getDisplayEstado(currentTurno) : null
-  const canArchive = currentEstado === 'cancelado' || currentEstado === 'completado' || currentEstado === 'vencido'
+  const canArchive = currentEstado === 'cancelado' || currentEstado === 'completado' || currentEstado === 'vencido' || currentEstado === 'ausente'
   if (!canArchive) {
-    notify({ title: 'Solo se pueden archivar turnos cancelados, completados o vencidos.', icon: 'error' })
+    notify({ title: 'Solo se pueden archivar turnos cancelados, completados, vencidos o ausentes.', icon: 'error' })
     return
   }
   const confirm = await confirmDialog({ 
@@ -597,6 +599,7 @@ const estadoLabel = (e)=>{
   if(v==='cancelado') return 'Cancelado'
   if(v==='completado') return 'Completado'
   if(v==='vencido') return 'Vencido'
+  if(v==='ausente') return 'Ausente'
   return v || 'Pendiente'
 }
 
@@ -607,6 +610,7 @@ const estadoClass = (e)=>{
   if(v==='completado') return 'estado-badge completed'
   if(v==='cancelado') return 'estado-badge canceled'
   if(v==='vencido') return 'estado-badge expired'
+  if(v==='ausente') return 'estado-badge expired'
   return 'estado-badge pending'
 }
 
@@ -665,7 +669,7 @@ const turnosHoyCount = useMemo(() => {
 }, [turnosFiltrados, todayYmd])
 
 const summary = useMemo(() => {
-  const counts = { total: 0, hoy: 0, pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0, insumo: 0, carnet: 0, otro: 0 }
+  const counts = { total: 0, hoy: 0, pendiente: 0, confirmado: 0, cancelado: 0, completado: 0, vencido: 0, ausente: 0, insumo: 0, carnet: 0, otro: 0 }
   turnosFiltrados.forEach(t => {
     counts.total += 1
     const dt = toDateSafe(t?.fechaTurno || t?.fecha)
@@ -676,6 +680,7 @@ const summary = useMemo(() => {
     if (est === 'cancelado') counts.cancelado += 1
     if (est === 'completado') counts.completado += 1
     if (est === 'vencido') counts.vencido += 1
+    if (est === 'ausente') counts.ausente += 1
     const tipo = String(t.tipoTurno || '').toLowerCase().trim()
     if (tipo === 'insumo') counts.insumo += 1
     else if (tipo === 'carnet') counts.carnet += 1
@@ -700,7 +705,7 @@ const exportarCSV = useCallback(async () => {
   if (!ok) return
 
   const TIPO_LABELS = { insumo: 'Insumos', carnet: 'Renovación de Carnet', otro: 'Otro' }
-  const ESTADO_LABELS = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido' }
+  const ESTADO_LABELS = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido', ausente: 'Ausente' }
   const rows = turnosFiltrados.map(t => {
     const dt = toDateSafe(t?.fechaTurno || t?.fecha)
     const fecha = dt ? toYmdLocal(dt).split('-').reverse().join('/') : '-'
@@ -903,8 +908,8 @@ const saveConfigTurnos = async () => {
   try {
     const payload =
       cfgModo === 'manual'
-        ? { modo: 'manual', habilitado: Boolean(cfgHabilitado), mensaje, desde: null, hasta: null, rangoModo: null }
-        : { modo: 'rango', mensaje, desde, hasta, rangoModo: cfgRangoModo }
+        ? { modo: 'manual', habilitado: Boolean(cfgHabilitado), mensaje, desde: null, hasta: null, rangoModo: null, requiereLoteArado: Boolean(cfgRequiereLoteArado) }
+        : { modo: 'rango', mensaje, desde, hasta, rangoModo: cfgRangoModo, requiereLoteArado: Boolean(cfgRequiereLoteArado) }
     const saved = await setTurnosConfig(payload)
     setCfgEstadoActual(typeof saved?.estadoActual === 'boolean' ? saved.estadoActual : null)
     notify({ title: 'Configuración guardada', icon: 'success' })
@@ -963,7 +968,7 @@ const canTransitionEstado = (fromEstado, toEstado) => {
   if (from === to) return true
   if (to === 'vencido') return false
   if (from === 'vencido') return to === 'completado'
-  if (from === 'cancelado' || from === 'completado') return false
+  if (from === 'cancelado' || from === 'completado' || from === 'ausente') return false
   if (from === 'pendiente') return to === 'confirmado' || to === 'cancelado'
   if (from === 'confirmado') return to === 'cancelado' || to === 'completado'
   return false
@@ -1365,6 +1370,27 @@ return (
               </div>
             </div>
 
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>Restricción por lote arado</div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: (cfgSaving || cfgLoading) ? 'not-allowed' : 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={cfgRequiereLoteArado}
+                  onChange={(e) => setCfgRequiereLoteArado(e.target.checked)}
+                  disabled={cfgSaving || cfgLoading}
+                  style={{ marginTop: 3 }}
+                />
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                    {cfgRequiereLoteArado ? 'Requisito de lote arado activo' : 'Requisito de lote arado inactivo'}
+                  </div>
+                  <div className="turnos-config-muted" style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>
+                    Cuando está activo, los productores solo pueden pedir turnos de Almácigo o Transplante si tienen al menos un lote marcado como tierra arada.
+                  </div>
+                </div>
+              </label>
+            </div>
+
             <div style={{ display: 'grid', gap: 6 }}>
               <label style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Mensaje del administrador (opcional)</label>
               <input
@@ -1488,6 +1514,10 @@ return (
         <span className="turnos-summary__label">Vencidos</span>
         <span className={`estado-badge expired`}>{summary.vencido}</span>
       </div>
+      <div className="turnos-summary__chip turnos-summary__chip--expired">
+        <span className="turnos-summary__label">Ausentes</span>
+        <span className={`estado-badge expired`}>{summary.ausente}</span>
+      </div>
       <div className="turnos-summary__chip turnos-summary__chip--total">
         <span className="turnos-summary__label">Total</span>
         <span className={`estado-badge expired`}>{summary.total}</span>
@@ -1550,6 +1580,7 @@ return (
           <option value="cancelado">Cancelado</option>
           <option value="completado">Completado</option>
           <option value="vencido">Vencido</option>
+          <option value="ausente">Ausente</option>
         </select>
       </div>
 
@@ -1703,7 +1734,7 @@ return (
                                       ) : null}
                                     </>
                                   ) : null}
-                                  {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
+                                  {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' || displayEstado === 'ausente' ? (
                                     <button className="btn turno-action-btn turno-action-btn--archive" disabled={isUpdating} onClick={() => handleArchivar(t.id)}>
                                       {isUpdating ? 'Actualizando…' : 'Archivar'}
                                     </button>
@@ -1942,7 +1973,7 @@ return (
                           </div>
 
                           <div className="turnos-actions-row">
-                            {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' ? (
+                            {displayEstado === 'cancelado' || displayEstado === 'completado' || displayEstado === 'vencido' || displayEstado === 'ausente' ? (
                               <button
                                 className="btn turno-action-btn turno-action-btn--archive"
                                 disabled={isUpdating}

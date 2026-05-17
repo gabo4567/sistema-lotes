@@ -10,7 +10,9 @@ export const insumosService = {
   async asignarAProductor(id, payload){ const res = await api.post(`/insumos/${id}/asignar`, payload); return res.data },
   async disponibilidadPorProductor(productorId){ const res = await api.get(`/insumos/productor/${productorId}/disponibilidad`); return res.data },
   async asignacionesPorProductor(productorId){ const res = await api.get(`/insumos/productor/${productorId}/asignaciones`); return res.data },
+  async resumenAsignacionesPorProductor(){ const res = await api.get('/insumos/asignaciones/resumen-productores'); return res.data },
   async updateAsignacion(asignacionId, data){ const res = await api.put(`/insumos/asignaciones/${asignacionId}`, data); return res.data },
   async updateAsignacionTipo(id, newInsumoId){ const res = await api.put(`/insumos/asignaciones/${id}/tipo`, { newInsumoId }); return res.data },
   async eliminarAsignacionesPorIpt(ipt){ const res = await api.delete(`/insumos/productor/ipt/${ipt}/asignaciones`); return res.data },
+  async importarAsignaciones(payload){ const res = await api.post('/insumos/importar-asignaciones', payload, { timeout: 120000, _dedupe: false }); return res.data },
 }

@@ -3,8 +3,7 @@ import NetInfo from "@react-native-community/netinfo";
 
 const deriveIptFromUid = (uid) => {
 	if (!uid) return null;
-	const match = String(uid).match(/^prod_(.+)$/i);
-	return match ? match[1] : null;
+	return String(uid);
 };
 
 let backendWarmedUp = false;

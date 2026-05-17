@@ -29,7 +29,9 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = tokenStore.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  config.timeout = backendWarmedUp ? 10000 : Math.max(Number(config.timeout || 0) || 0, 25000);
+  config.timeout = backendWarmedUp
+    ? Math.max(Number(config.timeout || 0) || 0, 10000)
+    : Math.max(Number(config.timeout || 0) || 0, 25000);
   return config;
 });
 

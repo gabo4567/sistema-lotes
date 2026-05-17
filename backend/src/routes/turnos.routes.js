@@ -17,6 +17,7 @@ import {
   obtenerTurnosPorProductor,
   obtenerTurnosPorRangoFechas,
   disponibilidadTurno,
+  registrarAsistenciaTurno,
   obtenerHistorialTurno,
   obtenerTimelineTurno,
 } from "../controllers/turnos.controller.js";
@@ -54,6 +55,7 @@ router.get("/config", obtenerConfigTurnos);
 router.put("/config", idempotency(), upsertConfigTurnos);
 router.get("/capacidad", obtenerCapacidadTurnoDia);
 router.put("/capacidad/:fecha", idempotency(), upsertCapacidadTurnoDia);
+router.post("/asistencia", idempotency(), registrarAsistenciaTurno);
 router.get("/:id/historial", obtenerHistorialTurno);
 router.get("/:id/timeline", obtenerTimelineTurno);
 router.get("/:id", obtenerTurnoPorId);

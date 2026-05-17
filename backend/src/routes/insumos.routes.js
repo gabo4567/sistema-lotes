@@ -10,9 +10,11 @@ import {
   obtenerDisponibilidadInsumosProductor,
   marcarAsignacionesEntregadas,
   listarAsignacionesPorProductor,
+  listarResumenAsignacionesPorProductor,
   actualizarAsignacion,
   eliminarAsignacionesPorIpt,
   actualizarTipoInsumoAsignado,
+  importarAsignacionesInsumos,
 } from "../controllers/insumos.controller.js";
 import { idempotency } from "../middlewares/idempotency.js";
 
@@ -20,6 +22,7 @@ const router = Router();
 
 router.post("/", idempotency(), crearInsumo);
 router.get("/", listarInsumos);
+router.post("/importar-asignaciones", idempotency(), importarAsignacionesInsumos);
 router.get("/:id", obtenerInsumo);
 router.put("/:id", idempotency(), actualizarInsumo);
 router.delete("/:id", idempotency(), eliminarInsumo);
@@ -27,6 +30,7 @@ router.delete("/:id", idempotency(), eliminarInsumo);
 router.post("/:id/asignar", idempotency(), asignarInsumoAProductor);
 router.get("/:id/asignaciones", listarAsignacionesPorInsumo);
 
+router.get("/asignaciones/resumen-productores", listarResumenAsignacionesPorProductor);
 router.get("/productor/:productorId/disponibilidad", obtenerDisponibilidadInsumosProductor);
 router.post("/productor/:productorId/entregar", idempotency(), marcarAsignacionesEntregadas);
 router.get("/productor/:productorId/asignaciones", listarAsignacionesPorProductor);

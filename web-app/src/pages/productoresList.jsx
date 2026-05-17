@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createProductor, deleteProductor, getProductores, getProductoresInactivos, activateProductor, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
+import { createProductor, deleteProductor, getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import { confirmDialog, notify } from "../utils/alerts";
 
@@ -7,22 +7,18 @@ const ProductoresList = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [items, setItems] = useState([]);
-  const [inactiveItems, setInactiveItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [iptFilter, setIptFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
   const [importing, setImporting] = useState(false);
-  const [viewType, setViewType] = useState("activos"); // 'activos' o 'inactivos'
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const { data: activos } = await getProductores();
-      const { data: inactivos } = await getProductoresInactivos();
-      setItems(activos || []);
-      setInactiveItems(inactivos || []);
+      const { data } = await getProductores();
+      setItems(data || []);
     } catch {
       setError("No se pudo cargar productores");
     } finally {
@@ -68,7 +64,7 @@ const ProductoresList = () => {
     return new Set((items || []).map((p) => normalizeIpt(p?.ipt)).filter(Boolean));
   }, [items]);
 
-  const viewItems = (viewType === "activos" ? items : inactiveItems).filter(p => {
+  const viewItems = items.filter(p => {
     const okIpt = iptFilter ? String(p.ipt||"").includes(String(iptFilter)) : true;
     const okName = nameFilter ? normalize(p.nombreCompleto||p.nombre||"").includes(normalize(nameFilter)) : true;
     return okIpt && okName;
@@ -240,30 +236,11 @@ const ProductoresList = () => {
     });
     if (!ok) return;
     try {
-      await deleteProductor(productor.id);
+      await deleteProductor(productor.ipt);
       await notify({ title: "Productor desactivado", icon: "success" });
       load();
     } catch {
       await notify({ title: "Error", text: "No se pudo desactivar el productor", icon: "error" });
-    }
-  };
-
-  const onActivar = async (productor) => {
-    const nombre = productor?.nombreCompleto || productor?.nombre || productor?.ipt || "este productor";
-    const ok = await confirmDialog({
-      title: "Activar productor",
-      text: `¿Deseas activar nuevamente al productor ${nombre}?`,
-      icon: "info",
-      confirmButtonText: "Activar",
-      cancelButtonText: "Cancelar",
-    });
-    if (!ok) return;
-    try {
-      await activateProductor(productor.id);
-      await notify({ title: "Productor activado", icon: "success" });
-      load();
-    } catch {
-      await notify({ title: "Error", text: "No se pudo activar el productor", icon: "error" });
     }
   };
 
@@ -292,72 +269,6 @@ const ProductoresList = () => {
             onChange={(e) => onImportFile(e.target.files?.[0])}
           />
         </div>
-      </div>
-
-      {/* Tabs para cambiar entre activos e inactivos */}
-      <div style={{
-        display: 'flex',
-        gap: 16,
-        marginBottom: 20,
-        borderBottom: '2px solid #e2e8f0',
-        paddingBottom: 0
-      }}>
-        <button
-          onClick={() => { setViewType('activos'); setIptFilter(''); setNameFilter(''); }}
-          style={{
-            padding: '12px 20px',
-            border: 'none',
-            background: 'none',
-            fontSize: 16,
-            fontWeight: viewType === 'activos' ? 600 : 500,
-            color: viewType === 'activos' ? '#166534' : '#64748b',
-            borderBottom: viewType === 'activos' ? '3px solid #166534' : 'none',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
-          Activos <span style={{
-            backgroundColor: '#dbeafe',
-            color: '#0c4a6e',
-            padding: '2px 8px',
-            borderRadius: 12,
-            fontSize: 12,
-            fontWeight: 600,
-            minWidth: 24,
-            textAlign: 'center'
-          }}>{items.length}</span>
-        </button>
-        <button
-          onClick={() => { setViewType('inactivos'); setIptFilter(''); setNameFilter(''); }}
-          style={{
-            padding: '12px 20px',
-            border: 'none',
-            background: 'none',
-            fontSize: 16,
-            fontWeight: viewType === 'inactivos' ? 600 : 500,
-            color: viewType === 'inactivos' ? '#dc2626' : '#64748b',
-            borderBottom: viewType === 'inactivos' ? '3px solid #dc2626' : 'none',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
-          Inactivos <span style={{
-            backgroundColor: '#fee2e2',
-            color: '#7f1d1d',
-            padding: '2px 8px',
-            borderRadius: 12,
-            fontSize: 12,
-            fontWeight: 600,
-            minWidth: 24,
-            textAlign: 'center'
-          }}>{inactiveItems.length}</span>
-        </button>
       </div>
 
       <div className="filters-bar productores-filters-bar" style={{
@@ -441,29 +352,17 @@ const ProductoresList = () => {
                         margin: '0 auto'
                       }}
                     >
-                      <button className="btn btn-compact" onClick={() => onVer(p.id)} style={{ minWidth: 0 }}>Ver</button>
-                      {viewType === 'activos' ? (
-                        <>
-                          <button className="btn btn-compact" onClick={() => onEditar(p.id)} style={{ minWidth: 0 }}>Editar</button>
-                          <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)} style={{ minWidth: 0 }}>Reset contraseña</button>
-                          <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)} style={{ minWidth: 0 }}>Re-empadronar</button>
-                          <button
-                            className="btn btn-danger btn-compact"
-                            onClick={() => onDesactivar(p)}
-                            style={{ gridColumn: '1 / -1', minWidth: 0 }}
-                          >
-                            Desactivar
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="btn btn-compact"
-                          onClick={() => onActivar(p)}
-                          style={{ gridColumn: '1 / -1', minWidth: 0, backgroundColor: '#16a34a', color: '#fff' }}
-                        >
-                          Activar
-                        </button>
-                      )}
+                      <button className="btn btn-compact" onClick={() => onVer(p.ipt)} style={{ minWidth: 0 }}>Ver</button>
+                      <button className="btn btn-compact" onClick={() => onEditar(p.ipt)} style={{ minWidth: 0 }}>Editar</button>
+                      <button className="btn btn-compact" onClick={() => onResetPassword(p.ipt)} style={{ minWidth: 0 }}>Reset contraseña</button>
+                      <button className="btn btn-compact" onClick={() => onReempadronado(p.ipt)} style={{ minWidth: 0 }}>Re-empadronar</button>
+                      <button
+                        className="btn btn-danger btn-compact"
+                        onClick={() => onDesactivar(p)}
+                        style={{ gridColumn: '1 / -1', minWidth: 0 }}
+                      >
+                        Desactivar
+                      </button>
                     </div>
                   </td>
                 </tr>

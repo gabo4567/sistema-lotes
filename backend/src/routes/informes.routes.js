@@ -4,7 +4,6 @@ import { Router } from "express";
 import {
   obtenerResumenGeneral,
   obtenerProductoresActivos,
-  obtenerOrdenesPorMes,
   obtenerTurnosPorEstado,
   obtenerInsumosResumen,
   obtenerTurnosEficiencia,
@@ -22,7 +21,6 @@ router.get("/ping", (req, res) => {
 // 📊 Endpoints principales
 router.get("/resumen-general", obtenerResumenGeneral);
 router.get("/productores-activos", obtenerProductoresActivos);
-router.get("/ordenes-por-mes", obtenerOrdenesPorMes);
 router.get("/turnos-por-estado", obtenerTurnosPorEstado);
 router.get("/insumos-resumen", obtenerInsumosResumen);
 router.get("/turnos-eficiencia", obtenerTurnosEficiencia);

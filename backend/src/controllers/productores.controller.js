@@ -2,6 +2,31 @@
 import { db, admin } from "../utils/firebase.js";
 import { FieldValue } from "firebase-admin/firestore";
 
+const normalizeIpt = (value) => String(value || "").trim();
+const getProductorAuthUid = (ipt) => normalizeIpt(ipt);
+
+const ensureProductorAuthUser = async ({ ipt, nombreCompleto, email }) => {
+  const uid = getProductorAuthUid(ipt);
+  if (!uid) throw new Error("IPT requerido para crear usuario productor");
+  try {
+    await admin.auth().getUser(uid);
+    return uid;
+  } catch (e) {
+    if (e?.code !== "auth/user-not-found") throw e;
+  }
+
+  const authData = { uid, displayName: nombreCompleto };
+  if (email) {
+    try {
+      await admin.auth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") authData.email = email;
+    }
+  }
+  await admin.auth().createUser(authData);
+  return uid;
+};
+
 // Crear productor
 export const createProductor = async (req, res) => {
   try {
@@ -68,7 +93,7 @@ export const createProductor = async (req, res) => {
 
     const docRef = await db.collection("productores").add(newProductor);
 
-    const authUid = `prod_${String(ipt)}`;
+    const authUid = getProductorAuthUid(ipt);
 
     // Asegurar que exista un usuario en Firebase Auth con ese UID
     try {
@@ -96,7 +121,15 @@ export const createProductor = async (req, res) => {
       }
     }
 
-    res.json({ id: docRef.id, ...newProductor });
+    await admin.auth().setCustomUserClaims(authUid, {
+      role: "productor",
+      ipt: String(ipt),
+      nombre: nombreCompleto,
+      email: email || undefined,
+      productorId: String(ipt),
+    });
+
+    res.json({ id: docRef.id, authUid, ...newProductor });
   } catch (error) {
     console.error("Error al crear productor:", error);
     res.status(500).json({ error: "Error al crear productor" });
@@ -127,11 +160,17 @@ export const getInactiveProductores = async (req, res) => {
   }
 };
 
-// Obtener productor por ID
+const findProductorByIpt = async (ipt) => {
+  const snap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
+  return snap.empty ? null : snap.docs[0];
+};
+
+// Obtener productor por IPT
 export const getProductorById = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection("productores").doc(id).get();
+    const doc = await findProductorByIpt(id);
+    if (!doc) return res.status(404).json({ error: "Productor no encontrado" });
     if (!doc.exists || doc.data().activo === false) 
       return res.status(404).json({ error: "Productor no encontrado" });
     res.json({ id: doc.id, ...doc.data() });
@@ -161,6 +200,8 @@ export const updateProductor = async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
+    const targetDoc = await findProductorByIpt(id);
+    if (!targetDoc) return res.status(404).json({ error: "Productor no encontrado" });
 
     // Validación de formato de email si se intenta actualizar
     if (data.email) {
@@ -181,7 +222,7 @@ export const updateProductor = async (req, res) => {
     // Validar unicidad de IPT si se está cambiando
     if (data.ipt) {
       const existingIpt = await db.collection("productores").where("ipt", "==", String(data.ipt)).limit(1).get();
-      if (!existingIpt.empty && existingIpt.docs[0].id !== id) {
+      if (!existingIpt.empty && existingIpt.docs[0].id !== targetDoc.id) {
         return res.status(400).json({ error: "El número de IPT ya se encuentra registrado." });
       }
     }
@@ -189,7 +230,7 @@ export const updateProductor = async (req, res) => {
     // Validar unicidad de CUIL si se está cambiando
     if (data.cuil) {
       const existingCuil = await db.collection("productores").where("cuil", "==", String(data.cuil)).limit(1).get();
-      if (!existingCuil.empty && existingCuil.docs[0].id !== id) {
+      if (!existingCuil.empty && existingCuil.docs[0].id !== targetDoc.id) {
         return res.status(400).json({ error: "El CUIL ya se encuentra registrado." });
       }
     }
@@ -197,12 +238,12 @@ export const updateProductor = async (req, res) => {
     // Validar unicidad de Email si se está cambiando
     if (data.email) {
       const existingEmail = await db.collection("productores").where("email", "==", String(data.email).toLowerCase()).limit(1).get();
-      if (!existingEmail.empty && existingEmail.docs[0].id !== id) {
+      if (!existingEmail.empty && existingEmail.docs[0].id !== targetDoc.id) {
         return res.status(400).json({ error: "El correo electrónico ya se encuentra registrado." });
       }
     }
 
-    const ref = db.collection("productores").doc(id);
+    const ref = targetDoc.ref;
     await ref.update(data);
     res.json({ message: "✅ Productor actualizado correctamente" });
   } catch (error) {
@@ -215,7 +256,9 @@ export const updateProductor = async (req, res) => {
 export const deleteProductor = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection("productores").doc(id).update({ activo: false });
+    const doc = await findProductorByIpt(id);
+    if (!doc) return res.status(404).json({ error: "Productor no encontrado" });
+    await doc.ref.update({ activo: false });
     res.json({ message: "✅ Productor desactivado correctamente" });
   } catch (error) {
     console.error("Error al desactivar productor:", error);

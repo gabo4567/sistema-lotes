@@ -33,10 +33,9 @@ export default function MisInsumosScreen({ navigation }) {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const { currentUser, tokenResult } = await getCurrentAuthContext();
-      const productorId = tokenResult?.claims?.productorId || currentUser?.uid;
-      if (!productorId) throw new Error("No se pudo identificar el productor");
-      const resp = await authFetch(`${API_URL}/insumos/productor/${productorId}/disponibilidad`);
+      const { ipt } = await getCurrentAuthContext();
+      if (!ipt) throw new Error("No se pudo identificar el IPT del productor");
+      const resp = await authFetch(`${API_URL}/insumos/productor/${ipt}/disponibilidad`);
       if (!resp.ok) throw new Error("Error al obtener insumos");
       const json = await resp.json();
       setData(json);

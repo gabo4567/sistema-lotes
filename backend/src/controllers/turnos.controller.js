@@ -16,6 +16,7 @@ const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
 const TURNOS_CONFIG_COLLECTION = "config";
 const TURNOS_CONFIG_DOC = "turnos";
 const DEFAULT_TURNOS_HABILITADO = true;
+const DEFAULT_REQUIERE_LOTE_ARADO = true;
 const HORA_APERTURA = 7;
 const HORA_CIERRE = 13;
 const IPT_TIMEZONE = "America/Argentina/Buenos_Aires";
@@ -110,7 +111,16 @@ const CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO = new Set(["almacigo", "transplante
 const MENSAJE_LOTE_ARADO_REQUERIDO =
   "Para solicitar turno de Almácigo o Transplante, primero marcá un lote como tierra arada.";
 
-const disponibilidadRequiereLoteArado = (disp, categoriaInsumo) => {
+const INASISTENCIAS_PARA_ADVERTENCIA = 1;
+const INASISTENCIAS_PARA_BLOQUEO = 2;
+const INASISTENCIAS_PARA_RESTRICCION = 3;
+const DIAS_BLOQUEO_INASISTENCIA = 30;
+
+const isRequisitoLoteAradoActivo = (config) =>
+  typeof config?.requiereLoteArado === "boolean" ? config.requiereLoteArado : DEFAULT_REQUIERE_LOTE_ARADO;
+
+const disponibilidadRequiereLoteArado = (disp, categoriaInsumo, config) => {
+  if (!isRequisitoLoteAradoActivo(config)) return false;
   const categoriaSolicitada = normalizeCategoriaInsumo(categoriaInsumo);
   if (categoriaSolicitada) {
     return CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO.has(categoriaSolicitada);
@@ -124,28 +134,17 @@ const disponibilidadRequiereLoteArado = (disp, categoriaInsumo) => {
 };
 
 const productorTieneLoteArado = async ({ productorId, ipt }) => {
-  const queries = [];
   const iptNorm = String(ipt || "").trim();
-  const productorIdNorm = String(productorId || "").trim();
+  if (!iptNorm) return false;
 
-  if (iptNorm) {
-    queries.push(db.collection("lotes").where("ipt", "==", iptNorm).where("activo", "==", true).get());
-  }
-  if (productorIdNorm) {
-    queries.push(db.collection("lotes").where("productorId", "==", productorIdNorm).where("activo", "==", true).get());
-  }
-  if (queries.length === 0) return false;
-
-  const snaps = await Promise.all(queries);
+  const snap = await db.collection("lotes").where("ipt", "==", iptNorm).where("activo", "==", true).get();
   const seen = new Set();
-  return snaps.some((snap) =>
-    snap.docs.some((doc) => {
-      if (seen.has(doc.id)) return false;
-      seen.add(doc.id);
-      const lote = doc.data() || {};
-      return lote.activo !== false && lote.loteArado === true;
-    })
-  );
+  return snap.docs.some((doc) => {
+    if (seen.has(doc.id)) return false;
+    seen.add(doc.id);
+    const lote = doc.data() || {};
+    return lote.activo !== false && lote.loteArado === true;
+  });
 };
 
 const isAdminRequest = (req) => {
@@ -157,16 +156,137 @@ const getAuthOwnershipIds = (req) => {
   const ids = new Set();
   const uid = req?.user?.uid;
   if (uid) ids.add(String(uid));
-  const claimPid = req?.user?.firebaseClaims?.productorId;
-  if (claimPid) ids.add(String(claimPid));
+  const claimIpt = req?.user?.firebaseClaims?.ipt;
+  if (claimIpt) ids.add(String(claimIpt));
   return ids;
 };
 
 const canModifyTurno = (req, turno) => {
   if (isAdminRequest(req)) return true;
+  const ids = getAuthOwnershipIds(req);
   const pid = String(turno?.productorId || "");
-  if (!pid) return false;
-  return getAuthOwnershipIds(req).has(pid);
+  const ipt = String(turno?.ipt || "");
+  return Boolean((ipt && ids.has(ipt)) || (pid && ids.has(pid)));
+};
+
+const normalizeIpt = (value) => String(value || "").trim();
+
+const resolveProductorByIdentifier = async (identifier) => {
+  const ipt = normalizeIpt(identifier);
+  if (!ipt) return null;
+  const snap = await db.collection("productores").where("ipt", "==", ipt).limit(1).get();
+  if (!snap.empty) {
+    const doc = snap.docs[0];
+    return { id: doc.id, ref: doc.ref, data: doc.data() || {}, ipt };
+  }
+  return null;
+};
+
+const resolveProductorForRequest = async (req, bodyIpt) => {
+  const identifiers = [
+    bodyIpt,
+    req?.user?.firebaseClaims?.ipt,
+    req?.user?.uid,
+  ];
+  for (const identifier of identifiers) {
+    const productor = await resolveProductorByIdentifier(identifier);
+    if (productor) return productor;
+  }
+  return null;
+};
+
+const collectTurnoDocsForProductor = async ({ ipt }) => {
+  const iptNorm = normalizeIpt(ipt);
+  if (!iptNorm) return [];
+  const snaps = await Promise.all([
+    db.collection("turnos").where("ipt", "==", iptNorm).get(),
+    db.collection("turnos").where("productorId", "==", iptNorm).get(),
+  ]);
+  const seen = new Set();
+  return snaps.flatMap((snap) => snap.docs).filter((doc) => {
+    if (seen.has(doc.id)) return false;
+    seen.add(doc.id);
+    return true;
+  });
+};
+
+const addDaysToYmd = (ymd, days) => {
+  const m = String(ymd || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + Number(days || 0), 12, 0, 0, 0));
+  return toYmdInIptTz(d);
+};
+
+const isRestriccionTurnosBloqueante = (productor) => {
+  const r = productor?.restriccionTurnos;
+  if (!r || r.activa !== true) return null;
+  const tipo = String(r.tipo || "").trim();
+  const hoy = toYmdInIptTz(new Date());
+  const hasta = String(r.hasta || "").trim();
+  if (tipo === "bloqueo_temporal" && hasta && hoy && hoy <= hasta) return r;
+  if (tipo === "restriccion_automatica") return r;
+  return null;
+};
+
+const buildEstadoInasistenciaProductor = ({ total, temporada, hoyYmd }) => {
+  const inasistenciasTurnos = { temporada, total, updatedAt: Timestamp.now() };
+
+  if (total >= INASISTENCIAS_PARA_RESTRICCION) {
+    return {
+      inasistenciasTurnos,
+      advertenciaTurnos: {
+        activa: true,
+        motivo: `Registra ${total} inasistencias en la temporada ${temporada}.`,
+        updatedAt: Timestamp.now(),
+      },
+      restriccionTurnos: {
+        activa: true,
+        tipo: "restriccion_automatica",
+        desde: hoyYmd,
+        hasta: null,
+        motivo: `RestricciÃ³n automÃ¡tica por ${total} inasistencias en la temporada ${temporada}.`,
+        updatedAt: Timestamp.now(),
+      },
+    };
+  }
+
+  if (total >= INASISTENCIAS_PARA_BLOQUEO) {
+    const hasta = addDaysToYmd(hoyYmd, DIAS_BLOQUEO_INASISTENCIA);
+    return {
+      inasistenciasTurnos,
+      advertenciaTurnos: {
+        activa: true,
+        motivo: `Registra ${total} inasistencias en la temporada ${temporada}.`,
+        updatedAt: Timestamp.now(),
+      },
+      restriccionTurnos: {
+        activa: true,
+        tipo: "bloqueo_temporal",
+        desde: hoyYmd,
+        hasta,
+        motivo: `Bloqueo temporal por ${total} inasistencias en la temporada ${temporada}.`,
+        updatedAt: Timestamp.now(),
+      },
+    };
+  }
+
+  if (total >= INASISTENCIAS_PARA_ADVERTENCIA) {
+    return {
+      inasistenciasTurnos,
+      advertenciaTurnos: {
+        activa: true,
+        motivo: `Advertencia por ${total} inasistencia en la temporada ${temporada}.`,
+        updatedAt: Timestamp.now(),
+      },
+      restriccionTurnos: admin.firestore.FieldValue.delete(),
+    };
+  }
+
+  return {
+    inasistenciasTurnos,
+    advertenciaTurnos: admin.firestore.FieldValue.delete(),
+    restriccionTurnos: admin.firestore.FieldValue.delete(),
+  };
 };
 
 const turnoDateFromRaw = (raw) => {
@@ -185,6 +305,11 @@ const turnoDateFromRaw = (raw) => {
     return isNaN(d.getTime()) ? null : d;
   }
   return null;
+};
+
+const turnoYmd = (turno) => {
+  const d = turnoDateFromRaw(turno);
+  return d ? toYmdUtc(d) : null;
 };
 
 const toYmdUtc = (d) => {
@@ -299,9 +424,10 @@ const countTurnosActivosEnDia = async (ymd) => {
 const getTurnosConfig = async () => {
   try {
     const snap = await db.collection(TURNOS_CONFIG_COLLECTION).doc(TURNOS_CONFIG_DOC).get();
-    if (!snap.exists) return { modo: "manual", habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "", desde: null, hasta: null, rangoModo: null };
+    if (!snap.exists) return { modo: "manual", habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "", desde: null, hasta: null, rangoModo: null, requiereLoteArado: DEFAULT_REQUIERE_LOTE_ARADO };
     const raw = snap.data() || {};
     const habilitado = typeof raw.habilitado === "boolean" ? raw.habilitado : DEFAULT_TURNOS_HABILITADO;
+    const requiereLoteArado = typeof raw.requiereLoteArado === "boolean" ? raw.requiereLoteArado : DEFAULT_REQUIERE_LOTE_ARADO;
     const mensaje = String(raw.mensaje || "").trim();
     const desde = normalizeYmdOrNull(raw.desde);
     const hasta = normalizeYmdOrNull(raw.hasta);
@@ -313,11 +439,11 @@ const getTurnosConfig = async () => {
     const modoInferred = hasRange ? "rango" : "manual";
     const modo = modoRaw === "manual" || modoRaw === "rango" ? modoRaw : modoInferred;
     if (modo === "manual") {
-      return { modo: "manual", habilitado, mensaje, desde: null, hasta: null, rangoModo: null };
+      return { modo: "manual", habilitado, mensaje, desde: null, hasta: null, rangoModo: null, requiereLoteArado };
     }
-    return { modo: "rango", habilitado: null, mensaje, desde, hasta, rangoModo };
+    return { modo: "rango", habilitado: null, mensaje, desde, hasta, rangoModo, requiereLoteArado };
   } catch {
-    return { modo: "manual", habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "", desde: null, hasta: null, rangoModo: null };
+    return { modo: "manual", habilitado: DEFAULT_TURNOS_HABILITADO, mensaje: "", desde: null, hasta: null, rangoModo: null, requiereLoteArado: DEFAULT_REQUIERE_LOTE_ARADO };
   }
 };
 
@@ -413,11 +539,8 @@ export const crearTurno = async (req, res) => {
 
     let { tipoTurno, fechaSolicitada, fecha, ipt, categoriaInsumo } = req.body;
 
-    // Obtener el productorId correcto - primero de los claims, luego del UID
     let productorId = req.user.uid;
-    if (req.user.firebaseClaims?.productorId) {
-      productorId = req.user.firebaseClaims.productorId;
-    }
+    let productorNombre = "";
     
     // Si no hay IPT en el body, intentar obtenerlo de los claims de Firebase
     if (!ipt && req.user.firebaseClaims) {
@@ -425,12 +548,27 @@ export const crearTurno = async (req, res) => {
     }
 
     // Validar que el productor existe y está activo
-    const prodSnap = await db.collection("productores").doc(productorId).get();
-    if (!prodSnap.exists) {
+    const resolvedProductor = await resolveProductorForRequest(req, ipt);
+    if (resolvedProductor) {
+      ipt = normalizeIpt(resolvedProductor.ipt || ipt);
+      productorId = ipt;
+      productorNombre = resolvedProductor.data?.nombreCompleto || resolvedProductor.data?.nombre || "";
+    }
+    if (!resolvedProductor) {
       return res.status(403).json({ message: "Productor no encontrado.", estadoActual });
     }
-    if (prodSnap.data()?.activo === false) {
+    if (resolvedProductor.data?.activo === false) {
       return res.status(403).json({ message: "El productor no está activo.", estadoActual });
+    }
+
+    const restriccionBloqueante = isRestriccionTurnosBloqueante(resolvedProductor.data);
+    if (restriccionBloqueante) {
+      const hasta = restriccionBloqueante.hasta ? ` hasta el ${restriccionBloqueante.hasta}` : "";
+      return res.status(403).json({
+        message: `${restriccionBloqueante.motivo || "El productor tiene una restricciÃ³n activa para solicitar turnos."}${hasta}`,
+        estadoActual,
+        restriccionTurnos: restriccionBloqueante,
+      });
     }
 
     // Normalizar tipoTurno
@@ -534,11 +672,10 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: `No hay cupos disponibles para esa fecha. Capacidad: ${capacidadDia}.`, estadoActual });
     }
     if (targetYmd && productorId && tipoTurno) {
-      const snapDup = await db
-        .collection("turnos")
-        .where("productorId", "==", String(productorId))
-        .where("activo", "==", true)
-        .get();
+      const snapDup = {
+        docs: (await collectTurnoDocsForProductor({ ipt }))
+          .filter((doc) => (doc.data() || {}).activo !== false),
+      };
 
       if (tipoTurno === "insumo") {
         if (hasTurnoPendienteOConfirmadoDelTipo(snapDup.docs, "insumo")) {
@@ -573,11 +710,9 @@ export const crearTurno = async (req, res) => {
           return res.status(400).json({ message: "Ya tenés un turno de renovación de carnet solicitado o confirmado.", estadoActual });
         }
 
-        const snapCarnetAll = await db
-          .collection("turnos")
-          .where("productorId", "==", String(productorId))
-          .where("tipoTurno", "==", "carnet")
-          .get();
+        const snapCarnetAll = {
+          docs: snapDup.docs.filter((doc) => normalizeTipoTurno(doc.data()?.tipoTurno) === "carnet"),
+        };
 
         let lastCarnet = null;
         let lastCarnetMs = null;
@@ -658,11 +793,11 @@ export const crearTurno = async (req, res) => {
       } else {
         categoriaInsumo = null;
       }
-      const disp = await getDisponibilidadInsumos(productorId);
+      const disp = await getDisponibilidadInsumos(ipt);
       if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "Usted no tiene insumos disponibles.", estadoActual });
       }
-      if (disponibilidadRequiereLoteArado(disp, categoriaInsumo)) {
+      if (disponibilidadRequiereLoteArado(disp, categoriaInsumo, cfg)) {
         const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
         if (!tieneLoteArado) {
           return res.status(400).json({ message: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual });
@@ -674,7 +809,7 @@ export const crearTurno = async (req, res) => {
         if (!insumoSnap.empty) {
           const insumoId = insumoSnap.docs[0].id;
           const asigSnap = await db.collection("productorInsumos")
-            .where("productorId", "==", String(productorId))
+            .where("productorId", "==", String(ipt))
             .where("insumoId", "==", insumoId)
             .get();
           const tieneCategoria = asigSnap.docs.some((d) => {
@@ -695,6 +830,8 @@ export const crearTurno = async (req, res) => {
     const temporada = temporadaFromDate(date);
     const turno = {
       productorId,
+      ipt,
+      productorNombre,
       tipoTurno,
       fecha: fechaIso,
       fechaTurno: ts,
@@ -730,6 +867,113 @@ export const crearTurno = async (req, res) => {
 
 
 // 📋 Obtener todos los turnos (con filtros de activo/inactivo y paginación)
+export const registrarAsistenciaTurno = async (req, res) => {
+  try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ message: "Solo administradores pueden registrar asistencia." });
+    }
+
+    const ipt = normalizeIpt(req.body?.ipt);
+    const fecha = normalizeYmdOrNull(req.body?.fecha);
+    const fuente = String(req.body?.fuente || "manual").trim().toLowerCase() || "manual";
+    const rawAsistio = req.body?.asistio;
+    const asistio =
+      typeof rawAsistio === "boolean"
+        ? rawAsistio
+        : ["true", "1", "si", "sÃ­", "yes", "y"].includes(String(rawAsistio ?? "").toLowerCase().trim());
+
+    if (!ipt) return res.status(400).json({ message: "El IPT es obligatorio." });
+    if (!fecha) return res.status(400).json({ message: "La fecha es obligatoria en formato YYYY-MM-DD." });
+
+    const hoyYmd = toYmdInIptTz(new Date());
+    if (hoyYmd && fecha > hoyYmd) {
+      return res.status(400).json({ message: "No se puede registrar asistencia de una fecha futura." });
+    }
+
+    const productor = await resolveProductorByIdentifier(ipt);
+    if (!productor) return res.status(404).json({ message: "Productor no encontrado." });
+    if (productor.data?.activo === false) {
+      return res.status(403).json({ message: "El productor no estÃ¡ activo." });
+    }
+
+    const docs = await collectTurnoDocsForProductor({ ipt });
+    const turnosDelDia = docs.filter((doc) => {
+      const t = doc.data() || {};
+      if (t.activo === false) return false;
+      if (turnoYmd(t) !== fecha) return false;
+      return normalizeEstado(t.estado) !== "cancelado";
+    });
+
+    if (turnosDelDia.length === 0) {
+      return res.status(404).json({ message: "No se encontrÃ³ un turno activo para ese IPT y fecha." });
+    }
+
+    const nuevoEstado = asistio ? "completado" : "ausente";
+    const nowTs = Timestamp.now();
+    const batch = db.batch();
+    const updatedIds = [];
+
+    for (const doc of turnosDelDia) {
+      const current = doc.data() || {};
+      const update = {
+        estado: nuevoEstado,
+        asistio,
+        asistenciaFuente: fuente,
+        asistenciaRegistradaAt: nowTs,
+        updatedAt: nowTs,
+      };
+      if (!asistio) {
+        update.motivoEstado = "Inasistencia registrada por control de asistencia";
+      }
+      batch.update(doc.ref, update);
+      updatedIds.push(doc.id);
+
+      registrarAuditoriaTurno({
+        turnoId: doc.id,
+        accion: "asistencia_registrada",
+        estadoAnterior: normalizeEstado(current.estado),
+        estadoNuevo: nuevoEstado,
+        motivo: asistio ? "Asistencia registrada" : "Inasistencia registrada",
+        realizadoPor: buildRealizadoPor(req),
+        origen: { ...buildOrigen(req), fuente },
+        automatico: false,
+      });
+    }
+
+    await batch.commit();
+
+    const temporadaActual = getTemporadaActual();
+    const docsActualizados = await collectTurnoDocsForProductor({ ipt });
+    const ausentesTemporada = docsActualizados.filter((doc) => {
+      const t = doc.data() || {};
+      if (t.activo === false) return false;
+      if (normalizeEstado(t.estado) !== "ausente") return false;
+      return getTurnoTemporada(t) === temporadaActual;
+    }).length;
+
+    const estadoProductor = buildEstadoInasistenciaProductor({
+      total: ausentesTemporada,
+      temporada: temporadaActual,
+      hoyYmd,
+    });
+    await productor.ref.set(estadoProductor, { merge: true });
+
+    return res.json({
+      message: asistio ? "Asistencia registrada." : "Inasistencia registrada.",
+      ipt,
+      fecha,
+      asistio,
+      turnosActualizados: updatedIds,
+      inasistenciasTemporada: ausentesTemporada,
+      advertenciaTurnos: estadoProductor.advertenciaTurnos?.activa ? estadoProductor.advertenciaTurnos : null,
+      restriccionTurnos: estadoProductor.restriccionTurnos?.activa ? estadoProductor.restriccionTurnos : null,
+    });
+  } catch (error) {
+    console.error("Error al registrar asistencia:", error);
+    return res.status(500).json({ message: "Error al registrar asistencia" });
+  }
+};
+
 export const obtenerTurnos = async (req, res) => {
   try {
     const { activo, fechaDesde, fechaHasta, limit: limitParam } = req.query;
@@ -826,10 +1070,10 @@ export const obtenerTurnos = async (req, res) => {
     const ids = Array.from(new Set(turnos.map(t => String(t.productorId || '')))).filter(Boolean);
     for (const pid of ids) {
       try {
-        const pdoc = await db.collection('productores').doc(pid).get();
-        if (pdoc.exists) {
-          const pd = pdoc.data();
-          prodInfo.set(pid, { nombre: pd.nombreCompleto || pd.nombre || '', ipt: String(pd.ipt || '') });
+        const productor = await resolveProductorByIdentifier(pid);
+        if (productor) {
+          const pd = productor.data || {};
+          prodInfo.set(pid, { nombre: pd.nombreCompleto || pd.nombre || '', ipt: String(productor.ipt || pd.ipt || '') });
           continue;
         }
       } catch {}
@@ -1116,8 +1360,8 @@ export const cambiarEstadoTurno = async (req, res) => {
     // Notificación push al productor cuando admin confirma, cancela o completa
     if (to === "confirmado" || to === "cancelado" || to === "completado") {
       try {
-        const prodDoc = await db.collection("productores").doc(String(current.productorId || "")).get();
-        const prodData = prodDoc.exists ? (prodDoc.data() || {}) : {};
+        const prodSnap = await db.collection("productores").where("ipt", "==", String(current.ipt || current.productorId || "")).limit(1).get();
+        const prodData = !prodSnap.empty ? (prodSnap.docs[0].data() || {}) : {};
         const expoTokens = [
           ...(Array.isArray(prodData.expoPushTokens) ? prodData.expoPushTokens : []),
           ...(Array.isArray(prodData.pushTokens) ? prodData.pushTokens : []),
@@ -1349,13 +1593,12 @@ export const obtenerTurnosPorProductor = async (req, res) => {
     const temporadaActual = getTemporadaActual();
     const activoParam = activo === undefined ? undefined : activo === "true";
     
-    let query = db.collection("turnos").where("productorId", "==", productorId);
-    
-    if (activoParam === true) {
-      query = query.where("activo", "==", activo === "true");
-    }
-
-    const snapshot = await query.get();
+    const productor = await resolveProductorByIdentifier(productorId);
+    const ipt = normalizeIpt(productor?.ipt || productorId);
+    const docs = await collectTurnoDocsForProductor({
+      ipt,
+    });
+    const snapshot = { docs };
     const now = new Date();
     const batch = db.batch(); let writes = 0;
     const turnos = snapshot.docs.map(doc => {
@@ -1527,12 +1770,28 @@ export const disponibilidadTurno = async (req, res) => {
       return res.json({ disponible: false, motivo: "No hay cupos disponibles para esa fecha.", estadoActual: true });
     }
 
+    if (ipt) {
+      try {
+        const productor = await resolveProductorByIdentifier(ipt);
+        const restriccion = productor ? isRestriccionTurnosBloqueante(productor.data) : null;
+        if (restriccion) {
+          const hasta = restriccion.hasta ? ` hasta el ${restriccion.hasta}` : "";
+          return res.json({
+            disponible: false,
+            motivo: `${restriccion.motivo || "El productor tiene una restricciÃ³n activa para solicitar turnos."}${hasta}`,
+            estadoActual: true,
+            restriccionTurnos: restriccion,
+          });
+        }
+      } catch {}
+    }
+
     if (normalizeTipoTurno(tipoTurno) === "insumo") {
       if (ipt) {
         try {
           const psnap = await db.collection("productores").where("ipt", "==", String(ipt)).limit(1).get();
           if (!psnap.empty) {
-            const productorId = psnap.docs[0].id;
+            const productorId = String(ipt);
             const snapTurnos = await db
               .collection("turnos")
               .where("productorId", "==", String(productorId))
@@ -1545,11 +1804,11 @@ export const disponibilidadTurno = async (req, res) => {
                 estadoActual: true,
               });
             }
-            const disp = await getDisponibilidadInsumos(productorId);
+            const disp = await getDisponibilidadInsumos(ipt);
             if (!disp?.tieneDisponible) {
               return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles.", estadoActual: true });
             }
-            if (disponibilidadRequiereLoteArado(disp, categoriaInsumo)) {
+            if (disponibilidadRequiereLoteArado(disp, categoriaInsumo, cfg)) {
               const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
               if (!tieneLoteArado) {
                 return res.json({ disponible: false, motivo: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual: true });
@@ -1613,6 +1872,8 @@ export const upsertConfigTurnos = async (req, res) => {
     const prevHabilitado = typeof prevRaw.habilitado === "boolean" ? prevRaw.habilitado : DEFAULT_TURNOS_HABILITADO;
 
     const mensaje = String(req.body?.mensaje || "").trim();
+    const prevRequiereLoteArado =
+      typeof prevRaw.requiereLoteArado === "boolean" ? prevRaw.requiereLoteArado : DEFAULT_REQUIERE_LOTE_ARADO;
     const modoRaw = req.body?.modo;
     const modoStr = String(modoRaw ?? "").toLowerCase().trim();
     const modo = modoStr === "rango" ? "rango" : (modoStr === "manual" || !modoStr ? "manual" : null);
@@ -1638,9 +1899,18 @@ export const upsertConfigTurnos = async (req, res) => {
       return null;
     };
 
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const hasRequiereLoteArado = Object.prototype.hasOwnProperty.call(body, "requiereLoteArado");
+    const requiereLoteAradoParsed =
+      hasRequiereLoteArado && (body.requiereLoteArado === null || body.requiereLoteArado === undefined || body.requiereLoteArado === "")
+        ? prevRequiereLoteArado
+        : (hasRequiereLoteArado ? parseBoolOrNull(body.requiereLoteArado) : prevRequiereLoteArado);
+    if (requiereLoteAradoParsed === null) {
+      return res.status(400).json({ message: "Campo 'requiereLoteArado' invÃ¡lido. Debe ser boolean." });
+    }
+
     let payload;
     if (modo === "manual") {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
       const hasHabilitado = Object.prototype.hasOwnProperty.call(body, "habilitado");
       const habilitadoParsed =
         hasHabilitado && (body.habilitado === null || body.habilitado === undefined || body.habilitado === "")
@@ -1659,6 +1929,7 @@ export const upsertConfigTurnos = async (req, res) => {
         desde: null,
         hasta: null,
         rangoModo: null,
+        requiereLoteArado: requiereLoteAradoParsed,
         updatedAt: Timestamp.now(),
       };
     } else {
@@ -1684,6 +1955,7 @@ export const upsertConfigTurnos = async (req, res) => {
         desde: desdeNorm,
         hasta: hastaNorm,
         rangoModo: rangoModoStr,
+        requiereLoteArado: requiereLoteAradoParsed,
         updatedAt: Timestamp.now(),
       };
     }
