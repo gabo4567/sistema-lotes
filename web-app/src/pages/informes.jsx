@@ -3,6 +3,8 @@ import { resumenGeneral, productoresActivos, insumosResumen, turnosEficiencia } 
 import { confirmDialog } from "../utils/alerts";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 import MapPolygon from "../components/MapPolygon";
+import LoadingState from "../components/LoadingState";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const Informes = () => {
   const [tipo, setTipo] = useState("resumen");
@@ -593,21 +595,10 @@ const Informes = () => {
   const renderData = () => {
     if (loading) {
       return (
-        <div
-          className="informes-empty-state"
-          style={{
-            marginTop: 8,
-            padding: "18px 20px",
-            borderRadius: 12,
-            background: "#f8fafc",
-            border: "1px solid #d9eadc",
-            color: "#2f6f4e",
-            fontWeight: 700,
-            textAlign: "center",
-          }}
-        >
-          Generando informe...
-        </div>
+        <LoadingState
+          title="Generando informe..."
+          message="Estamos preparando los datos del informe. Espera unos segundos."
+        />
       );
     }
     if (!data && !hasGenerated) {
@@ -629,7 +620,7 @@ const Informes = () => {
         </div>
       );
     }
-    if (!data) return <div className="users-msg err">Sin datos</div>;
+    if (!data) return <DismissibleAlert className="users-msg err">Sin datos</DismissibleAlert>;
     if (tipo === 'resumen') return renderResumen(data);
     if (tipo === 'productores') return renderProductores(data);
     if (tipo === 'insumosResumen') return renderInsumosResumen(data);
@@ -639,7 +630,7 @@ const Informes = () => {
   };
 
   return (
-    <div className="section-card informes page-container">
+    <div className="informes page-container">
       <h2 className="users-title" style={{ marginBottom: 0 }}>Informes</h2>
       <p className="section-subtitle">Generá reportes y exportá información clave del sistema.</p>
       <div className="inf-controls">
@@ -661,11 +652,11 @@ const Informes = () => {
         </div>
         <div className="inf-actions">
           <button className="btn" onClick={generar}>{loading? 'Generando…' : 'Generar'}</button>
-          <button className="btn" onClick={expPdf}>Exportar PDF</button>
-          <button className="btn" onClick={expExcel}>Exportar Excel</button>
+          <button className="btn" onClick={expPdf}>↓ Exportar PDF</button>
+          <button className="btn" onClick={expExcel}>↓ Exportar Excel</button>
         </div>
       </div>
-      {message && <div className="users-msg ok" style={{ marginBottom: 10 }}>{message}</div>}
+      {message && <DismissibleAlert className="users-msg ok" style={{ marginBottom: 10 }}>{message}</DismissibleAlert>}
       {renderData()}
       {mapView && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }} onClick={()=>setMapView(null)}>

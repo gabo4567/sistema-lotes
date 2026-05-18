@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
 import Layout from "../components/Layout";
 import MapPolygon from "../components/MapPolygon";
+import LoadingState from "../components/LoadingState";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const LoteDetail = () => {
   const { id } = useParams();
@@ -38,8 +40,13 @@ const LoteDetail = () => {
 
   return (
   <div className="lote-detail page-container section-card">
-      {error && <div className="text-red-600" style={{ marginBottom: 8 }}>{error}</div>}
-      {!lote ? (<div>Cargando…</div>) : (
+      {error && <DismissibleAlert className="users-msg err" style={{ marginBottom: 8 }}>{error}</DismissibleAlert>}
+      {!lote ? (
+        <LoadingState
+          title="Cargando lote..."
+          message="Estamos preparando la informacion del lote. Espera unos segundos."
+        />
+      ) : (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
             <h2 className="users-title" style={{ margin: 0 }}>{lote.nombre || ''}</h2>
@@ -91,8 +98,8 @@ const LoteDetail = () => {
               <button className="btn" onClick={()=>setEstado('Validado')}>Validar</button>
               <button className="btn" onClick={()=>setEstado('Rechazado')}>Rechazar</button>
             </div>
-            {msg && <div className="text-green-700">{msg}</div>}
-            {error && <div className="text-red-600">{error}</div>}
+            {msg && <DismissibleAlert className="users-msg ok">{msg}</DismissibleAlert>}
+            {error && <DismissibleAlert className="users-msg err">{error}</DismissibleAlert>}
           </div>
         </div>
       )}

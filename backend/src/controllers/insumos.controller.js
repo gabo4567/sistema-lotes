@@ -536,15 +536,25 @@ export const listarResumenAsignacionesPorProductor = async (req, res) => {
     });
 
     const byProductor = new Map();
+    const byInsumo = new Map();
     asignSnap.docs.forEach((doc) => {
       const raw = doc.data() || {};
       if (raw.activo === false) return;
       const { normalized } = buildNormalizePatchProductorInsumo(raw);
       const productorId = String(normalized.productorId || "").trim();
+      const insumoId = String(normalized.insumoId || "").trim();
       if (!productorId) return;
       const asignado = toNumber(normalized.cantidadAsignada, 0);
       const entregado = toNumber(normalized.cantidadEntregada, 0);
       if (asignado <= 0) return;
+      if (insumoId) {
+        const currentInsumo = byInsumo.get(insumoId) || { insumoId, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0, asignaciones: 0 };
+        currentInsumo.asignaciones += 1;
+        currentInsumo.totalAsignado += asignado;
+        currentInsumo.totalEntregado += entregado;
+        currentInsumo.totalDisponible += Math.max(0, asignado - entregado);
+        byInsumo.set(insumoId, currentInsumo);
+      }
       const prod = productoresByIpt.get(productorId) || {};
       const current = byProductor.get(productorId) || {
         productorId,
@@ -587,7 +597,7 @@ export const listarResumenAsignacionesPorProductor = async (req, res) => {
       return acc;
     }, { productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 });
 
-    res.json({ resumen, productores });
+    res.json({ resumen, productores, insumos: Array.from(byInsumo.values()) });
   } catch (e) {
     res.status(500).json({ error: "Error al obtener resumen de asignaciones" });
   }

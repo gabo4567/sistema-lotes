@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { getTurnoHistorial } from '../../services/turnos.service'
+import LoadingState from '../LoadingState'
 
 const ESTADO_LABELS = {
   pendiente: 'Pendiente',
@@ -371,9 +372,11 @@ const TurnoHistorial = ({ turnoId, onClose }) => {
         {/* Cuerpo */}
         <div className="turno-history-body" style={{ padding: 16, overflowY: 'auto', minHeight: 0 }}>
           {loading ? (
-            <div className="turno-history-loading" style={{ textAlign: 'center', padding: 32, color: '#9ca3af', fontSize: 14 }}>
-              Cargando historial…
-            </div>
+            <LoadingState
+              compact
+              title="Cargando historial..."
+              message="Estamos preparando los movimientos del turno."
+            />
           ) : error ? (
             <div
               className="turno-history-error"

@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { insumosService } from '../services/insumos.service'
 import { getProductores } from '../services/productores.service'
 import { notify, confirmDialog } from '../utils/alerts'
+import LoadingState from '../components/LoadingState'
+import DismissibleAlert from '../components/DismissibleAlert'
 
 
 const InsumosList = () => {
@@ -20,11 +22,16 @@ const InsumosList = () => {
   const [loadingAsign, setLoadingAsign] = useState(false)
   const [insumoNames, setInsumoNames] = useState({})
   const [filterActivo, setFilterActivo] = useState('activos')
+  const [quickFilter, setQuickFilter] = useState('todos')
+  const [sortConfig, setSortConfig] = useState({ key: 'nombre', direction: 'asc' })
+  const [catalogFilters, setCatalogFilters] = useState({ nombre: '', rubro: 'todos' })
   const [producerSearchTerm, setProducerSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showProducerResults, setShowProducerResults] = useState(false)
+  const [loadingResumenAsignaciones, setLoadingResumenAsignaciones] = useState(true)
   const [resumenAsignaciones, setResumenAsignaciones] = useState({ productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
   const [productoresConInsumos, setProductoresConInsumos] = useState([])
+  const [totalesPorInsumo, setTotalesPorInsumo] = useState({})
   const importInputRef = useRef(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -46,15 +53,11 @@ const InsumosList = () => {
   const load = async ()=>{
     try {
       setLoading(true)
-      const [data, resumenData] = await Promise.all([
-        insumosService.getInsumos(),
-        insumosService.resumenAsignacionesPorProductor().catch(() => null),
-      ])
+      const data = await insumosService.getInsumos()
       setItems(Array.isArray(data)? data: [])
       setInsumoNames(Array.isArray(data) ? Object.fromEntries(data.map(i=>[i.id, i.nombre])) : {})
-      setResumenAsignaciones(resumenData?.resumen || { productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
-      setProductoresConInsumos(Array.isArray(resumenData?.productores) ? resumenData.productores : [])
       setError('')
+      refreshResumenAsignaciones()
     } catch (e) {
       console.error(e)
       setError('No se pudieron cargar los insumos')
@@ -62,13 +65,97 @@ const InsumosList = () => {
     } finally { setLoading(false) }
   }
 
+  const refreshResumenAsignaciones = async () => {
+    setLoadingResumenAsignaciones(true)
+    try {
+      const resumenData = await insumosService.resumenAsignacionesPorProductor()
+      setResumenAsignaciones(resumenData?.resumen || { productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
+      setProductoresConInsumos(Array.isArray(resumenData?.productores) ? resumenData.productores : [])
+      setTotalesPorInsumo(
+        Array.isArray(resumenData?.insumos)
+          ? Object.fromEntries(resumenData.insumos.map(i => [String(i.insumoId), i]))
+          : {}
+      )
+    } catch {
+      setResumenAsignaciones({ productores: 0, asignaciones: 0, totalAsignado: 0, totalEntregado: 0, totalDisponible: 0 })
+      setProductoresConInsumos([])
+      setTotalesPorInsumo({})
+    } finally {
+      setLoadingResumenAsignaciones(false)
+    }
+  }
+
+  const normalizeText = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const isActivo = (i) => i?.activo !== false
+  const insumoTotal = (i, key) => Number(totalesPorInsumo?.[String(i?.id)]?.[key] || 0)
+  const insumoAsignado = (i) => insumoTotal(i, 'totalAsignado')
+  const insumoEntregado = (i) => insumoTotal(i, 'totalEntregado')
+  const hasAsignaciones = (i) => insumoAsignado(i) > 0
+
+  const sortMark = (key) => (
+    sortConfig.key === key ? (sortConfig.direction === 'asc' ? '^' : 'v') : ''
+  )
+
+  const onSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const insumosSummary = useMemo(() => {
+    const base = Array.isArray(items) ? items : []
+    const rubros = new Set()
+    return base.reduce((acc, i) => {
+      acc.total += 1
+      if (isActivo(i)) acc.activos += 1
+      else acc.inactivos += 1
+      if (String(i?.rubro || '').trim()) rubros.add(String(i.rubro).trim())
+      if (hasAsignaciones(i)) acc.conAsignaciones += 1
+      else acc.sinAsignaciones += 1
+      return acc
+    }, {
+      total: 0,
+      activos: 0,
+      inactivos: 0,
+      conAsignaciones: 0,
+      sinAsignaciones: 0,
+      get rubrosDistintos() { return rubros.size },
+    })
+  }, [items, totalesPorInsumo])
+
   const itemsFiltrados = useMemo(() => {
-    return items.filter(i => {
+    const filtered = items.filter(i => {
       if (filterActivo === 'todos') return true;
-      const isActivo = i.activo !== false;
-      return filterActivo === 'activos' ? isActivo : !isActivo;
+      return filterActivo === 'activos' ? isActivo(i) : !isActivo(i);
+    }).filter(i => {
+      const nombre = normalizeText(catalogFilters.nombre).trim()
+      const rubro = String(catalogFilters.rubro || 'todos')
+      const okNombre = nombre ? normalizeText(i?.nombre).includes(nombre) : true
+      const okRubro = rubro === 'todos' ? true : String(i?.rubro || '') === rubro
+      return okNombre && okRubro
+    }).filter(i => {
+      if (quickFilter === 'conAsignaciones') return hasAsignaciones(i)
+      if (quickFilter === 'sinAsignaciones') return !hasAsignaciones(i)
+      return true
     });
-  }, [items, filterActivo]);
+
+    return [...filtered].sort((a, b) => {
+      const getValue = (i) => {
+        if (sortConfig.key === 'nombre') return normalizeText(i?.nombre)
+        if (sortConfig.key === 'rubro') return normalizeText(i?.rubro)
+        if (sortConfig.key === 'asignado') return insumoAsignado(i)
+        if (sortConfig.key === 'estado') return i?.activo === false ? 'Inactivo' : 'Activo'
+        return ''
+      }
+      const aValue = getValue(a)
+      const bValue = getValue(b)
+      const compare = typeof aValue === 'number' && typeof bValue === 'number'
+        ? aValue - bValue
+        : String(aValue).localeCompare(String(bValue), 'es', { numeric: true, sensitivity: 'base' })
+      return sortConfig.direction === 'asc' ? compare : -compare
+    })
+  }, [items, filterActivo, quickFilter, sortConfig, totalesPorInsumo, catalogFilters]);
 
   const filteredProducers = useMemo(() => {
     const source = Array.isArray(productoresConInsumos) ? productoresConInsumos : [];
@@ -332,22 +419,48 @@ const InsumosList = () => {
   const estadoLabel = (i)=> {
     return i.activo === false ? 'Inactivo' : 'Activo'
   }
+  const estadoClass = (i) => i.activo === false ? 'is-inactive' : 'is-active'
+  const rubroLabel = (i) => String(i.rubro || '-')
+  const quickFilters = [
+    { key: 'todos', label: 'Todos', count: insumosSummary.total },
+    { key: 'activos', label: 'Activos', count: insumosSummary.activos },
+    { key: 'inactivos', label: 'Inactivos', count: insumosSummary.inactivos },
+    { key: 'conAsignaciones', label: 'Con asignaciones', count: insumosSummary.conAsignaciones },
+    { key: 'sinAsignaciones', label: 'Sin asignaciones', count: insumosSummary.sinAsignaciones },
+  ]
+  const setQuick = (key) => {
+    setQuickFilter(key)
+    if (key === 'activos') setFilterActivo('activos')
+    else if (key === 'inactivos') setFilterActivo('inactivos')
+    else if (key === 'todos') setFilterActivo('todos')
+    else setFilterActivo('todos')
+  }
+  const clearFilters = () => {
+    setFilterActivo('activos')
+    setQuickFilter('todos')
+    setCatalogFilters({ nombre: '', rubro: 'todos' })
+    setSortConfig({ key: 'nombre', direction: 'asc' })
+  }
+  const setCatalogOrder = (value) => {
+    const [key, direction] = String(value || 'nombre:asc').split(':')
+    setSortConfig({ key, direction: direction || 'asc' })
+  }
+  const catalogOrderValue = `${sortConfig.key}:${sortConfig.direction}`
   const buttonStyle = { border:'1px solid #22c55e', color:'#14532d', background:'#ffffff', padding:'6px 10px', borderRadius:8 }
   const miniBtnStyle = { border:'1px solid #cbd5e1', color:'#475569', background:'#fff', padding:'4px 8px', borderRadius:6, cursor:'pointer', fontSize:13 }
   const actionBtnStyle = { border:'1px solid #e2e8f0', color:'#1e293b', background:'#f8fafc', padding:'6px 10px', borderRadius:6, cursor:'pointer', fontSize:13 }
-
   return (
     <div className="insumos-list insumos-page page-container">
       <div className="insumos-hero">
         <div>
-          <h2>Gestion de Insumos</h2>
-          <p className="section-subtitle">Administra el catalogo de insumos y sus asignaciones por productor.</p>
+          <h2>Gestión de Insumos</h2>
+          <p className="section-subtitle">Administrá el catálogo de insumos y sus asignaciones por productor.</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn secondary" onClick={onClickImport} disabled={importing} style={{ minHeight: 42, padding: '0 14px' }}>
-            {importing ? 'Importando...' : 'Importar Excel'}
+            {importing ? 'Importando...' : '↑ Importar Excel'}
           </button>
-          <button className="btn insumos-primary-action" onClick={openAdd}>Agregar insumo</button>
+          <button className="btn" onClick={openAdd}>+ Agregar insumo</button>
           <input
             ref={importInputRef}
             type="file"
@@ -359,26 +472,105 @@ const InsumosList = () => {
       </div>
       <h2 style={{ marginTop: 0, color:'#14532d' }}>Gestión de Insumos</h2>
       <div style={{ color:'#166534', marginTop: 4, marginBottom: 12, fontSize: 18, fontWeight: 600 }}>Catalogo de insumos del IPT</div>
-      {error && <div className="users-msg err" style={{ marginBottom: 8 }}>{error}</div>}
-      <div className="insumos-toolbar" style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <div className="insumos-filter-panel" style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-          <label style={{ fontSize: 15, fontWeight: 600 }}>Mostrar:</label>
-          <select 
-            className="select-inst" 
-            style={{ padding: '8px 12px', minWidth: 120, minHeight: 40, fontSize: 16 }}
+      {error && <DismissibleAlert className="users-msg err" style={{ marginBottom: 8 }}>{error}</DismissibleAlert>}
+      <div className="turnos-summary insumos-summary">
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Mostrados</span>
+          <span className="estado-badge expired">{itemsFiltrados.length}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--completed">
+          <span className="turnos-summary__label">Activos</span>
+          <span className="estado-badge completed">{insumosSummary.activos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--expired">
+          <span className="turnos-summary__label">Inactivos</span>
+          <span className="estado-badge expired">{insumosSummary.inactivos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--confirmed">
+          <span className="turnos-summary__label">Rubros</span>
+          <span className="estado-badge confirmed">{insumosSummary.rubrosDistintos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Asignado</span>
+          <span className="estado-badge expired">{resumenAsignaciones.totalAsignado}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Entregado</span>
+          <span className="estado-badge expired">{resumenAsignaciones.totalEntregado}</span>
+        </div>
+      </div>
+      <div className="insumos-quick-filters" aria-label="Filtros rapidos de insumos">
+        {quickFilters.map(filter => (
+          <button
+            key={filter.key}
+            type="button"
+            className={`insumos-filter-chip${quickFilter === filter.key ? ' is-active' : ''}`}
+            onClick={() => setQuick(filter.key)}
+          >
+            <span>{filter.label}</span>
+            <strong>{filter.count}</strong>
+          </button>
+        ))}
+      </div>
+      <div className="filters-bar catalog-filter-card" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, backgroundColor: '#ffffff', padding: 20, borderRadius: 12, marginBottom: 20, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', alignItems: 'flex-end' }}>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 220px' }}>
+          <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Nombre del insumo</label>
+          <input
+            type="text"
+            className="input-inst"
+            placeholder="Buscar por nombre..."
+            value={catalogFilters.nombre}
+            onChange={e => setCatalogFilters({ ...catalogFilters, nombre: e.target.value })}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
+          />
+        </div>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 180px' }}>
+          <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Rubro</label>
+          <select
+            className="select-inst"
+            value={catalogFilters.rubro}
+            onChange={e => setCatalogFilters({ ...catalogFilters, rubro: e.target.value })}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
+          >
+            <option value="todos">Todos los rubros</option>
+            {RUBROS_INSUMOS.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 180px' }}>
+          <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Estado</label>
+          <select
+            className="select-inst"
             value={filterActivo}
-            onChange={e => setFilterActivo(e.target.value)}
+            onChange={e => { setFilterActivo(e.target.value); setQuickFilter('todos') }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
           >
             <option value="activos">Activos</option>
             <option value="inactivos">Inactivos</option>
             <option value="todos">Todos</option>
           </select>
         </div>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 220px' }}>
+          <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Ordenar por</label>
+          <select
+            className="select-inst"
+            value={catalogOrderValue}
+            onChange={e => setCatalogOrder(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
+          >
+            <option value="nombre:asc">Nombre A-Z</option>
+            <option value="nombre:desc">Nombre Z-A</option>
+            <option value="rubro:asc">Rubro A-Z</option>
+            <option value="asignado:desc">Mayor asignado</option>
+            <option value="asignado:asc">Menor asignado</option>
+            <option value="estado:asc">Estado</option>
+          </select>
+        </div>
+        <button type="button" className="btn secondary filter-clear-btn" onClick={clearFilters}>Limpiar filtros</button>
       </div>
       {importResult ? (
-        <div className="users-msg ok" style={{ marginBottom: 12 }}>
+        <DismissibleAlert className="users-msg ok" style={{ marginBottom: 12 }}>
           Importacion: {importResult.asignacionesCreadasOActualizadas ?? 0} asignaciones, {importResult.insumosCreadosOActualizados ?? 0} insumos, {importResult.productoresCreados ?? 0} productores creados.
-        </div>
+        </DismissibleAlert>
       ) : null}
       {importing ? (
         <div style={{
@@ -399,40 +591,74 @@ const InsumosList = () => {
           </div>
         </div>
       ) : null}
-      {loading ? (<div>Cargando…</div>) : (
-        <div className="table-wrap admin-data-table-wrap">
-          <table className="table-inst admin-data-table" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: 980 }}>
+      {loading ? (
+        <LoadingState
+          title="Cargando insumos..."
+          message="Estamos preparando el catalogo y las asignaciones. Espera unos segundos."
+        />
+      ) : (
+        <>
+        <div className="table-wrap admin-data-table-wrap insumos-table-wrap">
+          <table className="table-inst admin-data-table insumos-data-table" style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto', minWidth: 1280 }}>
             <thead>
               <tr style={{ background:'#f0fdf4' }}>
-                <th style={{ textAlign:'center', width:'24%' }}>Nombre</th>
-                <th style={{ textAlign:'center', width:'16%' }}>Rubro</th>
-                <th style={{ textAlign:'center', width:'20%' }}>Cantidad asignada por productor</th>
-                <th style={{ textAlign:'center', width:'12%' }}>Estado</th>
-                <th style={{ textAlign:'center', width:'16%' }}>Descripcion</th>
-                <th style={{ textAlign:'center', width:'12%' }}>Acciones</th>
+                <th style={{ textAlign:'center', width:'20%' }}>
+                  <button type="button" className="insumos-sort-button" onClick={() => onSort('nombre')}>
+                    <span>Nombre</span>
+                    <span className="insumos-sort-mark">{sortMark('nombre')}</span>
+                  </button>
+                </th>
+                <th style={{ textAlign:'center', width:'14%' }}>
+                  <button type="button" className="insumos-sort-button" onClick={() => onSort('rubro')}>
+                    <span>Rubro</span>
+                    <span className="insumos-sort-mark">{sortMark('rubro')}</span>
+                  </button>
+                </th>
+                <th style={{ textAlign:'center', width:'20%' }}>
+                  <button type="button" className="insumos-sort-button" onClick={() => onSort('asignado')}>
+                    <span>Asignado</span>
+                    <span className="insumos-sort-mark">{sortMark('asignado')}</span>
+                  </button>
+                </th>
+                <th style={{ textAlign:'center', width:'12%' }}>
+                  <button type="button" className="insumos-sort-button" onClick={() => onSort('estado')}>
+                    <span>Estado</span>
+                    <span className="insumos-sort-mark">{sortMark('estado')}</span>
+                  </button>
+                </th>
+                <th style={{ textAlign:'center', width:'18%' }}>Descripcion</th>
+                <th className="insumos-actions-cell" style={{ textAlign:'center', width: 320, minWidth: 320 }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {itemsFiltrados.length===0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12, textAlign:'center' }}>
-                    {filterActivo === 'activos' ? 'No hay insumos activos' : 
-                     filterActivo === 'inactivos' ? 'No hay insumos inactivos' : 
-                     'No hay insumos disponibles'}
+                  <td colSpan={6} style={{ padding: 28, textAlign:'center' }}>
+                    <div className="insumos-empty-state">
+                      <strong>No encontramos insumos con esos criterios.</strong>
+                      <span>Proba cambiando los filtros para ver el catalogo completo.</span>
+                      <button type="button" className="btn secondary filter-clear-btn" onClick={clearFilters}>Limpiar filtros</button>
+                    </div>
                   </td>
                 </tr>
               ) : itemsFiltrados.map(i=> (
                 <tr key={i.id}>
                   <td style={{ textAlign:'center' }}>{i.nombre}</td>
-                  <td style={{ textAlign:'center' }}>{i.rubro || '-'}</td>
-                  <td style={{ textAlign:'center' }}><InsumoAsignadoCell insumoId={i.id} unidad={i.unidad} /></td>
-                  <td style={{ textAlign:'center' }}>{estadoLabel(i)}</td>
-                  <td style={{ textAlign:'center' }}>{i.descripcion || '-'}</td>
+                  <td style={{ textAlign:'center' }}><span className="insumos-rubro-badge">{rubroLabel(i)}</span></td>
                   <td style={{ textAlign:'center' }}>
-                    <div className="actions-col" style={{ display:'inline-flex', flexDirection:'column', gap:6, alignItems:'center' }}>
+                    <span className="insumos-amount-badge">
+                      {loadingResumenAsignaciones
+                        ? 'Actualizando...'
+                        : `${insumoAsignado(i)} ${i.unidad || 'bolsas'}`}
+                    </span>
+                  </td>
+                  <td style={{ textAlign:'center' }}><span className={`insumos-status-badge ${estadoClass(i)}`}>{estadoLabel(i)}</span></td>
+                  <td style={{ textAlign:'center' }}>{i.descripcion || '-'}</td>
+                  <td className="insumos-actions-cell" style={{ textAlign:'center', width: 320, minWidth: 320 }}>
+                    <div className="insumos-actions-grid">
                       <button style={{ ...buttonStyle }} onClick={()=>openEdit(i)}>Modificar</button>
                       <button style={{ ...buttonStyle }} onClick={()=>onDelete(i)}>Eliminar</button>
-                      <button style={{ ...buttonStyle }} onClick={()=>openAssign(i)}>Asignar a productor</button>
+                      <button className="insumos-action-wide" style={{ ...buttonStyle }} onClick={()=>openAssign(i)}>Asignar a productor</button>
                     </div>
                   </td>
                 </tr>
@@ -440,16 +666,37 @@ const InsumosList = () => {
             </tbody>
           </table>
         </div>
-      )}
 
-      <div className="insumos-section-title" style={{ marginTop: 24, color:'#14532d', fontWeight: 600, marginBottom: 12 }}>Insumos asignados por productor</div>
+      <div className="insumos-section-title" style={{ marginTop: 28, color:'#14532d', fontWeight: 900, fontSize: 26, marginBottom: 14 }}>Insumos asignados por productor</div>
+      {loadingResumenAsignaciones ? (
+        <LoadingState
+          compact
+          title="Cargando asignaciones..."
+          message="Estamos preparando el resumen por productor."
+        />
+      ) : (
       <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-        <div className="insumos-assignment-summary" style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 16px', background: '#fff', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div className="insumos-summary-item">Productores: <span>{resumenAsignaciones.productores}</span></div>
-          <div className="insumos-summary-item">Asignaciones: <span>{resumenAsignaciones.asignaciones}</span></div>
-          <div className="insumos-summary-item">Asignado: <span>{resumenAsignaciones.totalAsignado}</span></div>
-          <div className="insumos-summary-item">Entregado: <span>{resumenAsignaciones.totalEntregado}</span></div>
-          <div className="insumos-summary-item">Disponible: <span style={{ color: Number(resumenAsignaciones.totalDisponible || 0) > 0 ? '#166534' : '#6b7280' }}>{resumenAsignaciones.totalDisponible}</span></div>
+        <div className="insumos-assignment-summary insumos-assignment-metrics">
+          <div className="insumos-metric-chip insumos-metric-chip--productores">
+            <span>Productores</span>
+            <strong>{resumenAsignaciones.productores}</strong>
+          </div>
+          <div className="insumos-metric-chip insumos-metric-chip--asignaciones">
+            <span>Asignaciones</span>
+            <strong>{resumenAsignaciones.asignaciones}</strong>
+          </div>
+          <div className="insumos-metric-chip insumos-metric-chip--asignado">
+            <span>Asignado</span>
+            <strong>{resumenAsignaciones.totalAsignado}</strong>
+          </div>
+          <div className="insumos-metric-chip insumos-metric-chip--entregado">
+            <span>Entregado</span>
+            <strong>{resumenAsignaciones.totalEntregado}</strong>
+          </div>
+          <div className="insumos-metric-chip insumos-metric-chip--disponible">
+            <span>Disponible</span>
+            <strong>{resumenAsignaciones.totalDisponible}</strong>
+          </div>
         </div>
         <div className="filters-bar insumos-producer-search" style={{ display: 'flex', gap: 12, backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: 12, border: '1px solid #e2e8f0', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
@@ -544,10 +791,11 @@ const InsumosList = () => {
               WebkitOverflowScrolling: 'touch'
             }}>
               {loadingAsign ? (
-                <div className="insumos-loading-state" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                  <div className="spinner" style={{ marginBottom: 12 }}></div>
-                  Cargando asignaciones del productor…
-                </div>
+                <LoadingState
+                  compact
+                  title="Cargando asignaciones..."
+                  message="Estamos preparando los insumos del productor."
+                />
               ) : asignacionesProd.length === 0 ? (
                 <div className="insumos-empty-state" style={{
                   padding: '60px 20px',
@@ -714,6 +962,9 @@ const InsumosList = () => {
           )}
         </div>
       </div>
+      )}
+        </>
+      )}
       <div className="filters-bar insumos-producer-search" style={{
         display: 'none',
         gap: 12,
@@ -906,14 +1157,5 @@ const InsumosList = () => {
     </div>
   )
 }
-
-const InsumoAsignadoCell = ({ insumoId, unidad }) => {
-  const [total, setTotal] = useState('-')
-  useEffect(()=>{ (async()=>{
-    try{ const asigs = await insumosService.asignacionesPorInsumo(insumoId); const sum = Array.isArray(asigs)? asigs.reduce((acc,x)=> acc + Number(x.cantidadAsignada||0), 0) : 0; setTotal(sum) }catch{ setTotal('-') }
-  })() },[insumoId])
-  return <span>{total === '-' ? '-' : `${total} ${unidad || 'bolsas'}`}</span>
-}
-
 
 export default InsumosList

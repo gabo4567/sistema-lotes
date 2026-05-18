@@ -11,6 +11,8 @@ import {
 } from "../services/users.service";
 import { notify, confirmDialog } from "../utils/alerts";
 import { AuthContext } from "../contexts/AuthContextBase";
+import LoadingState from "../components/LoadingState";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const emptyCreateForm = { nombre: "", email: "", password: "", activo: true };
 
@@ -31,6 +33,7 @@ const FULL_ADMIN_PERMISOS = {
   users: true,
   informes: true,
 };
+const PROTECTED_ADMIN_EMAILS = new Set(["gabrielparedok@gmail.com"]);
 
 const normalizeRole = (role) => {
   return String(role || "")
@@ -61,7 +64,9 @@ const UsersList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const [filtros, setFiltros] = useState({ nombre: "" });
+  const [filtros, setFiltros] = useState({ nombre: "", rol: "todos", estado: "todos", acceso: "todos" });
+  const [quickFilter, setQuickFilter] = useState("todos");
+  const [sortConfig, setSortConfig] = useState({ key: "nombre", direction: "asc" });
   const [modal, setModal] = useState(null);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [editForm, setEditForm] = useState({ uid: "", nombre: "", activo: true });
@@ -88,15 +93,134 @@ const UsersList = () => {
     load();
   }, []);
 
+  const timestampValue = (ts) => {
+    if (!ts) return 0;
+    try {
+      const d = typeof ts.toDate === "function" ? ts.toDate()
+        : typeof ts.seconds === "number" ? new Date(ts.seconds * 1000)
+          : typeof ts._seconds === "number" ? new Date(ts._seconds * 1000)
+            : typeof ts === "number" ? new Date(ts)
+              : new Date(ts);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    } catch {
+      return 0;
+    }
+  };
+
+  const hasUltimoAcceso = (u) => timestampValue(u?.ultimoAcceso) > 0;
+  const isActivo = (u) => u?.activo !== false;
+  const isAdministrador = (u) => normalizeRole(u?.role) === "administrador";
+  const hasPermisosPersonalizados = (u) => normalizeRole(u?.role) === "administrador limitado";
+  const normalizeText = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isProtectedAdmin = (u) => {
+    const email = String(u?.email || "").trim().toLowerCase();
+    return Boolean(u?.protectedAdmin || u?.adminPrincipal || u?.primaryAdmin || PROTECTED_ADMIN_EMAILS.has(email));
+  };
+
+  const estadoLabel = (u) => (isActivo(u) ? "Activo" : "Inactivo");
+  const estadoClass = (u) => (isActivo(u) ? "is-active" : "is-inactive");
+  const roleClass = (u) => (isAdministrador(u) ? "is-admin" : "is-limited");
+
+  const sortMark = (key) => (
+    sortConfig.key === key ? (sortConfig.direction === "asc" ? "^" : "v") : ""
+  );
+
+  const onSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const usersSummary = useMemo(() => {
+    const base = Array.isArray(items) ? items : [];
+    return base.reduce((acc, u) => {
+      acc.total += 1;
+      if (isActivo(u)) acc.activos += 1;
+      else acc.inactivos += 1;
+      if (isAdministrador(u)) acc.administradores += 1;
+      if (hasPermisosPersonalizados(u)) acc.personalizados += 1;
+      if (isActivo(u) && !hasUltimoAcceso(u)) acc.sinUltimoAcceso += 1;
+      return acc;
+    }, {
+      total: 0,
+      activos: 0,
+      inactivos: 0,
+      administradores: 0,
+      personalizados: 0,
+      sinUltimoAcceso: 0,
+    });
+  }, [items]);
+
   const itemsFiltrados = useMemo(() => {
     const search = filtros.nombre.trim().toLowerCase();
-    if (!search) return items;
-    return items.filter((u) => {
+    const filtered = items.filter((u) => {
       const nombre = String(u.nombre || "").toLowerCase();
       const email = String(u.email || "").toLowerCase();
-      return nombre.includes(search) || email.includes(search);
+      const okSearch = search ? nombre.includes(search) || email.includes(search) : true;
+      const okRol = filtros.rol === "todos"
+        ? true
+        : filtros.rol === "administrador"
+          ? isAdministrador(u)
+          : hasPermisosPersonalizados(u);
+      const okEstado = filtros.estado === "todos"
+        ? true
+        : filtros.estado === "activos"
+          ? isActivo(u)
+          : !isActivo(u);
+      const okAcceso = filtros.acceso === "todos"
+        ? true
+        : filtros.acceso === "con"
+          ? hasUltimoAcceso(u)
+          : !hasUltimoAcceso(u);
+      const okQuick = (() => {
+        if (quickFilter === "activos") return isActivo(u);
+        if (quickFilter === "inactivos") return !isActivo(u);
+        if (quickFilter === "administradores") return isAdministrador(u);
+        if (quickFilter === "sinUltimoAcceso") return !hasUltimoAcceso(u);
+        if (quickFilter === "personalizados") return hasPermisosPersonalizados(u);
+        return true;
+      })();
+      return okSearch && okRol && okEstado && okAcceso && okQuick;
     });
-  }, [items, filtros]);
+
+    return [...filtered].sort((a, b) => {
+      const getValue = (u) => {
+        if (sortConfig.key === "nombre") return normalizeText(u?.nombre);
+        if (sortConfig.key === "email") return normalizeText(u?.email);
+        if (sortConfig.key === "rol") return normalizeText(getRoleLabel(u?.role));
+        if (sortConfig.key === "estado") return estadoLabel(u);
+        if (sortConfig.key === "ultimoAcceso") return timestampValue(u?.ultimoAcceso);
+        return "";
+      };
+      const aValue = getValue(a);
+      const bValue = getValue(b);
+      const compare = typeof aValue === "number" && typeof bValue === "number"
+        ? aValue - bValue
+        : String(aValue).localeCompare(String(bValue), "es", { numeric: true, sensitivity: "base" });
+      return sortConfig.direction === "asc" ? compare : -compare;
+    });
+  }, [items, filtros, quickFilter, sortConfig]);
+
+  const quickFilters = [
+    { key: "todos", label: "Todos", count: usersSummary.total },
+    { key: "activos", label: "Activos", count: usersSummary.activos },
+    { key: "inactivos", label: "Inactivos", count: usersSummary.inactivos },
+    { key: "administradores", label: "Administradores", count: usersSummary.administradores },
+    { key: "sinUltimoAcceso", label: "Sin ultimo acceso", count: usersSummary.sinUltimoAcceso },
+    { key: "personalizados", label: "Permisos personalizados", count: usersSummary.personalizados },
+  ];
+
+  const clearFilters = () => {
+    setFiltros({ nombre: "", rol: "todos", estado: "todos", acceso: "todos" });
+    setQuickFilter("todos");
+    setSortConfig({ key: "nombre", direction: "asc" });
+  };
+  const setUsersOrder = (value) => {
+    const [key, direction] = String(value || "nombre:asc").split(":");
+    setSortConfig({ key, direction: direction || "asc" });
+  };
+  const usersOrderValue = `${sortConfig.key}:${sortConfig.direction}`;
 
   const openCreate = () => {
     setCreateForm(emptyCreateForm);
@@ -105,12 +229,20 @@ const UsersList = () => {
   };
 
   const openEdit = (u) => {
+    if (isProtectedAdmin(u) && u.id !== currentUid) {
+      notify({ title: "Este administrador principal esta protegido", icon: "info" });
+      return;
+    }
     setEditForm({ uid: u.id, nombre: u.nombre || "", activo: u.activo !== false });
     setFormError("");
     setModal("edit");
   };
 
   const openPermissions = (u) => {
+    if (isProtectedAdmin(u)) {
+      notify({ title: "Los permisos del administrador principal estan protegidos", icon: "info" });
+      return;
+    }
     setPermissionsForm({
       uid: u.id,
       permisos: normalizeRole(u.role) === "administrador"
@@ -122,6 +254,10 @@ const UsersList = () => {
   };
 
   const openRole = (u) => {
+    if (isProtectedAdmin(u)) {
+      notify({ title: "El rol del administrador principal esta protegido", icon: "info" });
+      return;
+    }
     setRoleForm({
       uid: u.id,
       role: normalizeRole(u.role) === "administrador limitado"
@@ -185,6 +321,9 @@ const UsersList = () => {
   const onSavePermissions = async () => {
     const target = items.find((u) => u.id === permissionsForm.uid);
     if (!target) return setFormError("Usuario no encontrado.");
+    if (isProtectedAdmin(target)) {
+      return setFormError("Los permisos del administrador principal estan protegidos.");
+    }
     if (permissionsForm.uid === currentUid) {
       return setFormError("No puede editar sus propios permisos.");
     }
@@ -211,6 +350,10 @@ const UsersList = () => {
   };
 
   const onSaveRole = async () => {
+    const target = items.find((u) => u.id === roleForm.uid);
+    if (isProtectedAdmin(target)) {
+      return setFormError("El rol del administrador principal esta protegido.");
+    }
     if (roleForm.uid === currentUid) {
       return setFormError("No puede editar su propio rol.");
     }
@@ -239,6 +382,10 @@ const UsersList = () => {
       await notify({ title: "No puede desactivar su propio usuario", icon: "error" });
       return;
     }
+    if (isProtectedAdmin(u)) {
+      await notify({ title: "Este administrador principal esta protegido", icon: "error" });
+      return;
+    }
     if (u?.activo === false) {
       await notify({ title: "El usuario ya esta desactivado", icon: "info" });
       return;
@@ -261,6 +408,11 @@ const UsersList = () => {
   };
 
   const onActivate = async (uid, activo) => {
+    const u = items.find((x) => x.id === uid);
+    if (isProtectedAdmin(u) && uid !== currentUid) {
+      await notify({ title: "Este administrador principal esta protegido", icon: "error" });
+      return;
+    }
     if (activo === true) {
       await notify({ title: "El usuario esta activo", icon: "info" });
       return;
@@ -284,6 +436,10 @@ const UsersList = () => {
 
   const onResetPassword = async (uid) => {
     const u = items.find((x) => x.id === uid);
+    if (isProtectedAdmin(u) && uid !== currentUid) {
+      await notify({ title: "Este administrador principal esta protegido", icon: "error" });
+      return;
+    }
     const ok = await confirmDialog({
       title: "Restablecer contrase\u00f1a",
       text: `Generar enlace para ${u?.nombre || u?.email || uid}?`,
@@ -322,68 +478,190 @@ const UsersList = () => {
   };
 
   return (
-    <div className="users-list page-container" style={{ width: "100%" }}>
+    <div className="usuarios-page page-container" style={{ width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <div>
-          <h2 className="users-title" style={{ margin: 0 }}>Gestion de Usuarios</h2>
+          <h2 className="users-title" style={{ margin: 0 }}>Gestión de Usuarios</h2>
           <p className="section-subtitle">Administrá los accesos y permisos del personal autorizado.</p>
         </div>
-        <button className="btn" onClick={openCreate}>Nuevo administrador</button>
+        <button className="btn" onClick={openCreate}>+ Nuevo administrador</button>
       </div>
 
-      <div className="filters-bar usuarios-filters-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12, backgroundColor: "#f8fafc", padding: 16, borderRadius: 12, marginBottom: 20, border: "1px solid #e2e8f0", alignItems: "flex-end" }}>
-        <div className="filter-item" style={{ flex: 1, minWidth: 250 }}>
-          <label style={{ display: "block", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre / Email</label>
+      <div className="turnos-summary usuarios-summary">
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Mostrados</span>
+          <span className="estado-badge expired">{itemsFiltrados.length}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--completed">
+          <span className="turnos-summary__label">Activos</span>
+          <span className="estado-badge completed">{usersSummary.activos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--expired">
+          <span className="turnos-summary__label">Inactivos</span>
+          <span className="estado-badge expired">{usersSummary.inactivos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--confirmed">
+          <span className="turnos-summary__label">Administradores</span>
+          <span className="estado-badge confirmed">{usersSummary.administradores}</span>
+        </div>
+        <div className="turnos-summary__chip usuarios-summary__chip--warning">
+          <span className="turnos-summary__label">Sin ultimo acceso</span>
+          <span className="estado-badge expired">{usersSummary.sinUltimoAcceso}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Total</span>
+          <span className="estado-badge expired">{usersSummary.total}</span>
+        </div>
+      </div>
+
+      <div className="usuarios-quick-filters" aria-label="Filtros rapidos de usuarios">
+        {quickFilters.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            className={`usuarios-filter-chip${quickFilter === filter.key ? " is-active" : ""}`}
+            onClick={() => setQuickFilter(filter.key)}
+          >
+            <span>{filter.label}</span>
+            <strong>{filter.count}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className="filters-bar usuarios-filters-bar" style={{ display: "flex", flexWrap: "wrap", gap: 10, backgroundColor: "#ffffff", padding: 18, borderRadius: 12, marginBottom: 20, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", alignItems: "flex-end" }}>
+        <div className="filter-item" style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1.15 1 190px", minWidth: 170 }}>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#374151" }}>Nombre / Email</label>
           <input
             type="text"
             className="input-inst"
             placeholder="Buscar por nombre o email..."
             value={filtros.nombre}
             onChange={(e) => setFiltros({ ...filtros, nombre: e.target.value })}
-            style={{ width: "100%", boxSizing: "border-box", fontSize: 17 }}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 14, minHeight: 42, borderRadius: 8 }}
           />
         </div>
-        <button className="btn secondary" onClick={() => setFiltros({ nombre: "" })} style={{ height: 38 }}>
+        <div className="filter-item" style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0.95 1 160px", minWidth: 145 }}>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#374151" }}>Rol</label>
+          <select className="select-inst" value={filtros.rol} onChange={(e) => setFiltros({ ...filtros, rol: e.target.value })} style={{ width: "100%", boxSizing: "border-box", fontSize: 14, minHeight: 42, borderRadius: 8 }}>
+            <option value="todos">Todos los roles</option>
+            <option value="administrador">Administradores</option>
+            <option value="limitado">Administradores limitados</option>
+          </select>
+        </div>
+        <div className="filter-item" style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0.8 1 130px", minWidth: 120 }}>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#374151" }}>Estado</label>
+          <select className="select-inst" value={filtros.estado} onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })} style={{ width: "100%", boxSizing: "border-box", fontSize: 14, minHeight: 42, borderRadius: 8 }}>
+            <option value="todos">Todos</option>
+            <option value="activos">Activos</option>
+            <option value="inactivos">Inactivos</option>
+          </select>
+        </div>
+        <div className="filter-item" style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0.9 1 150px", minWidth: 135 }}>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#374151" }}>Último acceso</label>
+          <select className="select-inst" value={filtros.acceso} onChange={(e) => setFiltros({ ...filtros, acceso: e.target.value })} style={{ width: "100%", boxSizing: "border-box", fontSize: 14, minHeight: 42, borderRadius: 8 }}>
+            <option value="todos">Todos</option>
+            <option value="con">Con acceso</option>
+            <option value="sin">Sin acceso</option>
+          </select>
+        </div>
+        <div className="filter-item" style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 170px", minWidth: 155 }}>
+          <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#374151" }}>Ordenar por</label>
+          <select className="select-inst" value={usersOrderValue} onChange={(e) => setUsersOrder(e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 14, minHeight: 42, borderRadius: 8 }}>
+            <option value="nombre:asc">Nombre A-Z</option>
+            <option value="nombre:desc">Nombre Z-A</option>
+            <option value="email:asc">Email A-Z</option>
+            <option value="rol:asc">Rol</option>
+            <option value="estado:asc">Estado</option>
+            <option value="ultimoAcceso:desc">Último acceso reciente</option>
+            <option value="ultimoAcceso:asc">Último acceso antiguo</option>
+          </select>
+        </div>
+        <button className="btn secondary filter-clear-btn" onClick={clearFilters} style={{ minWidth: 132, height: 42, padding: "8px 14px" }}>
           Limpiar filtros
         </button>
       </div>
 
-      {msg && <div className="users-msg ok">{msg}</div>}
-      {error && <div className="users-msg err">{error}</div>}
+      {usersSummary.sinUltimoAcceso > 0 && (
+        <DismissibleAlert className="usuarios-security-alert">
+          Hay {usersSummary.sinUltimoAcceso} usuario{usersSummary.sinUltimoAcceso === 1 ? "" : "s"} activo{usersSummary.sinUltimoAcceso === 1 ? "" : "s"} sin ultimo acceso registrado.
+        </DismissibleAlert>
+      )}
+
+      {msg && <DismissibleAlert className="users-msg ok">{msg}</DismissibleAlert>}
+      {error && <DismissibleAlert className="users-msg err">{error}</DismissibleAlert>}
 
       {loading ? (
-        <div style={{ padding: 16, color: "#166534", textAlign: "center" }}>Cargando usuarios...</div>
+        <LoadingState
+          title="Cargando usuarios..."
+          message="Estamos preparando el listado de usuarios. Espera unos segundos."
+        />
       ) : (
-        <div className="table-wrap admin-data-table-wrap" style={{ width: "100%" }}>
-          <table className="table-inst admin-data-table" style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="table-wrap admin-data-table-wrap usuarios-table-wrap" style={{ width: "100%" }}>
+          <table className="table-inst admin-data-table usuarios-data-table" style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr style={{ backgroundColor: "#f0f0f0" }}>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Nombre</th>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Email</th>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Rol</th>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Estado</th>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Ultimo acceso</th>
-                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Acciones</th>
+                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                  <button type="button" className="usuarios-sort-button" onClick={() => onSort("nombre")}>
+                    <span>Nombre</span>
+                    <span className="usuarios-sort-mark">{sortMark("nombre")}</span>
+                  </button>
+                </th>
+                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                  <button type="button" className="usuarios-sort-button" onClick={() => onSort("email")}>
+                    <span>Email</span>
+                    <span className="usuarios-sort-mark">{sortMark("email")}</span>
+                  </button>
+                </th>
+                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                  <button type="button" className="usuarios-sort-button" onClick={() => onSort("rol")}>
+                    <span>Rol</span>
+                    <span className="usuarios-sort-mark">{sortMark("rol")}</span>
+                  </button>
+                </th>
+                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                  <button type="button" className="usuarios-sort-button" onClick={() => onSort("estado")}>
+                    <span>Estado</span>
+                    <span className="usuarios-sort-mark">{sortMark("estado")}</span>
+                  </button>
+                </th>
+                <th style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                  <button type="button" className="usuarios-sort-button" onClick={() => onSort("ultimoAcceso")}>
+                    <span>Ultimo acceso</span>
+                    <span className="usuarios-sort-mark">{sortMark("ultimoAcceso")}</span>
+                  </button>
+                </th>
+                <th className="usuarios-actions-cell" style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {itemsFiltrados.map((u) => {
+                const protectedAdmin = isProtectedAdmin(u);
+                const protectedFromCurrentUser = protectedAdmin && u.id !== currentUid;
                 return (
                   <tr key={u.id}>
                     <td style={{ border: "1px solid #ddd", padding: "8px 12px", textAlign: "center" }}>{u.nombre || "Sin nombre"}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{u.email}</td>
-                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{getRoleLabel(u.role)}</td>
-                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{u.activo !== false ? "Activo" : "Inactivo"}</td>
-                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>{formatTimestamp(u.ultimoAcceso)}</td>
                     <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                        <button className="btn btn-compact" onClick={() => openEdit(u)} style={{ minWidth: 212 }}>Editar</button>
+                      <div style={{ display: "inline-flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+                        <span className={`usuarios-role-badge ${roleClass(u)}`}>{getRoleLabel(u.role)}</span>
+                        {protectedAdmin ? <span className="usuarios-protected-badge">Principal</span> : null}
+                      </div>
+                    </td>
+                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                      <span className={`usuarios-status-badge ${estadoClass(u)}`}>{estadoLabel(u)}</span>
+                    </td>
+                    <td style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                      {hasUltimoAcceso(u) ? formatTimestamp(u.ultimoAcceso) : <span className="usuarios-access-badge">Sin acceso registrado</span>}
+                    </td>
+                    <td className="usuarios-actions-cell" style={{ border: "1px solid #ddd", padding: 12, textAlign: "center" }}>
+                      <div className="usuarios-actions-grid">
+                        <button className="btn btn-compact" onClick={() => openEdit(u)} disabled={protectedFromCurrentUser}>Editar</button>
                         {u.activo === false ? (
-                          <button className="btn btn-compact secondary" onClick={() => onActivate(u.id, u.activo !== false)} style={{ minWidth: 212 }}>
+                          <button className="btn btn-compact secondary" onClick={() => onActivate(u.id, u.activo !== false)} disabled={protectedFromCurrentUser}>
                             Activar
                           </button>
                         ) : (
-                          <button className="btn btn-compact secondary" onClick={() => onDeactivate(u.id)} disabled={u.id === currentUid} style={{ minWidth: 212 }}>
+                          <button className="btn btn-compact secondary" onClick={() => onDeactivate(u.id)} disabled={u.id === currentUid || protectedFromCurrentUser}>
                             Desactivar
                           </button>
                         )}
@@ -392,22 +670,20 @@ const UsersList = () => {
                             <button
                               className="btn btn-compact secondary"
                               onClick={() => openRole(u)}
-                              disabled={u.id === currentUid}
-                              style={{ minWidth: 212 }}
+                              disabled={u.id === currentUid || protectedAdmin}
                             >
                               Cambiar rol
                             </button>
                             <button
                               className="btn btn-compact secondary"
                               onClick={() => openPermissions(u)}
-                              disabled={u.id === currentUid || normalizeRole(u.role) === "administrador"}
-                              style={{ minWidth: 212 }}
+                              disabled={u.id === currentUid || protectedAdmin || normalizeRole(u.role) === "administrador"}
                             >
                               Editar permisos
                             </button>
                           </>
                         ) : null}
-                        <button className="btn btn-compact" onClick={() => onResetPassword(u.id)} style={{ minWidth: 212 }}>
+                        <button className="btn btn-compact usuarios-action-wide" onClick={() => onResetPassword(u.id)} disabled={protectedFromCurrentUser}>
                           Restablecer contraseña
                         </button>
                       </div>
@@ -417,7 +693,13 @@ const UsersList = () => {
               })}
               {itemsFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 18, textAlign: "center", color: "#64748b" }}>No se encontraron administradores.</td>
+                  <td colSpan={6} style={{ padding: 28, textAlign: "center", color: "#64748b" }}>
+                    <div className="usuarios-empty-state">
+                      <strong>No encontramos usuarios con esos criterios.</strong>
+                      <span>Proba cambiando la busqueda o limpiando los filtros para ver el listado completo.</span>
+                      <button type="button" className="btn secondary filter-clear-btn" onClick={clearFilters}>Limpiar filtros</button>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>

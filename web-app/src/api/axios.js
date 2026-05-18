@@ -5,6 +5,8 @@ import { tokenStore } from "../utils/tokenStore";
 let authFailureHandler = null;
 let backendWarmedUp = false;
 const inFlight = new Map();
+const WARM_TIMEOUT_MS = 15000;
+const COLD_START_TIMEOUT_MS = 60000;
 
 const generateIdempotencyKey = () => {
   try {
@@ -23,15 +25,15 @@ export const setAuthFailureHandler = (handler) => {
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: false,
-  timeout: 10000,
+  timeout: WARM_TIMEOUT_MS,
 });
 
 api.interceptors.request.use((config) => {
   const token = tokenStore.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   config.timeout = backendWarmedUp
-    ? Math.max(Number(config.timeout || 0) || 0, 10000)
-    : Math.max(Number(config.timeout || 0) || 0, 25000);
+    ? Math.max(Number(config.timeout || 0) || 0, WARM_TIMEOUT_MS)
+    : Math.max(Number(config.timeout || 0) || 0, COLD_START_TIMEOUT_MS);
   return config;
 });
 
@@ -61,7 +63,7 @@ api.interceptors.response.use(
 
     if (shouldRetry) {
       config._retryCount = retryCount + 1;
-      config.timeout = config._retryCount > 0 ? 15000 : Math.max(Number(config.timeout || 0) || 0, 25000);
+      config.timeout = config._retryCount > 0 ? WARM_TIMEOUT_MS : Math.max(Number(config.timeout || 0) || 0, COLD_START_TIMEOUT_MS);
       const delayMs = 900 * config._retryCount;
       await new Promise((r) => setTimeout(r, delayMs));
       config._dedupe = false;

@@ -7,6 +7,8 @@ import {
 } from "../services/productores.service";
 
 import { insumosService } from "../services/insumos.service";
+import LoadingState from "../components/LoadingState";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const DetailField = ({ label, value, wide = false }) => (
   <div className={`producer-field ${wide ? "producer-field--wide" : ""}`}>
@@ -195,9 +197,10 @@ const ProductorDetail = () => {
 
       {loading && !prod ? (
 
-        <div className="producer-detail-loading">
-          Cargando productor...
-        </div>
+        <LoadingState
+          title="Cargando productor..."
+          message="Estamos preparando la informacion del productor. Espera unos segundos."
+        />
 
       ) : !prod ? (
 
@@ -300,9 +303,11 @@ const ProductorDetail = () => {
 
           {histLoading ? (
 
-            <div className="producer-detail-loading producer-detail-loading--inline">
-              Cargando historial de ingresos...
-            </div>
+            <LoadingState
+              compact
+              title="Cargando historial..."
+              message="Estamos consultando los ingresos del productor."
+            />
 
           ) : Array.isArray(hist) && hist.length > 0 ? (
 
@@ -368,9 +373,11 @@ const ProductorDetail = () => {
 
           {insumosLoading ? (
 
-            <div className="producer-detail-loading producer-detail-loading--inline">
-              Cargando insumos...
-            </div>
+            <LoadingState
+              compact
+              title="Cargando insumos..."
+              message="Estamos consultando las asignaciones del productor."
+            />
 
           ) : Array.isArray(insumos) &&
             insumos.length > 0 ? (
@@ -417,12 +424,12 @@ const ProductorDetail = () => {
 
           {error && (
 
-            <div
+            <DismissibleAlert
               className="users-msg err"
               style={{ marginTop: 8 }}
             >
               {error}
-            </div>
+            </DismissibleAlert>
 
           )}
 

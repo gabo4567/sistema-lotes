@@ -903,15 +903,30 @@ export const crearTurnoManual = async (req, res) => {
     const ipt = normalizeIpt(req.body?.ipt);
     const fecha = normalizeYmdOrNull(req.body?.fecha || req.body?.fechaSolicitada);
     const hora = String(req.body?.hora || "").trim();
+    const tipoTurno = normalizeTipoTurno(req.body?.tipoTurno || "insumo");
     const observacion = String(req.body?.observacion || req.body?.observaciones || "").trim();
 
     if (!ipt) return res.status(400).json({ message: "Debe seleccionar un productor." });
     if (!fecha) return res.status(400).json({ message: "Fecha invalida." });
+    if (!["insumo", "carnet", "otro"].includes(tipoTurno)) {
+      return res.status(400).json({ message: "Tipo de turno invalido." });
+    }
+    if (tipoTurno === "otro" && !observacion) {
+      return res.status(400).json({ message: "Debe indicar el motivo para un turno de tipo Otro." });
+    }
 
     const ts = toManualTurnoTimestamp({ fecha, hora });
     if (!ts) return res.status(400).json({ message: "Hora invalida." });
 
     const date = ts.toDate();
+    const hm = toHmInIptTz(date);
+    if (!hm) return res.status(400).json({ message: "Hora invalida." });
+    const minutos = hm.hour * 60 + hm.minute;
+    if (minutos < HORA_APERTURA * 60 || minutos > HORA_CIERRE * 60) {
+      return res.status(400).json({
+        message: `La hora debe estar dentro del horario de atencion (${String(HORA_APERTURA).padStart(2, "0")}:00 a ${String(HORA_CIERRE).padStart(2, "0")}:00).`,
+      });
+    }
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const turnoDia = new Date(date);
@@ -922,6 +937,21 @@ export const crearTurnoManual = async (req, res) => {
     if (date.getTime() < Date.now()) {
       return res.status(400).json({ message: "No se puede crear un turno con horario pasado." });
     }
+    const dow = date.getDay();
+    if (dow === 0 || dow === 6) {
+      return res.status(400).json({ message: "No se permiten turnos sabado o domingo." });
+    }
+
+    const targetYmd = toYmdInIptTz(date);
+    const feriadoLabel = getArgentinaHolidayLabel(targetYmd);
+    if (feriadoLabel) {
+      return res.status(400).json({ message: `No se permiten turnos en feriados nacionales (${feriadoLabel}).` });
+    }
+    const capacidadDia = await resolveCapacidadDia(targetYmd);
+    const turnosDia = await countTurnosActivosEnDia(targetYmd);
+    if (turnosDia >= capacidadDia) {
+      return res.status(400).json({ message: `No hay cupos disponibles para esa fecha. Capacidad: ${capacidadDia}.` });
+    }
 
     const productor = await resolveProductorByIdentifier(ipt);
     if (!productor) return res.status(404).json({ message: "Productor no encontrado." });
@@ -931,17 +961,49 @@ export const crearTurnoManual = async (req, res) => {
       return res.status(bloqueoProductor.status).json({ message: bloqueoProductor.message, code: bloqueoProductor.code });
     }
 
+    const turnosProductor = await collectTurnoDocsForProductor({ ipt: productor.ipt });
+    if ((tipoTurno === "insumo" || tipoTurno === "carnet") && hasTurnoPendienteOConfirmadoDelTipo(turnosProductor, tipoTurno)) {
+      const label = tipoTurno === "carnet" ? "renovacion de carnet" : tipoTurno === "insumo" ? "retiro de insumos" : "este tipo";
+      return res.status(400).json({ message: `El productor ya tiene un turno de ${label} pendiente o confirmado.` });
+    }
+    const hasDupMismoDia = turnosProductor.some((doc) => {
+      const other = doc.data() || {};
+      if (other.activo === false) return false;
+      if (isTurnoExpired(other, new Date())) return false;
+      const st = normalizeEstado(other.estado);
+      if (st === "cancelado" || st === "completado" || st === "vencido") return false;
+      if (normalizeTipoTurno(other.tipoTurno) !== tipoTurno) return false;
+      return toYmdInIptTz(turnoDateFromRaw(other)) === targetYmd;
+    });
+    if (hasDupMismoDia) {
+      return res.status(400).json({ message: "El productor ya tiene un turno del mismo tipo para esa fecha." });
+    }
+
+    if (tipoTurno === "insumo") {
+      const disp = await getDisponibilidadInsumos(productor.ipt);
+      if (!disp?.tieneDisponible) {
+        return res.status(400).json({ message: "El productor no tiene insumos disponibles." });
+      }
+      const cfg = await getTurnosConfig();
+      if (disponibilidadRequiereLoteArado(disp, null, cfg)) {
+        const tieneLoteArado = await productorTieneLoteArado({ productorId: productor.ipt, ipt: productor.ipt });
+        if (!tieneLoteArado) {
+          return res.status(400).json({ message: MENSAJE_LOTE_ARADO_REQUERIDO });
+        }
+      }
+    }
+
     const turno = {
       productorId: productor.ipt,
       ipt: productor.ipt,
       productorNombre: productor.data?.nombreCompleto || productor.data?.nombre || "",
-      tipoTurno: "insumo",
+      tipoTurno,
       fecha: date.toISOString(),
       fechaTurno: ts,
       temporada: temporadaFromDate(date),
       estado: "pendiente",
       activo: true,
-      motivo: "",
+      motivo: tipoTurno === "otro" ? observacion : "",
       observacionAdmin: observacion,
       createdBy: req.user?.uid || "sistema",
       createdAt: Timestamp.now(),

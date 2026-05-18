@@ -1,12 +1,12 @@
 import React from "react";
 
-const LoteFilters = ({ filters, onFilterChange, onReset }) => {
+const LoteFilters = ({ filters, onFilterChange, onReset, onExport }) => {
   const containerStyle = {
     display: "flex",
     flexWrap: "wrap",
-    gap: "16px",
+    gap: "10px",
     backgroundColor: "#ffffff",
-    padding: "20px",
+    padding: "18px",
     borderRadius: "12px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     marginBottom: "24px",
@@ -18,20 +18,22 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
     display: "flex",
     flexDirection: "column",
     gap: "6px",
-    flex: "1 1 200px"
+    flex: "1 1 155px",
+    minWidth: "140px"
   };
 
   const labelStyle = {
-    fontSize: "14px",
+    fontSize: "15px",
     fontWeight: "600",
     color: "#374151"
   };
 
   const inputStyle = {
-    padding: "10px 12px",
+    padding: "10px 14px",
     borderRadius: "8px",
     border: "1px solid #d1d5db",
-    fontSize: "14px",
+    fontSize: "16px",
+    minHeight: "46px",
     outline: "none",
     transition: "border-color 0.2s",
     width: "100%",
@@ -39,7 +41,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
   };
 
   const resetBtnStyle = {
-    padding: "10px 20px",
+    padding: "8px 14px",
     backgroundColor: "#f3f4f6",
     color: "#374151",
     border: "1px solid #d1d5db",
@@ -49,6 +51,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
     fontSize: "14px",
     transition: "all 0.2s",
     height: "42px",
+    minWidth: "132px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center"
@@ -56,7 +59,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
 
   return (
     <div style={containerStyle} className="lote-filters-bar">
-      <div style={fieldStyle}>
+      <div style={{ ...fieldStyle, flex: "1.05 1 170px", minWidth: "155px" }}>
         <label style={labelStyle}>Nombre del lote</label>
         <input
           type="text"
@@ -67,7 +70,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
         />
       </div>
 
-      <div style={fieldStyle}>
+      <div style={{ ...fieldStyle, flex: "0.85 1 135px", minWidth: "120px" }}>
         <label style={labelStyle}>Número IPT</label>
         <input
           type="number"
@@ -78,7 +81,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
         />
       </div>
 
-      <div style={fieldStyle}>
+      <div style={{ ...fieldStyle, flex: "0.9 1 140px", minWidth: "125px" }}>
         <label style={labelStyle}>Estado</label>
         <select
           style={inputStyle}
@@ -91,7 +94,7 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
         </select>
       </div>
 
-      <div style={fieldStyle}>
+      <div style={{ ...fieldStyle, flex: "1 1 165px", minWidth: "150px" }}>
         <label style={labelStyle}>Ordenar por</label>
         <select
           style={inputStyle}
@@ -109,12 +112,21 @@ const LoteFilters = ({ filters, onFilterChange, onReset }) => {
 
       <button 
         type="button" 
+        className="filter-clear-btn"
         style={resetBtnStyle} 
         onClick={onReset}
         onMouseOver={(e) => e.target.style.backgroundColor = "#e5e7eb"}
         onMouseOut={(e) => e.target.style.backgroundColor = "#f3f4f6"}
       >
         Limpiar filtros
+      </button>
+      <button
+        type="button"
+        className="btn secondary"
+        style={{ padding: "8px 14px", fontSize: 16, height: 42, borderRadius: 8, display: "flex", alignItems: "center", gap: 6, minWidth: 94 }}
+        onClick={onExport}
+      >
+        ↓ Excel
       </button>
     </div>
   );

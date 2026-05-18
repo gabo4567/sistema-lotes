@@ -4,12 +4,16 @@ import { getProductorByIpt } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import LoteFilters from "../components/LoteFilters";
 import Swal from "sweetalert2";
+import LoadingState from "../components/LoadingState";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const LotesList = () => {
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [ultimaModByLoteId, setUltimaModByLoteId] = useState({});
+  const [quickFilter, setQuickFilter] = useState("todos");
+  const [sortConfig, setSortConfig] = useState(null);
   const navigate = useNavigate();
 
   // Estado para filtros
@@ -21,6 +25,7 @@ const LotesList = () => {
   });
 
   const handleFilterChange = (key, value) => {
+    if (key === "orderBy") setSortConfig(null);
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
@@ -31,6 +36,41 @@ const LotesList = () => {
       orderBy: "newest",
       activo: "activos"
     });
+    setQuickFilter("todos");
+    setSortConfig(null);
+  };
+
+  const hasCoordinates = (lote) => {
+    if (Array.isArray(lote?.poligono) && lote.poligono.length > 0) {
+      return lote.poligono.some((p) => {
+        const lat = p?.lat ?? p?.latitude;
+        const lng = p?.lng ?? p?.longitude;
+        return lat !== null && lat !== undefined && lng !== null && lng !== undefined;
+      });
+    }
+    const lat = lote?.lat ?? lote?.latitude;
+    const lng = lote?.lng ?? lote?.longitude;
+    return lat !== null && lat !== undefined && lng !== null && lng !== undefined;
+  };
+
+  const hasProductor = (lote) => Boolean(String(lote?.ipt || lote?.productorIpt || lote?.productorId || "").trim());
+  const isActivo = (lote) => lote?.activo !== false;
+  const normalizeText = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const loteStatusLabel = (lote) => (isActivo(lote) ? "Activo" : "Inactivo");
+  const loteStatusClass = (lote) => (isActivo(lote) ? "is-active" : "is-inactive");
+  const coordenadasLabel = (lote) => (hasCoordinates(lote) ? "Con coordenadas" : "Sin coordenadas");
+  const coordenadasClass = (lote) => (hasCoordinates(lote) ? "has-coordinates" : "no-coordinates");
+
+  const sortMark = (key) => (
+    sortConfig?.key === key ? (sortConfig.direction === "asc" ? "^" : "v") : ""
+  );
+
+  const onSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev?.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
   };
 
   const formatMetodo = (metodo) => {
@@ -180,7 +220,7 @@ const LotesList = () => {
     const fetchLotes = async () => {
       try {
         setLoading(true);
-        const data = await lotesService.getLotes({ activo: filters.activo });
+        const data = await lotesService.getLotes({ activo: "todos" });
         setLotes(data);
         setError(null);
       } catch (err) {
@@ -192,11 +232,60 @@ const LotesList = () => {
     };
 
     fetchLotes();
-  }, [filters.activo]);
+  }, []);
+
+  const lotesSummary = useMemo(() => {
+    const base = Array.isArray(lotes) ? lotes : [];
+    return base.reduce((acc, lote) => {
+      acc.total += 1;
+      if (isActivo(lote)) acc.activos += 1;
+      else acc.inactivos += 1;
+      if (hasCoordinates(lote)) acc.conCoordenadas += 1;
+      else acc.sinCoordenadas += 1;
+      if (hasProductor(lote)) acc.conProductor += 1;
+      else acc.sinProductor += 1;
+      return acc;
+    }, {
+      total: 0,
+      activos: 0,
+      inactivos: 0,
+      conCoordenadas: 0,
+      sinCoordenadas: 0,
+      conProductor: 0,
+      sinProductor: 0,
+    });
+  }, [lotes]);
+
+  const quickFilters = [
+    { key: "todos", label: "Todos", count: lotesSummary.total },
+    { key: "activos", label: "Activos", count: lotesSummary.activos },
+    { key: "inactivos", label: "Inactivos", count: lotesSummary.inactivos },
+    { key: "conCoordenadas", label: "Con coordenadas", count: lotesSummary.conCoordenadas },
+    { key: "sinCoordenadas", label: "Sin coordenadas", count: lotesSummary.sinCoordenadas },
+    { key: "conProductor", label: "Con productor", count: lotesSummary.conProductor },
+    { key: "sinProductor", label: "Sin productor", count: lotesSummary.sinProductor },
+  ];
+
+  const setQuick = (key) => {
+    setQuickFilter(key);
+    if (key === "activos") setFilters((prev) => ({ ...prev, activo: "activos" }));
+    else if (key === "inactivos") setFilters((prev) => ({ ...prev, activo: "inactivos" }));
+    else if (filters.activo !== "todos" && key !== "todos") setFilters((prev) => ({ ...prev, activo: "todos" }));
+    else if (key === "todos") setFilters((prev) => ({ ...prev, activo: "todos" }));
+  };
 
   // Lógica de filtrado y ordenamiento combinada
   const filteredAndSortedLotes = useMemo(() => {
     let result = [...lotes];
+
+    if (filters.activo !== "todos") {
+      result = result.filter((lote) => filters.activo === "activos" ? isActivo(lote) : !isActivo(lote));
+    }
+
+    if (quickFilter === "conCoordenadas") result = result.filter(hasCoordinates);
+    if (quickFilter === "sinCoordenadas") result = result.filter((lote) => !hasCoordinates(lote));
+    if (quickFilter === "conProductor") result = result.filter(hasProductor);
+    if (quickFilter === "sinProductor") result = result.filter((lote) => !hasProductor(lote));
 
     // 1. Filtro por nombre (contains, case insensitive)
     if (filters.nombre) {
@@ -214,15 +303,36 @@ const LotesList = () => {
       );
     }
 
+    const getVal = (v) => {
+      if (!v) return 0;
+      if (v.toDate) return v.toDate().getTime();
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+
+    if (sortConfig?.key) {
+      const getSortValue = (lote) => {
+        if (sortConfig.key === "nombre") return normalizeText(lote?.nombre);
+        if (sortConfig.key === "ipt") return Number(lote?.ipt) || String(lote?.ipt || "");
+        if (sortConfig.key === "superficie") return Number(lote?.superficie || 0);
+        if (sortConfig.key === "productor") return String(lote?.ipt || "");
+        if (sortConfig.key === "estado") return loteStatusLabel(lote);
+        if (sortConfig.key === "fecha") return getVal(lote?.fechaCreacion);
+        return "";
+      };
+      result.sort((a, b) => {
+        const aValue = getSortValue(a);
+        const bValue = getSortValue(b);
+        const compare = typeof aValue === "number" && typeof bValue === "number"
+          ? aValue - bValue
+          : String(aValue).localeCompare(String(bValue), "es", { numeric: true, sensitivity: "base" });
+        return sortConfig.direction === "asc" ? compare : -compare;
+      });
+      return result;
+    }
+
     // 3. Ordenamiento
     result.sort((a, b) => {
-      const getVal = (v) => {
-        if (!v) return 0;
-        if (v.toDate) return v.toDate().getTime();
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? 0 : d.getTime();
-      };
-
       switch (filters.orderBy) {
         case "newest": {
           return getVal(b.fechaCreacion) - getVal(a.fechaCreacion);
@@ -249,7 +359,7 @@ const LotesList = () => {
     });
 
     return result;
-  }, [lotes, filters]);
+  }, [lotes, filters, quickFilter, sortConfig]);
 
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
@@ -351,20 +461,74 @@ const LotesList = () => {
           <p className="section-subtitle">Consultá y gestioná los lotes productivos.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Link to="/lotes/mapa" className="btn">Mapa general</Link>
-          <button className="btn" onClick={handleExportExcel}>Exportar Excel</button>
-          <Link to="/lotes/nuevo" className="btn">Nuevo lote</Link>
+          <Link to="/lotes/mapa" className="btn">▣ Mapa general</Link>
+          <Link to="/lotes/nuevo" className="btn">+ Nuevo lote</Link>
         </div>
       </div>
 
-      <LoteFilters 
-        filters={filters} 
-        onFilterChange={handleFilterChange} 
-        onReset={resetFilters} 
+      <div className="turnos-summary lotes-summary">
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Mostrados</span>
+          <span className="estado-badge expired">{filteredAndSortedLotes.length}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--completed">
+          <span className="turnos-summary__label">Activos</span>
+          <span className="estado-badge completed">{lotesSummary.activos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--expired">
+          <span className="turnos-summary__label">Inactivos</span>
+          <span className="estado-badge expired">{lotesSummary.inactivos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--confirmed">
+          <span className="turnos-summary__label">Con coordenadas</span>
+          <span className="estado-badge confirmed">{lotesSummary.conCoordenadas}</span>
+        </div>
+        <div className="turnos-summary__chip lotes-summary__chip--warning">
+          <span className="turnos-summary__label">Sin coordenadas</span>
+          <span className="estado-badge expired">{lotesSummary.sinCoordenadas}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Con productor</span>
+          <span className="estado-badge expired">{lotesSummary.conProductor}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Total</span>
+          <span className="estado-badge expired">{lotesSummary.total}</span>
+        </div>
+      </div>
+
+      {lotesSummary.sinCoordenadas > 0 && (
+        <DismissibleAlert className="lotes-data-alert">
+          Hay {lotesSummary.sinCoordenadas} lote{lotesSummary.sinCoordenadas === 1 ? "" : "s"} sin coordenadas. Revisalos para que aparezcan correctamente en el mapa.
+        </DismissibleAlert>
+      )}
+
+      <div className="lotes-quick-filters" aria-label="Filtros rapidos de lotes">
+        {quickFilters.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            className={`lotes-filter-chip${quickFilter === filter.key ? " is-active" : ""}`}
+            onClick={() => setQuick(filter.key)}
+          >
+            <span>{filter.label}</span>
+            <strong>{filter.count}</strong>
+          </button>
+        ))}
+      </div>
+
+      <LoteFilters
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onReset={resetFilters}
+        onExport={handleExportExcel}
       />
 
       {loading ? (
-        <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando lotes...</div>
+        <LoadingState
+          title="Cargando lotes..."
+          message="Estamos preparando el listado de lotes. Espera unos segundos."
+        />
       ) : (
         <>
           {filteredAndSortedLotes.length === 0 ? (
@@ -376,20 +540,45 @@ const LotesList = () => {
               border: '1px dashed #d1d5db',
               color: '#6b7280'
             }}>
-              {lotes.length === 0 ? "No hay lotes registrados." : "No se encontraron lotes con los filtros aplicados."}
+              <div className="lotes-empty-state__content">
+                <strong>{lotes.length === 0 ? "Todavia no hay lotes cargados." : "No encontramos lotes con esos criterios."}</strong>
+                <span>{lotes.length === 0 ? "Cuando cargues el primer lote, va a aparecer en este listado." : "Proba cambiando la busqueda o limpiando los filtros para ver el listado completo."}</span>
+                {lotes.length > 0 && <button type="button" className="btn secondary filter-clear-btn" onClick={resetFilters}>Limpiar filtros</button>}
+              </div>
             </div>
           ) : (
             <div className="table-wrap lotes-table-wrap">
-              <table className="lotes-table">
+              <table className="lotes-table lotes-data-table">
                 <thead>
                   <tr>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Superficie (ha)</th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                      <button type="button" className="lotes-sort-button" onClick={() => onSort("nombre")}>
+                        <span>Nombre</span>
+                        <span className="lotes-sort-mark">{sortMark("nombre")}</span>
+                      </button>
+                    </th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                      <button type="button" className="lotes-sort-button" onClick={() => onSort("ipt")}>
+                        <span>IPT</span>
+                        <span className="lotes-sort-mark">{sortMark("ipt")}</span>
+                      </button>
+                    </th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                      <button type="button" className="lotes-sort-button" onClick={() => onSort("superficie")}>
+                        <span>Superficie (ha)</span>
+                        <span className="lotes-sort-mark">{sortMark("superficie")}</span>
+                      </button>
+                    </th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Tierra arada</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Coordenadas</th>
+                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                      <button type="button" className="lotes-sort-button" onClick={() => onSort("estado")}>
+                        <span>Estado</span>
+                        <span className="lotes-sort-mark">{sortMark("estado")}</span>
+                      </button>
+                    </th>
                     <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Método</th>
-                    <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
+                    <th className="lotes-actions-cell" style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -410,9 +599,14 @@ const LotesList = () => {
                           {lote.loteArado ? 'Sí' : 'No'}
                         </span>
                       </td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{lote.estado || 'Pendiente'}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{formatMetodo(lote.metodoMarcado)}</td>
                       <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                        <span className={`lotes-status-badge ${coordenadasClass(lote)}`}>{coordenadasLabel(lote)}</span>
+                      </td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                        <span className={`lotes-status-badge ${loteStatusClass(lote)}`}>{loteStatusLabel(lote)}</span>
+                      </td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{formatMetodo(lote.metodoMarcado)}</td>
+                      <td className="lotes-actions-cell" style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                         <div className="actions-col" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                           <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}`)}>Ver</button>
                           <button className="btn" onClick={()=>navigate(`/lotes/${lote.id}/editar`)}>Editar</button>

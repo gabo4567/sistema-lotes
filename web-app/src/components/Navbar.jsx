@@ -10,6 +10,7 @@ const Navbar = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("ipt-dark-mode") === "true");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     document.body.classList.toggle("dark-mode", darkMode);
@@ -47,6 +48,25 @@ const Navbar = () => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+  const permissionLabels = {
+    turnos: "Turnos",
+    productores: "Productores",
+    insumos: "Insumos",
+    lotes: "Lotes",
+    users: "Usuarios",
+    informes: "Informes",
+  };
+  const protectedAdminEmails = new Set(["gabrielparedok@gmail.com"]);
+  const userEmail = String(user?.email || "").trim().toLowerCase();
+  const isPrincipalAdmin = Boolean(user?.protectedAdmin || user?.adminPrincipal || protectedAdminEmails.has(userEmail));
+  const displayName = String(user?.nombre || user?.displayName || user?.name || "Administrador").trim();
+  const displayEmail = userEmail || "Sin correo registrado";
+  const roleLabel = isPrincipalAdmin
+    ? "Administrador principal"
+    : role === "administrador limitado"
+      ? "Administrador limitado"
+      : "Administrador";
+  const activePermissions = Object.entries(permissionLabels).filter(([key]) => permisos?.[key]);
 
   const menuItems = useMemo(() => {
     const items = [
@@ -222,6 +242,20 @@ const Navbar = () => {
         </div>
 
         <div className="sidebar-bottom">
+          <div className="sidebar-account">
+            <div className="sidebar-account__avatar" aria-hidden="true">
+              {displayName.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="sidebar-account__body">
+              <div className="sidebar-account__name">{displayName}</div>
+              <div className="sidebar-account__email">{displayEmail}</div>
+              <div className="sidebar-account__role">{roleLabel}</div>
+            </div>
+            <button type="button" className="sidebar-account__profile" onClick={() => setProfileOpen(true)}>
+              Mi perfil
+            </button>
+          </div>
+
           <button type="button" className="sidebar-link logout-link" onClick={handleLogout}>
             <span className="sidebar-icon-wrapper" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -252,6 +286,51 @@ const Navbar = () => {
           </div>
         </div>
       </aside>
+
+      {profileOpen ? (
+        <div className="profile-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setProfileOpen(false); }}>
+          <div className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+            <div className="profile-modal__header">
+              <div>
+                <div id="profile-modal-title" className="profile-modal__title">Mi perfil</div>
+                <div className="profile-modal__subtitle">Cuenta conectada al sistema web</div>
+              </div>
+              <button type="button" className="profile-modal__close" onClick={() => setProfileOpen(false)}>Cerrar</button>
+            </div>
+
+            <div className="profile-modal__identity">
+              <div className="profile-modal__avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</div>
+              <div>
+                <div className="profile-modal__name">{displayName}</div>
+                <div className="profile-modal__email">{displayEmail}</div>
+                <span className="profile-modal__role">{roleLabel}</span>
+              </div>
+            </div>
+
+            <div className="profile-modal__grid">
+              <div className="profile-field">
+                <span>Estado</span>
+                <strong>Activo</strong>
+              </div>
+              <div className="profile-field">
+                <span>Identificador</span>
+                <strong>{user?.uid || "-"}</strong>
+              </div>
+            </div>
+
+            <div className="profile-permissions">
+              <div className="profile-permissions__title">Permisos activos</div>
+              <div className="profile-permissions__list">
+                {activePermissions.length > 0 ? activePermissions.map(([key, label]) => (
+                  <span key={key} className="profile-permissions__chip">{label}</span>
+                )) : (
+                  <span className="profile-permissions__empty">Sin permisos activos</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 };

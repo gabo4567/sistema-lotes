@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import api from "../api/axios";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const Register = () => {
   const [nombre, setNombre] = useState("");
@@ -38,8 +39,8 @@ const Register = () => {
         <input placeholder="Email institucional" value={email} onChange={e=>setEmail(e.target.value)} type="email" />
         <input placeholder="Contraseña inicial" value={password} onChange={e=>setPassword(e.target.value)} type="password" />
         <button className="btn" disabled={loading} type="submit">{loading? 'Creando…' : 'Crear admin'}</button>
-        {message && <div className="text-green-700">{message}</div>}
-        {error && <div className="text-red-600">{error}</div>}
+        {message && <DismissibleAlert className="users-msg ok">{message}</DismissibleAlert>}
+        {error && <DismissibleAlert className="users-msg err">{error}</DismissibleAlert>}
       </form>
     </div>
   );

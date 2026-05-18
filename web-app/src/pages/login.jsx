@@ -1,6 +1,6 @@
 // src/pages/Login.jsx
 
-import React, { useState, useContext, useCallback } from "react";
+import React, { useState, useContext, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import api from "../api/axios";
@@ -42,6 +42,20 @@ const Login = () => {
   const [error, setError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showWakeNotice, setShowWakeNotice] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setShowWakeNotice(false);
+      return undefined;
+    }
+
+    const noticeTimer = window.setTimeout(() => {
+      setShowWakeNotice(true);
+    }, 7000);
+
+    return () => window.clearTimeout(noticeTimer);
+  }, [loading]);
 
   const validate = useCallback(() => {
     const trimmed = email.trim();
@@ -68,6 +82,7 @@ const Login = () => {
     if (loading) return;
     if (!validate()) return;
     setLoading(true);
+    setShowWakeNotice(false);
     let firebaseAuthenticated = false;
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -77,6 +92,9 @@ const Login = () => {
 
       const res = await api.post("/auth/login", {
         idToken,
+      }, {
+        timeout: 60000,
+        _dedupe: false,
       });
 
       login(res.data.token, {
@@ -213,8 +231,14 @@ const Login = () => {
             </div>
 
             <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? "Ingresando..." : "Ingresar"}
+              {loading ? (showWakeNotice ? "Conectando con el servidor..." : "Ingresando...") : "Ingresar"}
             </button>
+
+            {showWakeNotice ? (
+              <div className="login-wake-notice" role="status" aria-live="polite">
+                El servidor puede estar iniciando. Esto es normal si estuvo sin uso y puede demorar hasta 30 segundos.
+              </div>
+            ) : null}
 
             {error ? <div className="login-error login-error--center">{error}</div> : null}
 

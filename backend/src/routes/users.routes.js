@@ -22,6 +22,12 @@ const normalizeRoleValue = (role) => {
 
 const PERMISSION_KEYS = ["turnos", "productores", "insumos", "lotes", "users", "informes"];
 const OFFICIAL_ROLES = ["administrador", "administrador limitado"];
+const PROTECTED_ADMIN_EMAILS = new Set(
+  String(process.env.PROTECTED_ADMIN_EMAILS || process.env.PRIMARY_ADMIN_EMAILS || "gabrielparedok@gmail.com")
+    .split(",")
+    .map(normalizeEmail)
+    .filter(Boolean)
+);
 
 const DEFAULT_ADMIN_PERMISOS = {
   turnos: true,
@@ -81,6 +87,25 @@ const canManageUsers = (data) => {
   return role === "administrador" && permisos.users === true;
 };
 
+const isProtectedAdmin = (data = {}) => {
+  const email = normalizeEmail(data?.email);
+  return Boolean(
+    data?.adminPrincipal === true ||
+    data?.primaryAdmin === true ||
+    data?.protectedAdmin === true ||
+    (email && PROTECTED_ADMIN_EMAILS.has(email))
+  );
+};
+
+const assertCanModifyProtectedAdmin = ({ req, targetData }) => {
+  if (!isProtectedAdmin(targetData)) return null;
+  if (req.user?.uid === targetData?.id) return null;
+  return {
+    status: 403,
+    message: "Este administrador principal esta protegido y no puede ser modificado desde el panel",
+  };
+};
+
 const requireFullAdminUsersAccess = async (req, res, next) => {
   try {
     const uid = String(req.user?.uid || "").trim();
@@ -104,7 +129,7 @@ const assertAdminUserDoc = async (uid) => {
   const targetDoc = await db.collection("users").doc(uid).get();
   if (!targetDoc.exists) return { error: { status: 404, message: "Usuario no encontrado" } };
   const targetData = targetDoc.data() || {};
-  const targetRole = resolveRole(targetData);
+  const targetRole = isProtectedAdmin(targetData) ? "administrador" : resolveRole(targetData);
   if (!isPanelAdminRole(targetRole)) {
     return { error: { status: 400, message: "Solo se pueden administrar usuarios Administradores desde esta seccion" } };
   }
@@ -127,6 +152,8 @@ const assertCanChangeAccess = async ({ req, uid, nextRole, nextPermisos }) => {
 
   const { targetData, targetRole, error } = await assertAdminUserDoc(uid);
   if (error) return { error };
+  const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+  if (protectedError) return { error: protectedError };
 
   const currentCanManage = targetData.activo !== false && canManageUsers(targetData);
   const futureRole = nextRole || targetRole;
@@ -170,7 +197,8 @@ router.get("/", async (req, res) => {
 
     const all = snapshot.docs.map((doc) => {
       const data = doc.data();
-      const roleResolved = resolveRole(data);
+      const protectedAdmin = isProtectedAdmin(data);
+      const roleResolved = protectedAdmin ? "administrador" : resolveRole(data);
       const permisos = resolvePermisosForRole(roleResolved, data?.permisos);
       const updates = {};
 
@@ -185,7 +213,7 @@ router.get("/", async (req, res) => {
       }
 
       const nombre = data?.nombre || authDisplayNames[doc.id] || null;
-      return { id: doc.id, ...data, nombre, role: roleResolved, permisos };
+      return { id: doc.id, ...data, nombre, role: roleResolved, permisos, protectedAdmin };
     });
     if (hasWrites) await batch.commit();
 
@@ -223,19 +251,27 @@ router.post("/", async (req, res) => {
     const existingUsers = await db.collection("users").where("email", "==", email).limit(1).get();
     if (!existingUsers.empty) return res.status(409).json({ error: "Ya existe un administrador con ese correo" });
 
+    let userRecord;
     try {
-      await admin.auth().getUserByEmail(email);
-      return res.status(409).json({ error: "Ya existe un usuario de autenticacion con ese correo" });
+      userRecord = await admin.auth().getUserByEmail(email);
+      const existingDoc = await db.collection("users").doc(userRecord.uid).get();
+      if (existingDoc.exists) {
+        return res.status(409).json({ error: "Ya existe un administrador con ese correo" });
+      }
+      userRecord = await admin.auth().updateUser(userRecord.uid, {
+        displayName: nombre,
+        password,
+        disabled: !activo,
+      });
     } catch (error) {
       if (error?.code !== "auth/user-not-found") throw error;
+      userRecord = await admin.auth().createUser({
+        email,
+        password,
+        displayName: nombre,
+        disabled: !activo,
+      });
     }
-
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
-      displayName: nombre,
-      disabled: !activo,
-    });
 
     const doc = {
       email,
@@ -248,6 +284,10 @@ router.post("/", async (req, res) => {
     };
 
     await db.collection("users").doc(userRecord.uid).set(doc);
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      role: "administrador",
+      permisos: { ...DEFAULT_ADMIN_PERMISOS },
+    });
     res.status(201).json({ id: userRecord.uid, ...doc });
   } catch (error) {
     console.error("Error al crear usuario:", error);
@@ -264,12 +304,18 @@ router.put("/:uid/permisos", async (req, res) => {
 
     const { targetData, targetRole, error: targetError } = await assertAdminUserDoc(uid);
     if (targetError) return res.status(targetError.status).json({ error: targetError.message });
+    const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+    if (protectedError) return res.status(protectedError.status).json({ error: protectedError.message });
 
     if (targetRole === "administrador") {
       const permisos = { ...DEFAULT_ADMIN_PERMISOS };
       await db.collection("users").doc(uid).update({
         permisos,
         updatedAt: new Date(),
+      });
+      await admin.auth().setCustomUserClaims(uid, {
+        role: targetRole,
+        permisos,
       });
       return res.json({ message: "Permisos actualizados", permisos });
     }
@@ -285,6 +331,10 @@ router.put("/:uid/permisos", async (req, res) => {
     await db.collection("users").doc(uid).update({
       permisos,
       updatedAt: new Date(),
+    });
+    await admin.auth().setCustomUserClaims(uid, {
+      role: targetRole,
+      permisos,
     });
 
     return res.json({
@@ -323,6 +373,10 @@ router.put("/:uid/role", async (req, res) => {
       permisos,
       updatedAt: new Date(),
     });
+    await admin.auth().setCustomUserClaims(uid, {
+      role,
+      permisos,
+    });
 
     return res.json({ message: "Rol actualizado", role, permisos });
   } catch (error) {
@@ -337,7 +391,7 @@ router.get("/:uid", async (req, res) => {
     const doc = await db.collection("users").doc(uid).get();
     if (!doc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
     const data = doc.data() || {};
-    const roleResolved = resolveRole(data);
+    const roleResolved = isProtectedAdmin(data) ? "administrador" : resolveRole(data);
     if (!isPanelAdminRole(roleResolved)) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
@@ -345,7 +399,7 @@ router.get("/:uid", async (req, res) => {
     if (data?.role !== roleResolved || JSON.stringify(normalizePermisos(data?.permisos)) !== JSON.stringify(permisos)) {
       await doc.ref.update({ role: roleResolved, permisos, updatedAt: new Date() });
     }
-    res.json({ id: doc.id, ...data, role: roleResolved, permisos });
+    res.json({ id: doc.id, ...data, role: roleResolved, permisos, protectedAdmin: isProtectedAdmin(data) });
   } catch (error) {
     console.error("Error al obtener usuario:", error);
     res.status(500).json({ error: "Error al obtener usuario" });
@@ -357,6 +411,8 @@ router.patch("/:uid", async (req, res) => {
     const { uid } = req.params;
     const { targetData, error } = await assertAdminUserDoc(uid);
     if (error) return res.status(error.status).json({ error: error.message });
+    const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+    if (protectedError) return res.status(protectedError.status).json({ error: protectedError.message });
 
     const { nombre, activo } = req.body;
     const updates = {};
@@ -391,6 +447,8 @@ router.post("/:uid/deactivate", async (req, res) => {
     if (req.user?.uid === uid) return res.status(400).json({ error: "No puede desactivar su propio usuario" });
     const { targetData, error } = await assertAdminUserDoc(uid);
     if (error) return res.status(error.status).json({ error: error.message });
+    const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+    if (protectedError) return res.status(protectedError.status).json({ error: protectedError.message });
     if (targetData.activo !== false && canManageUsers(targetData) && !(await hasOtherFullAdmin(uid))) {
       return res.status(400).json({ error: "No se puede desactivar el ultimo administrador con permiso de usuarios" });
     }
@@ -407,8 +465,10 @@ router.post("/:uid/deactivate", async (req, res) => {
 router.post("/:uid/activate", async (req, res) => {
   try {
     const { uid } = req.params;
-    const { error } = await assertAdminUserDoc(uid);
+    const { targetData, error } = await assertAdminUserDoc(uid);
     if (error) return res.status(error.status).json({ error: error.message });
+    const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+    if (protectedError) return res.status(protectedError.status).json({ error: protectedError.message });
 
     await db.collection("users").doc(uid).update({ activo: true, updatedAt: new Date() });
     try { await admin.auth().updateUser(uid, { disabled: false }); } catch {}
@@ -424,6 +484,8 @@ router.post("/:uid/reset-password", async (req, res) => {
     const { uid } = req.params;
     const { targetData, error } = await assertAdminUserDoc(uid);
     if (error) return res.status(error.status).json({ error: error.message });
+    const protectedError = assertCanModifyProtectedAdmin({ req, targetData: { ...targetData, id: uid } });
+    if (protectedError) return res.status(protectedError.status).json({ error: protectedError.message });
     const email = normalizeEmail(targetData?.email);
     if (!isValidEmail(email)) return res.status(400).json({ error: "El usuario no tiene un email valido" });
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { lotesService } from "../services/lotes.service";
 import { notify } from "../utils/alerts";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const LoteForm = () => {
   const [nombre, setNombre] = useState("");
@@ -30,8 +31,8 @@ const LoteForm = () => {
     <div className="lotes-form page-container">
       <form onSubmit={handleSubmit} className="max-w-md bg-white p-4 rounded shadow">
         <h2 className="text-xl mb-4 font-semibold">Crear Lote</h2>
-        {message ? <div className="text-green-700 mb-2">{message}</div> : null}
-        {error ? <div className="text-red-600 mb-2">{error}</div> : null}
+        {message ? <DismissibleAlert className="users-msg ok">{message}</DismissibleAlert> : null}
+        {error ? <DismissibleAlert className="users-msg err">{error}</DismissibleAlert> : null}
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}

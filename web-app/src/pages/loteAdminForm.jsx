@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
 import MapPolygonEditor from "../components/MapPolygonEditor";
+import DismissibleAlert from "../components/DismissibleAlert";
 import Swal from "sweetalert2";
 
 const METERS_PER_DEGREE_LAT = 111320;
@@ -356,7 +357,7 @@ const LoteAdminForm = () => {
           <ReadOnlyValue value={"A\u00e9reo"} />
         </LoteField>
 
-        {error && <div className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</div>}
+        {error && <DismissibleAlert className="users-msg err" style={{ gridColumn: '1 / -1' }}>{error}</DismissibleAlert>}
         <div className="form-actions">
           <button type="button" className="btn" onClick={()=>navigate('/lotes')}>Cancelar</button>
           <button className="btn" type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>

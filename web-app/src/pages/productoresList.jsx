@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createProductor, deleteProductor, getProductores, resetPasswordProductor, marcarReempadronado } from "../services/productores.service";
 import { Link, useNavigate } from "react-router-dom";
 import { confirmDialog, notify } from "../utils/alerts";
+import LoadingState from "../components/LoadingState";
 
 const ProductoresList = () => {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ const ProductoresList = () => {
   const [error, setError] = useState("");
   const [iptFilter, setIptFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState("todos");
+  const [sortConfig, setSortConfig] = useState({ key: "ipt", direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [importing, setImporting] = useState(false);
   const PAGE_SIZE = 20;
@@ -66,19 +69,99 @@ const ProductoresList = () => {
     return new Set((items || []).map((p) => normalizeIpt(p?.ipt)).filter(Boolean));
   }, [items]);
 
+  const hasPhone = (p) => Boolean(String(p?.telefono || "").trim());
+  const hasLocalidad = (p) => Boolean(String(p?.domicilioCasa || p?.localidad || "").trim());
+  const hasIngresos = (p) => Number(p?.historialIngresos || 0) > 0;
+  const isReempadronado = (p) => String(p?.estado || "").toLowerCase().includes("re-empadronado");
+  const isActivo = (p) => p?.activo !== false;
+  const isIncomplete = (p) => !hasPhone(p) || !hasLocalidad(p);
+
+  const getEstadoLabel = (p) => {
+    if (!isActivo(p)) return "Inactivo";
+    if (isReempadronado(p)) return "Re-empadronado";
+    return p?.estado || "Nuevo";
+  };
+
+  const getEstadoClass = (p) => {
+    if (!isActivo(p)) return "is-inactive";
+    if (isReempadronado(p)) return "is-reempadronado";
+    return "is-new";
+  };
+
+  const sortValue = (p, key) => {
+    if (key === "ipt") return Number(normalizeIpt(p?.ipt)) || 0;
+    if (key === "nombre") return normalize(p?.nombreCompleto || p?.nombre || "");
+    if (key === "estado") return normalize(getEstadoLabel(p));
+    if (key === "ingresos") return Number(p?.historialIngresos || 0);
+    return "";
+  };
+
+  const onSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const sortMark = (key) => (
+    sortConfig.key === key ? (sortConfig.direction === "asc" ? "^" : "v") : ""
+  );
+
   const viewItems = useMemo(() => {
-    return items.filter(p => {
+    const filtered = items.filter(p => {
       const okIpt = iptFilter ? String(p.ipt||"").includes(String(iptFilter)) : true;
       const okName = nameFilter ? normalize(p.nombreCompleto||p.nombre||"").includes(normalize(nameFilter)) : true;
-      return okIpt && okName;
+      const okQuick = (() => {
+        if (quickFilter === "activos") return isActivo(p);
+        if (quickFilter === "inactivos") return !isActivo(p);
+        if (quickFilter === "reempadronados") return isReempadronado(p);
+        if (quickFilter === "conIngresos") return hasIngresos(p);
+        if (quickFilter === "sinTelefono") return !hasPhone(p);
+        if (quickFilter === "incompletos") return isIncomplete(p);
+        return true;
+      })();
+      return okIpt && okName && okQuick;
     });
-  }, [items, iptFilter, nameFilter]);
+
+    return [...filtered].sort((a, b) => {
+      const aValue = sortValue(a, sortConfig.key);
+      const bValue = sortValue(b, sortConfig.key);
+      const result = typeof aValue === "number" && typeof bValue === "number"
+        ? aValue - bValue
+        : String(aValue).localeCompare(String(bValue), "es", { numeric: true, sensitivity: "base" });
+      return sortConfig.direction === "asc" ? result : -result;
+    });
+  }, [items, iptFilter, nameFilter, quickFilter, sortConfig]);
 
   const pageCount = Math.max(1, Math.ceil(viewItems.length / PAGE_SIZE));
   const pagedItems = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return viewItems.slice(start, start + PAGE_SIZE);
   }, [viewItems, currentPage]);
+
+  const productoresSummary = useMemo(() => {
+    const base = Array.isArray(items) ? items : [];
+    return base.reduce((acc, p) => {
+      acc.total += 1;
+      if (!isActivo(p)) acc.inactivos += 1;
+      else acc.activos += 1;
+      if (isReempadronado(p)) acc.reempadronados += 1;
+      if (hasIngresos(p)) acc.conIngresos += 1;
+      if (!hasPhone(p)) acc.sinTelefono += 1;
+      if (!hasLocalidad(p)) acc.sinLocalidad += 1;
+      if (isIncomplete(p)) acc.incompletos += 1;
+      return acc;
+    }, {
+      total: 0,
+      activos: 0,
+      inactivos: 0,
+      reempadronados: 0,
+      conIngresos: 0,
+      sinTelefono: 0,
+      sinLocalidad: 0,
+      incompletos: 0,
+    });
+  }, [items]);
 
   useEffect(() => {
     if (currentPage > pageCount) {
@@ -88,7 +171,23 @@ const ProductoresList = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [iptFilter, nameFilter]);
+  }, [iptFilter, nameFilter, quickFilter]);
+
+  const quickFilters = [
+    { key: "todos", label: "Todos", count: productoresSummary.total },
+    { key: "activos", label: "Activos", count: productoresSummary.activos },
+    { key: "inactivos", label: "Inactivos", count: productoresSummary.inactivos },
+    { key: "reempadronados", label: "Re-empadronados", count: productoresSummary.reempadronados },
+    { key: "conIngresos", label: "Con ingresos", count: productoresSummary.conIngresos },
+    { key: "sinTelefono", label: "Sin telefono", count: productoresSummary.sinTelefono },
+    { key: "incompletos", label: "Datos incompletos", count: productoresSummary.incompletos },
+  ];
+
+  const clearFilters = () => {
+    setIptFilter("");
+    setNameFilter("");
+    setQuickFilter("todos");
+  };
 
   const onClickImport = () => {
     if (importing) return;
@@ -270,7 +369,7 @@ const ProductoresList = () => {
   if (error) return <div style={{ padding: 24, color: "#c0392b" }}>{error}</div>;
 
   return (
-    <div className="users-list page-container" style={{ width: '100%' }}>
+    <div className="prod-list page-container" style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 className="users-title" style={{ margin: 0 }}>Gestión de Productores</h2>
@@ -278,9 +377,9 @@ const ProductoresList = () => {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }} onClick={onClickImport} disabled={importing}>
-            {importing ? "Importando…" : "Importar Excel"}
+            {importing ? "Importando…" : "↑ Importar Excel"}
           </button>
-          <Link to="/productores/nuevo" className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }}>Nuevo productor</Link>
+          <Link to="/productores/nuevo" className="btn" style={{ fontFamily: "inherit", fontSize: "inherit" }}>+ Nuevo productor</Link>
           <input
             ref={fileInputRef}
             type="file"
@@ -291,76 +390,158 @@ const ProductoresList = () => {
         </div>
       </div>
 
+      <div className="turnos-summary productores-summary">
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Mostrados</span>
+          <span className="estado-badge expired">{viewItems.length}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--confirmed">
+          <span className="turnos-summary__label">Activos</span>
+          <span className="estado-badge confirmed">{productoresSummary.activos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--expired">
+          <span className="turnos-summary__label">Inactivos</span>
+          <span className="estado-badge expired">{productoresSummary.inactivos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--completed">
+          <span className="turnos-summary__label">Re-empadronados</span>
+          <span className="estado-badge completed">{productoresSummary.reempadronados}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--insumo" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+          <span className="turnos-summary__label" style={{ color: '#1d4ed8' }}>Con ingresos</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#1d4ed8' }}>{productoresSummary.conIngresos}</span>
+        </div>
+        <div className="turnos-summary__chip turnos-summary__chip--total">
+          <span className="turnos-summary__label">Total</span>
+          <span className="estado-badge expired">{productoresSummary.total}</span>
+        </div>
+        <div className="turnos-summary__chip productores-summary__chip--warning">
+          <span className="turnos-summary__label">Datos incompletos</span>
+          <span className="estado-badge expired">{productoresSummary.incompletos}</span>
+        </div>
+        <div className="turnos-summary__chip productores-summary__chip--warning">
+          <span className="turnos-summary__label">Sin localidad</span>
+          <span className="estado-badge expired">{productoresSummary.sinLocalidad}</span>
+        </div>
+      </div>
+
+      <div className="productores-quick-filters" aria-label="Filtros rapidos de productores">
+        {quickFilters.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            className={`productores-filter-chip${quickFilter === filter.key ? " is-active" : ""}`}
+            onClick={() => setQuickFilter(filter.key)}
+          >
+            <span>{filter.label}</span>
+            <strong>{filter.count}</strong>
+          </button>
+        ))}
+      </div>
+
       <div className="filters-bar productores-filters-bar" style={{
         display: 'flex',
         flexWrap: 'wrap',
-        gap: 12,
-        backgroundColor: '#f8fafc',
-        padding: 16, 
+        gap: 16,
+        backgroundColor: '#ffffff',
+        padding: 20, 
         borderRadius: 12, 
         marginBottom: 20,
-        border: '1px solid #e2e8f0',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
         alignItems: 'flex-end'
       }}>
-        <div className="filter-item" style={{ flex: 1, minWidth: 220 }}>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>IPT</label>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 220px' }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>IPT</label>
           <input
             type="text"
             className="input-inst"
             placeholder="Filtrar por IPT..."
             value={iptFilter}
             onChange={e=>setIptFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
           />
         </div>
-        <div className="filter-item" style={{ flex: 1, minWidth: 260 }}>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 260px' }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151' }}>Nombre</label>
           <input
             type="text"
             className="input-inst"
             placeholder="Filtrar por nombre..."
             value={nameFilter}
             onChange={e=>setNameFilter(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', fontSize: 17 }}
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 14, minHeight: 42, borderRadius: 8 }}
           />
         </div>
         <button
-          className="btn secondary"
-          onClick={() => { setIptFilter(''); setNameFilter(''); }}
-          style={{ height: 38, display: 'flex', alignItems: 'center', gap: 4 }}
+          className="btn secondary filter-clear-btn"
+          onClick={clearFilters}
         >
-          Limpiar Filtros
+          Limpiar filtros
         </button>
       </div>
 
       {loading ? (
-        <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando…</div>
+        <LoadingState
+          title="Cargando productores..."
+          message="Estamos preparando el listado de productores. Espera unos segundos."
+        />
       ) : (
-        <div className="table-wrap admin-data-table-wrap">
-          <table className="table-inst admin-data-table" style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <div className="table-wrap admin-data-table-wrap productores-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="table-inst admin-data-table productores-table" style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1320, tableLayout: 'auto' }}>
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>IPT</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Nombre</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                  <button type="button" className="productores-sort-button" onClick={() => onSort("ipt")}>
+                    <span>IPT</span>
+                    <span className="productores-sort-mark">{sortMark("ipt")}</span>
+                  </button>
+                </th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                  <button type="button" className="productores-sort-button" onClick={() => onSort("nombre")}>
+                    <span>Nombre</span>
+                    <span className="productores-sort-mark">{sortMark("nombre")}</span>
+                  </button>
+                </th>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Teléfono</th>
                 <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Localidad</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Estado</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Ingresos</th>
-                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>Acciones</th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                  <button type="button" className="productores-sort-button" onClick={() => onSort("estado")}>
+                    <span>Estado</span>
+                    <span className="productores-sort-mark">{sortMark("estado")}</span>
+                  </button>
+                </th>
+                <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                  <button type="button" className="productores-sort-button" onClick={() => onSort("ingresos")}>
+                    <span>Ingresos</span>
+                    <span className="productores-sort-mark">{sortMark("ingresos")}</span>
+                  </button>
+                </th>
+                <th className="productores-actions-cell" style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', width: 340 }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {pagedItems.length === 0 ? (
-                <tr><td colSpan={7} style={{ border: '1px solid #ddd', padding: '12px', textAlign:'center' }}>Sin resultados</td></tr>
+                <tr>
+                  <td colSpan={7} style={{ border: '1px solid #ddd', padding: '28px 12px', textAlign:'center' }}>
+                    <div className="productores-empty-state">
+                      <strong>No encontramos productores con esos criterios.</strong>
+                      <span>Proba cambiando la busqueda o limpiando los filtros para ver el listado completo.</span>
+                      <button type="button" className="btn secondary filter-clear-btn" onClick={clearFilters}>Limpiar filtros</button>
+                    </div>
+                  </td>
+                </tr>
               ) : pagedItems.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id || p.ipt}>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.ipt || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.nombreCompleto || ''}>{p.nombreCompleto || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.telefono || ''}>{p.telefono || '-'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }} title={p.domicilioCasa || ''}>{p.domicilioCasa || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.estado || '-'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>
+                    <span className={`productores-status-badge ${getEstadoClass(p)}`}>{getEstadoLabel(p)}</span>
+                  </td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{p.historialIngresos ?? 0}</td>
+                  <td className="productores-actions-cell" style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', minWidth: 340 }}>
                     <div
                       style={{
                         display: 'grid',

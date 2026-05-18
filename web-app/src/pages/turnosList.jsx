@@ -5,6 +5,8 @@ import { notify, confirmDialog } from '../utils/alerts'
 import { isTurnosHabilitados } from '../utils/turnos.utils'
 import { getProductores } from '../services/productores.service'
 import TurnoHistorial from '../components/turnos/TurnoHistorial'
+import LoadingState from '../components/LoadingState'
+import DismissibleAlert from '../components/DismissibleAlert'
 
 const toDateSafe = (raw) => {
   if (!raw) return null
@@ -157,6 +159,7 @@ const getDefaultManualTurnoForm = () => {
     ipt: '',
     fecha: toYmdLocal(d),
     hora: '09:00',
+    tipoTurno: 'insumo',
     observacion: '',
   }
 }
@@ -719,14 +722,14 @@ const summary = useMemo(() => {
   return counts
 }, [turnosFiltrados, todayYmd])
 
-const exportarCSV = useCallback(async () => {
+const exportarCSVLegacy = useCallback(async () => {
   const total = turnosFiltrados.length
   if (total === 0) {
     await notify({ title: 'No hay turnos para exportar', icon: 'info' })
     return
   }
   const ok = await confirmDialog({
-    title: 'Exportar turnos a CSV',
+    title: 'Exportar turnos a Excel',
     text: `Se exportaran ${total} turno${total === 1 ? '' : 's'} segun los filtros actuales. Queres continuar?`,
     icon: 'question',
     confirmButtonText: 'Exportar',
@@ -765,6 +768,60 @@ const exportarCSV = useCallback(async () => {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}, [turnosFiltrados, prodMap])
+
+const exportarExcel = useCallback(async () => {
+  const total = turnosFiltrados.length
+  if (total === 0) {
+    await notify({ title: 'No hay turnos para exportar', icon: 'info' })
+    return
+  }
+  const ok = await confirmDialog({
+    title: 'Exportar turnos a Excel',
+    text: `Se exportaran ${total} turno${total === 1 ? '' : 's'} segun los filtros actuales. Queres continuar?`,
+    icon: 'question',
+    confirmButtonText: 'Exportar',
+    cancelButtonText: 'Cancelar',
+  })
+  if (!ok) return
+
+  const TIPO_LABELS = { insumo: 'Insumos', carnet: 'Renovacion de Carnet', otro: 'Otro' }
+  const ESTADO_LABELS = { pendiente: 'Pendiente', confirmado: 'Confirmado', cancelado: 'Cancelado', completado: 'Completado', vencido: 'Vencido', ausente: 'Ausente' }
+  const rows = turnosFiltrados.map(t => {
+    const dt = toDateSafe(t?.fechaTurno || t?.fecha)
+    const fecha = dt ? toYmdLocal(dt).split('-').reverse().join('/') : '-'
+    const pInfo = prodMap.get(String(t.productorId || ''))
+    const est = getDisplayEstado(t)
+    return {
+      Fecha: fecha,
+      Tipo: TIPO_LABELS[String(t.tipoTurno || '').toLowerCase()] || t.tipoTurno || '-',
+      Categoria: String(t.categoriaInsumo || '-'),
+      Estado: ESTADO_LABELS[est] || est,
+      Productor: pInfo?.nombre || t.productorNombre || '-',
+      IPT: pInfo?.ipt || t.ipt || '-',
+      Motivo: shouldShowTurnoMotivo(t) ? formatMotivo(t.motivo) : '-',
+    }
+  })
+
+  try {
+    const XLSXModule = await import('xlsx')
+    const XLSX = XLSXModule?.default || XLSXModule
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    worksheet['!cols'] = [
+      { wch: 12 },
+      { wch: 22 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 32 },
+      { wch: 12 },
+      { wch: 42 },
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Turnos')
+    XLSX.writeFile(workbook, `turnos_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  } catch (e) {
+    await notify({ title: 'No se pudo exportar Excel', text: e?.message || 'Intentelo nuevamente.', icon: 'error' })
+  }
 }, [turnosFiltrados, prodMap])
 
 const agendaItems = turnosFiltrados
@@ -857,6 +914,8 @@ const saveManualTurno = async () => {
   const ipt = String(manualForm.ipt || '').trim()
   const fecha = String(manualForm.fecha || '').trim()
   const hora = String(manualForm.hora || '').trim()
+  const tipoTurno = String(manualForm.tipoTurno || 'insumo').trim()
+  const observacion = String(manualForm.observacion || '').trim()
 
   if (!ipt) {
     setManualError('Seleccioná un productor.')
@@ -870,6 +929,17 @@ const saveManualTurno = async () => {
     setManualError('Seleccioná una hora válida.')
     return
   }
+  const [hh, mm] = hora.split(':').map(Number)
+  const horaMinutos = hh * 60 + mm
+  if (!Number.isFinite(horaMinutos) || horaMinutos < HORA_APERTURA * 60 || horaMinutos > HORA_CIERRE * 60) {
+    setManualError(`Selecciona una hora dentro del horario de atencion (${String(HORA_APERTURA).padStart(2, '0')}:00 a ${String(HORA_CIERRE).padStart(2, '0')}:00).`)
+    return
+  }
+  if (tipoTurno === 'otro' && !observacion) {
+    setManualError('Indica el motivo para crear un turno de tipo Otro.')
+    return
+  }
+
   const today = toYmdLocal(new Date())
   if (fecha < today) {
     setManualError('No se puede crear un turno con fecha pasada.')
@@ -890,12 +960,16 @@ const saveManualTurno = async () => {
       ipt,
       fecha,
       hora,
-      observacion: manualForm.observacion,
+      tipoTurno,
+      observacion,
     })
     notify({ title: 'Turno creado correctamente', icon: 'success' })
     setManualModalOpen(false)
-    setViewMode('activos')
-    await loadData({ showLoading: false })
+    if (viewMode !== 'activos') {
+      setViewMode('activos')
+    } else {
+      await loadData({ showLoading: false })
+    }
   } catch (e) {
     const message = e?.response?.data?.message || e?.message || 'No se pudo crear el turno.'
     setManualError(message)
@@ -1099,10 +1173,10 @@ return (
     </div>
 
     {error ? (
-      <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#991b1b', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <DismissibleAlert className="users-msg err" style={{ marginBottom: 16 }}>
         <span>{error}</span>
         <button className="btn secondary" onClick={loadData} style={{ padding: '6px 12px' }}>Reintentar</button>
-      </div>
+      </DismissibleAlert>
     ) : null}
 
     {historialModal.open && historialModal.turnoId ? (
@@ -1123,19 +1197,20 @@ return (
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 16,
+          padding: 24,
           zIndex: 9999,
+          overflowY: 'auto',
         }}
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) closeManualTurnoModal()
         }}
       >
-        <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 620, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-          <div style={{ padding: 16, borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div className="turnos-modal-panel" style={{ width: '100%', maxWidth: 620, maxHeight: 'calc(100vh - 48px)', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flex: '0 0 auto' }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Nuevo turno</div>
             <button className="btn secondary" onClick={closeManualTurnoModal} disabled={manualSaving} style={{ padding: '6px 10px' }}>Cerrar</button>
           </div>
-          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+          <div style={{ padding: 16, display: 'grid', gap: 12, overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
             <div style={{ display: 'grid', gap: 6 }}>
               <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Productor</label>
               <input
@@ -1147,7 +1222,7 @@ return (
                 placeholder="Buscar por IPT o nombre"
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
               />
-              <div style={{ display: 'grid', gap: 6, maxHeight: 170, overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gap: 6, maxHeight: 128, overflowY: 'auto', paddingRight: 4 }}>
                 {productoresManualFiltrados.map((p) => {
                   const ipt = String(p?.ipt || '')
                   const active = manualForm.ipt && manualForm.ipt === ipt
@@ -1168,6 +1243,21 @@ return (
                   <div style={{ fontSize: 14, color: '#6b7280' }}>No se encontraron productores.</div>
                 ) : null}
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Tipo de turno</label>
+              <select
+                className="select-inst"
+                value={manualForm.tipoTurno}
+                onChange={(e) => setManualForm({ ...manualForm, tipoTurno: e.target.value })}
+                disabled={manualSaving}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              >
+                <option value="insumo">Insumos</option>
+                <option value="carnet">Renovacion de carnet</option>
+                <option value="otro">Otro</option>
+              </select>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
@@ -1196,14 +1286,16 @@ return (
             </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Observación opcional</label>
+              <label style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>
+                {manualForm.tipoTurno === 'otro' ? 'Motivo' : 'Observacion opcional'}
+              </label>
               <textarea
                 className="input-inst"
                 value={manualForm.observacion}
                 onChange={(e) => setManualForm({ ...manualForm, observacion: e.target.value })}
                 disabled={manualSaving}
                 rows={3}
-                placeholder="Motivo interno o aclaración para este turno"
+                placeholder={manualForm.tipoTurno === 'otro' ? 'Indica el motivo del turno' : 'Motivo interno o aclaracion para este turno'}
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 72, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', resize: 'vertical' }}
               />
             </div>
@@ -1212,12 +1304,12 @@ return (
               Estado inicial: <strong>Pendiente</strong>
             </div>
             {manualError ? (
-              <div className="turnos-config-alert turnos-config-alert--error" style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
+              <DismissibleAlert className="turnos-config-alert turnos-config-alert--error" style={{ fontSize: 14, borderRadius: 10, border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '8px 10px' }}>
                 {manualError}
-              </div>
+              </DismissibleAlert>
             ) : null}
           </div>
-          <div style={{ padding: 16, borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div style={{ padding: '14px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 10, flex: '0 0 auto' }}>
             <button className="btn secondary" onClick={closeManualTurnoModal} disabled={manualSaving}>Cancelar</button>
             <button className="btn primary" onClick={saveManualTurno} disabled={manualSaving}>
               {manualSaving ? 'Guardando...' : 'Guardar turno'}
@@ -1651,17 +1743,6 @@ return (
 
     <div className="turnos-toolbar">
       <div className="turnos-toolbar__left">
-        <div className="turnos-search">
-          <input
-            type="text"
-            className="input-inst"
-            placeholder="Buscar por productor o IPT"
-            value={filtros.productor}
-            onChange={e => setFiltros({ ...filtros, productor: e.target.value })}
-            style={{ fontSize: 15, minHeight: 38, padding: '7px 10px' }}
-          />
-        </div>
-
         <div className="turnos-today">
           <button
             className={`btn ${isHoyFilterActive ? 'secondary' : 'primary'}`}
@@ -1767,7 +1848,7 @@ return (
     <div className="filters-bar" style={{ 
       display: 'flex', 
       flexWrap: 'wrap', 
-      gap: 14, 
+      gap: 10, 
       backgroundColor: '#ffffff', 
       padding: 18, 
       borderRadius: 12, 
@@ -1777,7 +1858,19 @@ return (
       boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
       width: '100%'
     }}>
-      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1.15 1 210px', minWidth: 190 }}>
+        <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Productor o IPT</label>
+        <input
+          type="text"
+          className="input-inst"
+          placeholder="Buscar por productor o IPT"
+          value={filtros.productor}
+          onChange={e => setFiltros({ ...filtros, productor: e.target.value })}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, minHeight: 40, padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+        />
+      </div>
+
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 180px', minWidth: 170 }}>
         <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Ordenar por</label>
         <select 
           className="select-inst" 
@@ -1792,7 +1885,7 @@ return (
         </select>
       </div>
 
-      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 180px', minWidth: 170 }}>
         <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Estado</label>
         <select 
           className="select-inst" 
@@ -1811,7 +1904,7 @@ return (
       </div>
 
       {viewMode === 'historial' ? (
-        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+        <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 170px', minWidth: 160 }}>
           <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Temporada</label>
           <select
             className="select-inst"
@@ -1827,7 +1920,7 @@ return (
         </div>
       ) : null}
       
-      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '0.9 1 160px', minWidth: 150 }}>
         <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Desde</label>
         <input 
           type="date" 
@@ -1838,7 +1931,7 @@ return (
         />
       </div>
 
-      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px', minWidth: 220 }}>
+      <div className="filter-item" style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '0.9 1 160px', minWidth: 150 }}>
         <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#374151' }}>Hasta</label>
         <input 
           type="date" 
@@ -1851,18 +1944,18 @@ return (
 
       <div className="filter-item" style={{ flex: '0 0 auto', display: 'flex', gap: 8 }}>
         <button
-          className="btn secondary"
+          className="btn secondary filter-clear-btn"
           onClick={() => setFiltros({ orden: 'proximos', estado: 'todos', productor: '', desde: '', hasta: '', temporada: 'todas' })}
-          style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8 }}
+          style={{ padding: '8px 14px', fontSize: 16, height: 40, borderRadius: 8, minWidth: 106 }}
         >Limpiar</button>
         <button
           className="btn secondary"
-          onClick={exportarCSV}
+          onClick={exportarExcel}
           disabled={turnosFiltrados.length === 0}
-          style={{ padding: '8px 18px', fontSize: 16, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}
-          title={`Exportar ${turnosFiltrados.length} turnos a CSV`}
+          style={{ padding: '8px 14px', fontSize: 16, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, minWidth: 94 }}
+          title={`Exportar ${turnosFiltrados.length} turnos a Excel`}
         >
-          ↓ CSV
+          ↓ Excel
         </button>
       </div>
     </div>
@@ -1889,7 +1982,10 @@ return (
     ) : null}
 
     {loading ? (
-      <div style={{ padding: 16, color:'#166534', textAlign: 'center' }}>Cargando turnos…</div>
+      <LoadingState
+        title="Cargando turnos..."
+        message="Estamos preparando la agenda y los estados. Espera unos segundos."
+      />
     ) : (
       <>
         {turnosFiltrados.length === 0 ? (

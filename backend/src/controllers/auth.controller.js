@@ -92,6 +92,12 @@ const DEFAULT_LIMITED_ADMIN_PERMISOS = {
   users: false,
   informes: false,
 };
+const PROTECTED_ADMIN_EMAILS = new Set(
+  String(process.env.PROTECTED_ADMIN_EMAILS || process.env.PRIMARY_ADMIN_EMAILS || "gabrielparedok@gmail.com")
+    .split(",")
+    .map(normalizeEmail)
+    .filter(Boolean)
+);
 
 const hasPermisos = (data) => {
   return Boolean(
@@ -106,6 +112,16 @@ const resolvePermisos = ({ role, permisos }) => {
   return normalizeRole(role).includes("limitado")
     ? DEFAULT_LIMITED_ADMIN_PERMISOS
     : DEFAULT_ADMIN_PERMISOS;
+};
+
+const isProtectedAdmin = (data = {}) => {
+  const email = normalizeEmail(data?.email);
+  return Boolean(
+    data?.adminPrincipal === true ||
+    data?.primaryAdmin === true ||
+    data?.protectedAdmin === true ||
+    (email && PROTECTED_ADMIN_EMAILS.has(email))
+  );
 };
 
 const resolveLoginUserDoc = async ({ uid, emailNormalized }) => {
@@ -441,7 +457,11 @@ export const loginUser = async (req, res) => {
     }
 
     const { resolvedUid, resolvedUserData } = resolvedUser;
-    const role = normalizeRole(resolvedUserData.role) || "administrador";
+    const protectedAdmin = isProtectedAdmin({ ...resolvedUserData, email: emailNormalized });
+    const role = protectedAdmin ? "administrador" : (normalizeRole(resolvedUserData.role) || "administrador");
+    const permisos = protectedAdmin
+      ? { ...DEFAULT_ADMIN_PERMISOS }
+      : resolvePermisos({ role, permisos: resolvedUserData.permisos });
 
     if (resolvedUserData.activo === false) {
       return res.status(403).json({ error: "Usuario inactivo" });
@@ -463,24 +483,31 @@ export const loginUser = async (req, res) => {
     // 4. Actualizar último acceso
     await db.collection("users").doc(resolvedUid).set({
       email: emailNormalized,
+      role,
+      permisos,
+      ...(protectedAdmin ? { protectedAdmin: true } : {}),
       ultimoAcceso: new Date(),
     }, { merge: true });
+    await admin.auth().setCustomUserClaims(resolvedUid, {
+      role,
+      permisos,
+    });
 
     console.log("USER DOC:", resolvedUserData);
-    console.log("PERMISOS:", resolvedUserData?.permisos);
+    console.log("PERMISOS:", permisos);
     console.log("UID:", resolvedUid);
 
     const webToken = makeToken({
       uid: resolvedUid,
       email: emailNormalized,
       role,
-      permisos: resolvedUserData.permisos || {},
+      permisos,
       nombre: resolvedUserData.nombre || "",
     });
     res.json({
       token: webToken,
       role,
-      permisos: resolvedUserData.permisos || {},
+      permisos,
     });
   } catch (error) {
     logServerError("Error al hacer login", error);

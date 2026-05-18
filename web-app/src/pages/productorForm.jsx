@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createProductor, getProductorById, updateProductor } from "../services/productores.service";
+import DismissibleAlert from "../components/DismissibleAlert";
 
 const FormField = ({ label, children }) => (
   <label className="producer-field">
@@ -283,12 +284,12 @@ const ProductorForm = () => {
         </label>
 
         {error && (
-          <div
+          <DismissibleAlert
             className="users-msg err"
             style={{ gridColumn: '1 / -1' }}
           >
             {error}
-          </div>
+          </DismissibleAlert>
         )}
 
         <div className="form-actions">

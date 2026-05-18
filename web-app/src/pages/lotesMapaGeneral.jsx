@@ -4,6 +4,7 @@ import { lotesService } from "../services/lotes.service";
 import { getProductores } from "../services/productores.service";
 import { loadGoogleMaps } from "../utils/loadGoogleMaps";
 import { attachGoogleMapVisualControls } from "../utils/googleMapVisualControls";
+import LoadingState from "../components/LoadingState";
 
 const computeCentroid = (pts) => {
   const arr = Array.isArray(pts) ? pts : [];
@@ -325,7 +326,7 @@ const LotesMapaGeneral = () => {
         </label>
         <button
           type="button"
-          className="btn"
+          className="btn filter-clear-btn"
           style={{ minHeight: 44, whiteSpace: "nowrap" }}
           onClick={() => setFilters({ ipt: "", productor: "" })}
         >
@@ -352,7 +353,10 @@ const LotesMapaGeneral = () => {
       </div>
 
       {loading ? (
-        <div style={{ padding: 16 }}>Cargando…</div>
+        <LoadingState
+          title="Cargando lotes..."
+          message="Estamos preparando los datos del mapa. Espera unos segundos."
+        />
       ) : error ? (
         <div style={{ padding: 16, color: "#c0392b" }}>{error}</div>
       ) : !key ? (
@@ -360,7 +364,10 @@ const LotesMapaGeneral = () => {
       ) : mapsError ? (
         <div style={{ padding: 16, color: "#c0392b" }}>{mapsError}</div>
       ) : !mapsReady ? (
-        <div style={{ padding: 16, color: "#6b7280" }}>Cargando mapa…</div>
+        <LoadingState
+          title="Cargando mapa..."
+          message="Estamos inicializando el mapa general."
+        />
       ) : mapInitError ? (
         <div style={{ padding: 16, color: "#c0392b" }}>{mapInitError}</div>
       ) : (
