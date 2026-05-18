@@ -649,6 +649,99 @@ export const cambiarPasswordProductor = async (req, res) => {
     return res.status(500).json({ error: "No se pudo actualizar la contraseÃ±a" });
   }
 };
+
+export const cambiarEmailProductor = async (req, res) => {
+  try {
+    const { ipt, password, email } = req.body;
+    const iptNorm = normalizeIpt(ipt);
+    const emailNormalized = normalizeEmail(email);
+
+    if (!iptNorm || !password || !emailNormalized) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+    if (!isValidEmail(emailNormalized)) {
+      return res.status(400).json({ error: "Ingrese un correo electrónico válido." });
+    }
+
+    const snap = await db.collection("productores").where("ipt", "==", iptNorm).limit(1).get();
+    if (snap.empty) {
+      return res.status(404).json({ error: "Productor no encontrado" });
+    }
+
+    const doc = snap.docs[0];
+    const data = doc.data() || {};
+    const currentEmail = normalizeEmail(data.email);
+    if (currentEmail === emailNormalized) {
+      return res.status(400).json({ error: "El correo nuevo es igual al actual." });
+    }
+
+    const requiereCambio = Boolean(data.requiereCambioContrasena);
+    let ok = false;
+    if (requiereCambio) {
+      ok = String(password) === String(data.cuil);
+    } else {
+      const salt = String(data.ipt);
+      const hash = hashPassword(String(password), salt);
+      ok = hash && data.passwordHash && hash === data.passwordHash;
+    }
+    if (!ok) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+
+    const existingEmail = await db.collection("productores").where("email", "==", emailNormalized).limit(1).get();
+    if (!existingEmail.empty && existingEmail.docs[0].id !== doc.id) {
+      return res.status(409).json({ error: "El correo electrónico ya se encuentra registrado." });
+    }
+
+    try {
+      const authUser = await admin.auth().getUserByEmail(emailNormalized);
+      if (authUser?.uid && authUser.uid !== getProductorAuthUid(iptNorm)) {
+        return res.status(409).json({ error: "El correo electrónico ya se encuentra registrado." });
+      }
+    } catch (err) {
+      if (err?.code !== "auth/user-not-found") throw err;
+    }
+
+    const uid = await ensureProductorAuthUser({
+      ipt: iptNorm,
+      nombreCompleto: data.nombreCompleto || data.nombre,
+      email: currentEmail,
+    });
+
+    await admin.auth().updateUser(uid, {
+      email: emailNormalized,
+      emailVerified: false,
+      displayName: data.nombreCompleto || data.nombre || undefined,
+    });
+
+    await doc.ref.update({
+      email: emailNormalized,
+      updatedAt: new Date(),
+    });
+
+    await admin.auth().setCustomUserClaims(uid, {
+      ipt: iptNorm,
+      role: "productor",
+      nombre: data.nombreCompleto || data.nombre,
+      email: emailNormalized,
+      productorId: iptNorm,
+    });
+
+    const token = await admin.auth().createCustomToken(uid, {
+      role: "productor",
+      ipt: iptNorm,
+      nombre: data.nombreCompleto || data.nombre,
+      email: emailNormalized,
+      productorId: iptNorm,
+    });
+
+    return res.json({ message: "Correo actualizado correctamente", token, email: emailNormalized });
+  } catch (error) {
+    logServerError("Error al cambiar email de productor", error);
+    return res.status(500).json({ error: "No se pudo cambiar el correo" });
+  }
+};
+
 export const resetPasswordLink = async (req, res) => {
   try {
     const { email } = req.body;

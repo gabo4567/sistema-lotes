@@ -1,16 +1,18 @@
 import React, { useCallback, useContext, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Modal, TextInput, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
+import { signInWithCustomToken } from "firebase/auth";
 import { AuthContext } from "../context/AuthContext";
 import { getNotificationPermissionInfo, registerPushToken } from "../services/notifications";
 import { usePermissionPrompt } from "../components/PermissionPromptModal";
 import { API_URL } from "../utils/constants";
-import { authFetch, getCurrentAuthContext } from "../api/api";
+import { apiFetch, authFetch, getCurrentAuthContext } from "../api/api";
+import { auth } from "../services/firebase";
 
 export default function ConfiguracionScreen({ navigation }) {
-  const { user, confirmLogout } = useContext(AuthContext);
+  const { user, confirmLogout, setUser } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
   const { ask: askPermission, Prompt: PermissionPrompt } = usePermissionPrompt();
   const backBtnTop = useMemo(() => {
@@ -31,6 +33,11 @@ export default function ConfiguracionScreen({ navigation }) {
   const [locActionLoading, setLocActionLoading] = useState(false);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
 
   const refreshNotificationStatus = useCallback(async () => {
     try {
@@ -167,6 +174,60 @@ export default function ConfiguracionScreen({ navigation }) {
     }
   }, [askPermission, openSettings, refreshLocationStatus]);
 
+  const openEmailModal = useCallback(() => {
+    setNewEmail(user?.email || profile?.email || "");
+    setEmailPassword("");
+    setEmailError("");
+    setEmailModalOpen(true);
+  }, [profile?.email, user?.email]);
+
+  const closeEmailModal = useCallback(() => {
+    if (emailLoading) return;
+    setEmailModalOpen(false);
+    setEmailError("");
+  }, [emailLoading]);
+
+  const saveEmail = useCallback(async () => {
+    const nextEmail = String(newEmail || "").trim().toLowerCase();
+    const password = String(emailPassword || "");
+    setEmailError("");
+
+    if (!nextEmail || !password) {
+      setEmailError("Completá el nuevo Gmail y tu contraseña actual.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      setEmailError("Ingresá un correo válido.");
+      return;
+    }
+
+    try {
+      setEmailLoading(true);
+      const { ipt } = await getCurrentAuthContext();
+      const resp = await apiFetch(`${API_URL}/auth/productor/cambiar-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ipt, email: nextEmail, password }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data?.error || "No se pudo cambiar el Gmail.");
+      }
+      if (data?.token) {
+        await signInWithCustomToken(auth, data.token);
+        setUser(auth.currentUser);
+      }
+      setProfile((cur) => ({ ...(cur || {}), email: data?.email || nextEmail }));
+      setEmailModalOpen(false);
+      setEmailPassword("");
+      Alert.alert("Gmail actualizado", "El correo de tu cuenta fue actualizado correctamente.");
+    } catch (e) {
+      setEmailError(e?.message || "No se pudo cambiar el Gmail.");
+    } finally {
+      setEmailLoading(false);
+    }
+  }, [emailPassword, newEmail, setUser]);
+
   const accountName = (user?.displayName || "-").toString();
   const accountEmail = (user?.email || "-").toString();
   const claims = user?.claims || {};
@@ -294,6 +355,24 @@ export default function ConfiguracionScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.sectionTitle}>Acceso</Text>
+          <View style={styles.box}>
+            <Text style={styles.hint}>
+              Solo podés modificar tu Gmail y tu contraseña. Los demás datos del perfil son de solo lectura.
+            </Text>
+            <View style={styles.accountActions}>
+              <TouchableOpacity style={[styles.btnHalf, styles.btnSecondary]} onPress={openEmailModal}>
+                <Text style={styles.btnSecondaryText}>Cambiar Gmail</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnHalf, styles.btnPrimary]}
+                onPress={() => navigation.navigate("ChangePassword", { ipt: accountIpt })}
+              >
+                <Text style={styles.btnPrimaryText}>Cambiar contraseña</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <Text style={styles.sectionTitle}>Información</Text>
           <View style={styles.box}>
             <Text style={styles.row}>
@@ -303,6 +382,41 @@ export default function ConfiguracionScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      <Modal transparent animationType="fade" visible={emailModalOpen} onRequestClose={closeEmailModal}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Cambiar Gmail</Text>
+            <Text style={styles.modalText}>
+              Ingresá el nuevo correo y confirmá con tu contraseña actual.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nuevo Gmail"
+              value={newEmail}
+              onChangeText={setNewEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Contraseña actual"
+              value={emailPassword}
+              onChangeText={setEmailPassword}
+              secureTextEntry
+            />
+            {emailError ? <Text style={styles.modalError}>{emailError}</Text> : null}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.btnSecondary]} onPress={closeEmailModal} disabled={emailLoading}>
+                <Text style={styles.btnSecondaryText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.btnPrimary, emailLoading ? styles.btnDisabled : null]} onPress={saveEmail} disabled={emailLoading}>
+                {emailLoading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.btnPrimaryText}>Guardar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -332,6 +446,7 @@ const styles = StyleSheet.create({
   accountInfoLabel: { fontSize: 11, color: "#64748b", fontWeight: "900", textTransform: "uppercase", marginBottom: 5, lineHeight: 14 },
   accountInfoValue: { fontSize: 14, color: "#111827", fontWeight: "800", lineHeight: 19, flexShrink: 1 },
   actionsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  accountActions: { flexDirection: "row", gap: 10, marginTop: 12 },
   btnFull: { marginTop: 10, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   btnHalf: { flex: 1, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   btnPrimary: { backgroundColor: "#16a34a" },
@@ -340,4 +455,12 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.7 },
   btnPrimaryText: { color: "#fff", fontWeight: "800" },
   btnSecondaryText: { color: "#111827", fontWeight: "800" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", alignItems: "center", justifyContent: "center", padding: 20 },
+  modalCard: { width: "100%", maxWidth: 420, backgroundColor: "#ffffff", borderRadius: 16, padding: 18, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)" },
+  modalTitle: { fontSize: 20, fontWeight: "900", color: "#1e8449", textAlign: "center", marginBottom: 8 },
+  modalText: { fontSize: 14, color: "#475569", textAlign: "center", lineHeight: 20, marginBottom: 14 },
+  modalInput: { borderWidth: 1, borderColor: "#cbd5e1", backgroundColor: "#ffffff", borderRadius: 10, minHeight: 44, paddingHorizontal: 12, marginBottom: 10, color: "#111827" },
+  modalError: { color: "#b91c1c", fontSize: 13, textAlign: "center", marginBottom: 8 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  modalBtn: { flex: 1, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
 });

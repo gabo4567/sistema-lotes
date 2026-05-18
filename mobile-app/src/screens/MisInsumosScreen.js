@@ -13,15 +13,6 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_URL } from "../utils/constants";
 import { authFetch, getCurrentAuthContext } from "../api/api";
 
-const CATEGORIAS = ["Arada", "Almácigo", "Transplante", "Cosecha"];
-
-const normalizeKey = (value) =>
-  String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-
 const formatCantidad = (value) => {
   const n = Number(value || 0);
   if (!Number.isFinite(n)) return "0";
@@ -30,23 +21,7 @@ const formatCantidad = (value) => {
 
 const getOrderedInsumos = (porCategoria = {}) => {
   const entries = Object.entries(porCategoria || {}).filter(([, value]) => value && typeof value === "object");
-  const used = new Set();
-  const ordered = [];
-
-  for (const categoria of CATEGORIAS) {
-    const found = entries.find(([key]) => normalizeKey(key) === normalizeKey(categoria));
-    if (found) {
-      used.add(found[0]);
-      ordered.push(found);
-    }
-  }
-
-  entries
-    .filter(([key]) => !used.has(key))
-    .sort(([a], [b]) => String(a).localeCompare(String(b), "es"))
-    .forEach((entry) => ordered.push(entry));
-
-  return ordered;
+  return entries.sort(([a], [b]) => String(a).localeCompare(String(b), "es"));
 };
 
 const ProgressBar = ({ value, total }) => {
@@ -101,13 +76,10 @@ export default function MisInsumosScreen({ navigation }) {
   const totalEntregado = Number(data?.totalEntregado || 0);
   const totalDisponible = Number(data?.totalDisponible || 0);
   const tieneDisponible = totalDisponible > 0;
-  const primeraCategoriaDisponible = insumosCargados.find(([, item]) => Number(item?.disponible || 0) > 0)?.[0] || "";
-  const categoriaParaTurno = CATEGORIAS.find((cat) => normalizeKey(cat) === normalizeKey(primeraCategoriaDisponible)) || "";
 
   const goSolicitarTurno = () => {
     navigation.navigate("Turnos", {
       presetTipo: "insumo",
-      categoriaInsumo: categoriaParaTurno,
     });
   };
 
@@ -170,7 +142,7 @@ export default function MisInsumosScreen({ navigation }) {
             </View>
           ) : null}
 
-          {/* Tarjetas por categoría */}
+          {/* Tarjetas por insumo */}
           {insumosCargados.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Todavía no tenés insumos disponibles.</Text>

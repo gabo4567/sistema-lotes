@@ -75,6 +75,7 @@ export default function AppNavigator() {
               <Stack.Screen name="EditarUbicacion" component={EditarUbicacionScreen} />
               <Stack.Screen name="Perfil" component={PerfilScreen} />
               <Stack.Screen name="Configuracion" component={ConfiguracionScreen} />
+              <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             </Stack.Navigator>
           </View>
         ) : (

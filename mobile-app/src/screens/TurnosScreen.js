@@ -1,4 +1,4 @@
-// mobile-app/src/screens/TurnosScreen.js
+﻿// mobile-app/src/screens/TurnosScreen.js
 
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView, Modal, Platform, AppState } from "react-native";
@@ -12,6 +12,7 @@ import { useOffline } from "../hooks/useOffline";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isTurnosHabilitados } from "../utils/turnos.utils";
+import { notifyAcceptedTurnosIfNeeded } from "../services/turnoAcceptedNotifier";
 
 export default function TurnosScreen({ route, navigation }) {
   const [fechaInput, setFechaInput] = useState("");
@@ -35,7 +36,6 @@ export default function TurnosScreen({ route, navigation }) {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [orden, setOrden] = useState("proximos"); // "proximos" | "lejanos"
   const [turnoEditando, setTurnoEditando] = useState(null);
-  const [categoriaInsumo, setCategoriaInsumo] = useState("");
   const [historialModal, setHistorialModal] = useState({ visible: false, turnoId: null, data: [], loading: false, error: '' });
   const insets = useSafeAreaInsets();
   const { isOnline, pendingOperations, isProcessing, subscribeOperations } = useOffline();
@@ -52,15 +52,14 @@ export default function TurnosScreen({ route, navigation }) {
 
       setTurnoEditando(null);
       setTipo(SIMPLE_TURNO_TYPE);
-      setCategoriaInsumo(String(route?.params?.categoriaInsumo || ""));
       setMotivo("");
       setMostrarTipos(false);
       setError("");
       setSuccess("");
       setView("form");
-      navigation?.setParams?.({ presetTipo: undefined, categoriaInsumo: undefined });
+      navigation?.setParams?.({ presetTipo: undefined });
       return undefined;
-    }, [navigation, route?.params?.categoriaInsumo, route?.params?.presetTipo])
+    }, [navigation, route?.params?.presetTipo])
   );
 
   const toYmdLocal = (d) => {
@@ -98,7 +97,7 @@ export default function TurnosScreen({ route, navigation }) {
       const resp = await authFetch(`${API_URL}/turnos/config`, { forceRefresh });
       const j = await resp.json().catch(() => null);
       if (__DEV__) {
-        console.log("📡 /turnos/config resp:", { ok: resp.ok, status: resp.status, body: j });
+        console.log("/turnos/config resp:", { ok: resp.ok, status: resp.status, body: j });
       }
       if (!resp.ok) throw new Error(j?.message || "No se pudo obtener configuración de turnos");
 
@@ -114,6 +113,11 @@ export default function TurnosScreen({ route, navigation }) {
       try {
         await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
       } catch {}
+      if (listMode === "activos") {
+        try {
+          await notifyAcceptedTurnosIfNeeded(productorKey, next);
+        } catch {}
+      }
     } catch (e) {
       setTurnosConfig((prev) => ({
         ...(prev && typeof prev === "object" ? prev : {}),
@@ -227,7 +231,7 @@ export default function TurnosScreen({ route, navigation }) {
         await AsyncStorage.setItem(cacheKey, JSON.stringify(next));
       } catch {}
     } catch (error) {
-      console.error("❌ Error cargando turnos:", error);
+      console.error("Error cargando turnos:", error);
       setList([]);
     }
     finally {
@@ -237,18 +241,21 @@ export default function TurnosScreen({ route, navigation }) {
 
   const testBackendConnection = async () => {
     try {
-      console.log("🧪 Testeando conexión con backend...");
+      console.log("Testeando conexión con backend...");
       const resp = await apiFetch(`${API_URL}/turnos/ping`);
       const data = await resp.json();
-      console.log("✅ Conexión exitosa:", data);
+      console.log("Conexión exitosa:", data);
     } catch (error) {
-      console.error("❌ Error de conexión:", error);
+      console.error("Error de conexión:", error);
     }
   };
 
-  useEffect(() => { 
-    loadList(); 
-  }, [listMode, isOnline]);
+  useFocusEffect(
+    useCallback(() => {
+      loadList();
+      return undefined;
+    }, [listMode, isOnline])
+  );
 
   useEffect(() => {
     const prev = prevPendingOpsRef.current;
@@ -328,12 +335,12 @@ export default function TurnosScreen({ route, navigation }) {
   
   const testFlujoTurno = async () => {
     try {
-      console.log("🧪 Testeando flujo completo de turno...");
+      console.log("Testeando flujo completo de turno...");
       const tokenResult = await auth.currentUser?.getIdTokenResult();
       const idToken = await auth.currentUser?.getIdToken();
       
       if (!idToken) {
-        console.error("❌ No hay token de autenticación");
+        console.error("No hay token de autenticación");
         return;
       }
       
@@ -343,7 +350,7 @@ export default function TurnosScreen({ route, navigation }) {
         ipt: tokenResult?.claims?.ipt
       };
       
-      console.log("📤 Enviando a /api/test/test-turno:", body);
+      console.log("Enviando a /api/test/test-turno:", body);
       
       const resp = await authFetch(`${API_URL}/test/test-turno`, {
         method: "POST",
@@ -354,33 +361,33 @@ export default function TurnosScreen({ route, navigation }) {
       });
       
       const responseText = await resp.text();
-      console.log("📡 Respuesta cruda:", responseText);
+      console.log("Respuesta cruda:", responseText);
       
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error("❌ Error parseando JSON:", e);
+        console.error("Error parseando JSON:", e);
         return;
       }
       
-      console.log("📊 Respuesta del test:", data);
+      console.log("Respuesta del test:", data);
       
       if (data.success) {
-        console.log("✅ Test exitoso - El flujo está funcionando");
+        console.log("Test exitoso - El flujo está funcionando");
       } else {
-        console.log("❌ Test fallido:", data.message);
+        console.log("Test fallido:", data.message);
       }
       
     } catch (error) {
-      console.error("❌ Error en test de flujo:", error);
+      console.error("Error en test de flujo:", error);
     }
   };
   
   const testComunicacionBasica = async () => {
     try {
-      console.log("🧪 Testeando comunicación básica sin autenticación...");
-      console.log("📡 API_URL:", API_URL);
+      console.log("Testeando comunicación básica sin autenticación...");
+      console.log("API_URL:", API_URL);
       
       const body = {
         fechaSolicitada: "2024-11-26",
@@ -389,8 +396,8 @@ export default function TurnosScreen({ route, navigation }) {
         motivo: "Test de comunicación"
       };
       
-      console.log("📤 Enviando a /api/test/public/test-turno:", body);
-      console.log("📡 URL completa:", `${API_URL}/test/public/test-turno`);
+      console.log("Enviando a /api/test/public/test-turno:", body);
+      console.log("URL completa:", `${API_URL}/test/public/test-turno`);
       
       const startTime = Date.now();
       const resp = await apiFetch(`${API_URL}/test/public/test-turno`, {
@@ -403,51 +410,51 @@ export default function TurnosScreen({ route, navigation }) {
       });
       const endTime = Date.now();
       
-      console.log("⏱️ Tiempo de respuesta:", endTime - startTime, "ms");
-      console.log("📊 Estado HTTP:", resp.status, resp.statusText);
-      console.log("📡 Headers de respuesta:", resp.headers);
+      console.log("â±ï¸ Tiempo de respuesta:", endTime - startTime, "ms");
+      console.log("Estado HTTP:", resp.status, resp.statusText);
+      console.log("Headers de respuesta:", resp.headers);
       
       const responseText = await resp.text();
-      console.log("📄 Respuesta cruda (sin auth):", responseText);
+      console.log("Respuesta cruda (sin auth):", responseText);
       
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error("❌ Error parseando JSON:", e);
-        console.error("📄 Texto que falló al parsear:", responseText);
+        console.error("Error parseando JSON:", e);
+        console.error("Texto que falló al parsear:", responseText);
         Alert.alert("Error", `No se pudo parsear la respuesta: ${responseText.substring(0, 100)}...`);
         return;
       }
       
-      console.log("📊 Respuesta del test (sin auth):", data);
+      console.log("Respuesta del test (sin auth):", data);
       
       if (data.success) {
-        console.log("✅ Comunicación básica exitosa");
+        console.log("Comunicación básica exitosa");
         Alert.alert("Éxito", `Comunicación exitosa: ${data.message}`);
       } else {
-        console.log("❌ Falló comunicación básica:", data.message);
+        console.log("Falló comunicación básica:", data.message);
         Alert.alert("Error", `Falló: ${data.message}`);
       }
       
     } catch (error) {
-      console.error("❌ Error en test de comunicación:", error);
-      console.error("📍 Stack:", error.stack);
+      console.error("Error en test de comunicación:", error);
+      console.error("Stack:", error.stack);
       Alert.alert("Error de Red", `Error: ${error.message}`);
     }
   };
   
   const testFlujoCompleto = async () => {
     try {
-      console.log("🧪 Testeando flujo completo CON autenticación...");
+      console.log("Testeando flujo completo CON autenticación...");
       
       const tokenResult = await auth.currentUser?.getIdTokenResult();
       const token = await auth.currentUser?.getIdToken();
       const ipt = tokenResult?.claims?.ipt;
       
-      console.log("👤 Usuario autenticado:", auth.currentUser?.uid);
-      console.log("📋 IPT del usuario:", ipt);
-      console.log("🔑 Token presente:", !!token);
+      console.log("Usuario autenticado:", auth.currentUser?.uid);
+      console.log("IPT del usuario:", ipt);
+      console.log("Token presente:", !!token);
       
       const body = {
         fechaSolicitada: "2024-11-26",
@@ -456,7 +463,7 @@ export default function TurnosScreen({ route, navigation }) {
         motivo: "Test de flujo completo"
       };
       
-      console.log("📤 Enviando a /api/test/test-turno:", body);
+      console.log("Enviando a /api/test/test-turno:", body);
       
       const startTime = Date.now();
       const resp = await authFetch(`${API_URL}/test/test-turno`, {
@@ -469,33 +476,33 @@ export default function TurnosScreen({ route, navigation }) {
       });
       const endTime = Date.now();
       
-      console.log("⏱️ Tiempo de respuesta:", endTime - startTime, "ms");
-      console.log("📊 Estado HTTP:", resp.status, resp.statusText);
+      console.log("â±ï¸ Tiempo de respuesta:", endTime - startTime, "ms");
+      console.log("Estado HTTP:", resp.status, resp.statusText);
       
       const responseText = await resp.text();
-      console.log("📄 Respuesta cruda (con auth):", responseText);
+      console.log("Respuesta cruda (con auth):", responseText);
       
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error("❌ Error parseando JSON:", e);
+        console.error("Error parseando JSON:", e);
         Alert.alert("Error", `No se pudo parsear la respuesta: ${responseText.substring(0, 100)}...`);
         return;
       }
       
-      console.log("📊 Respuesta del test (con auth):", data);
+      console.log("Respuesta del test (con auth):", data);
       
       if (data.success) {
-        console.log("✅ Flujo completo exitoso");
+        console.log("Flujo completo exitoso");
         Alert.alert("Éxito", `Flujo completo exitoso: ${data.message}`);
       } else {
-        console.log("❌ Falló flujo completo:", data.message);
+        console.log("Falló flujo completo:", data.message);
         Alert.alert("Error", `Falló: ${data.message}`);
       }
       
     } catch (error) {
-      console.error("❌ Error en test de flujo:", error);
+      console.error("Error en test de flujo:", error);
       Alert.alert("Error", `Error: ${error.message}`);
     }
   };
@@ -715,7 +722,7 @@ export default function TurnosScreen({ route, navigation }) {
     setShowDatePicker(true);
   };
 
-  const recalcularDisponibilidad = async (fechaValue, tipoValue, requestId, categoriaInsumoValue) => {
+  const recalcularDisponibilidad = async (fechaValue, tipoValue, requestId) => {
     const isStale = () => dispReqRef.current !== requestId;
 
     const fechaIso = toIso(fechaValue);
@@ -772,15 +779,14 @@ export default function TurnosScreen({ route, navigation }) {
           : "otra";
       const query =
         `fechaSolicitada=${encodeURIComponent(fechaIso)}&tipoTurno=${encodeURIComponent(tipoParam)}` +
-        (ipt ? `&ipt=${encodeURIComponent(ipt)}` : "") +
-        (tipoParam === "insumo" && categoriaInsumoValue ? `&categoriaInsumo=${encodeURIComponent(categoriaInsumoValue)}` : "");
+        (ipt ? `&ipt=${encodeURIComponent(ipt)}` : "");
       const resp = await apiFetch(`${API_URL}/turnos/disponibilidad?${query}`);
       const responseText = await resp.text();
       let j;
       try {
         j = JSON.parse(responseText);
       } catch (e) {
-        console.error("❌ Error parseando JSON:", e);
+        console.error("Error parseando JSON:", e);
         if (isStale()) return;
         setError("Error en respuesta del servidor");
         return;
@@ -790,7 +796,7 @@ export default function TurnosScreen({ route, navigation }) {
       setDisp(ok);
       setDispHint(ok ? "" : String(j?.motivo || j?.reason || "No disponible"));
     } catch (e) {
-      console.error("❌ Error verificando disponibilidad:", e);
+      console.error("Error verificando disponibilidad:", e);
       if (isStale()) return;
       setError("No se pudo verificar disponibilidad");
     }
@@ -816,7 +822,7 @@ export default function TurnosScreen({ route, navigation }) {
     const requestId = ++dispReqRef.current;
     setDispLoading(true);
     dispTimerRef.current = setTimeout(() => {
-      Promise.resolve(recalcularDisponibilidad(fechaInput, tipo, requestId, categoriaInsumo))
+      Promise.resolve(recalcularDisponibilidad(fechaInput, tipo, requestId))
         .catch(() => {})
         .finally(() => {
           if (dispReqRef.current === requestId) setDispLoading(false);
@@ -829,7 +835,7 @@ export default function TurnosScreen({ route, navigation }) {
         dispTimerRef.current = null;
       }
     };
-  }, [view, fechaInput, tipo, categoriaInsumo, isOnline, turnosDisabled]);
+  }, [view, fechaInput, tipo, isOnline, turnosDisabled]);
 
   useEffect(() => {
     if (view !== "form" && view !== "edit") return;
@@ -905,7 +911,7 @@ export default function TurnosScreen({ route, navigation }) {
             turnosParaValidar = [...turnosParaValidar, ...jTurnos];
           }
         } catch (e) {
-          console.error("❌ Error cargando turnos para validación:", e);
+          console.error("Error cargando turnos para validación:", e);
         }
       }
 
@@ -938,10 +944,9 @@ export default function TurnosScreen({ route, navigation }) {
         fechaSolicitada: fechaIso,
         tipoTurno: tipoNormalizado,
         motivo: motivoTrim,
-        ...(tipoNormalizado === "insumo" && categoriaInsumo ? { categoriaInsumo } : {}),
       };
       
-      console.log("📝 Body preparado:", body);
+      console.log("Body preparado:", body);
 
       const result = await offlineTurnosOperations.createTurno(body);
       const wasOffline = Boolean(result?._isOffline);
@@ -972,7 +977,6 @@ export default function TurnosScreen({ route, navigation }) {
 
       setFechaInput("");
       setTipo("");
-      setCategoriaInsumo("");
       setDisp(null);
       setMotivo("");
       if (isOnline && !wasOffline) {
@@ -980,7 +984,7 @@ export default function TurnosScreen({ route, navigation }) {
       }
       setView('list');
     } catch (e) { 
-      console.error("❌ Error solicitando turno:", e);
+      console.error("Error solicitando turno:", e);
       setError(e.message || "Error"); 
     } finally { 
       setActionLoading(false); 
@@ -996,7 +1000,6 @@ export default function TurnosScreen({ route, navigation }) {
     setTurnoEditando(turno);
     setFechaInput(formatDDMMYYYY(turno.fechaTurno));
     setTipo(getTipoLabel(turno.tipoTurno));
-    setCategoriaInsumo(turno.categoriaInsumo || "");
     setMotivo(normalizeTipoFromLabel(turno.tipoTurno) === "otro" ? (turno.motivo || "") : "");
     setView("edit");
     setError("");
@@ -1030,11 +1033,6 @@ export default function TurnosScreen({ route, navigation }) {
         setError('Si el tipo es "Otro", el motivo es obligatorio.');
         return;
       }
-      if (tipoNormalizado === 'insumo' && !categoriaInsumo) {
-        setError('Seleccioná la categoría de insumo que vas a retirar.');
-        return;
-      }
-
       const { ipt } = await getCurrentAuthContext();
       const productorId = ipt || auth.currentUser?.uid;
       const requestedKey = fechaIso;
@@ -1073,7 +1071,7 @@ export default function TurnosScreen({ route, navigation }) {
             turnosParaValidar = [...turnosParaValidar, ...jTurnos];
           }
         } catch (e) {
-          console.error("❌ Error cargando turnos para validación:", e);
+          console.error("Error cargando turnos para validación:", e);
         }
       }
 
@@ -1107,9 +1105,6 @@ export default function TurnosScreen({ route, navigation }) {
       }
 
       const body = { fechaTurno: fechaIso, tipoTurno: tipoNormalizado, motivo: motivoTrim };
-      if (tipoNormalizado === "insumo" && categoriaInsumo) {
-        body.categoriaInsumo = categoriaInsumo;
-      }
       const resp = await authFetch(`${API_URL}/turnos/${turnoEditando.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1127,11 +1122,10 @@ export default function TurnosScreen({ route, navigation }) {
       setFechaInput("");
       setTipo("");
       setMotivo("");
-      setCategoriaInsumo("");
       await loadList();
       setView("list");
     } catch (error) {
-      console.error("❌ Error actualizando turno:", error);
+      console.error("Error actualizando turno:", error);
       setError(error.message || "Error al actualizar turno");
     } finally {
       setActionLoading(false);
@@ -1182,7 +1176,7 @@ export default function TurnosScreen({ route, navigation }) {
       Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       await loadList();
     } catch (error) {
-      console.error("❌ Error cancelando turno:", error);
+      console.error("Error cancelando turno:", error);
       const msg = error.message || "Error al cancelar turno";
       setError(msg);
       Alert.alert("Error", msg, [{ text: "Aceptar" }]);
@@ -1237,7 +1231,7 @@ export default function TurnosScreen({ route, navigation }) {
       Alert.alert("¡Éxito!", msg, [{ text: "Aceptar" }]);
       await loadList();
     } catch (error) {
-      console.error("❌ Error archivando turno:", error);
+      console.error("Error archivando turno:", error);
       const msg = error.message || "Error al archivar turno";
       setError(msg);
       Alert.alert("Error", msg, [{ text: "Aceptar" }]);
@@ -1251,7 +1245,6 @@ export default function TurnosScreen({ route, navigation }) {
     setFechaInput("");
     setTipo("");
     setMotivo("");
-    setCategoriaInsumo("");
     setError("");
     setSuccess("");
     setView("list");
@@ -1279,7 +1272,6 @@ export default function TurnosScreen({ route, navigation }) {
   const abrirSolicitudSimple = () => {
     setTurnoEditando(null);
     setTipo(SIMPLE_TURNO_TYPE);
-    setCategoriaInsumo("");
     setMotivo("");
     setMostrarTipos(false);
     setError("");
@@ -1540,7 +1532,7 @@ export default function TurnosScreen({ route, navigation }) {
         <View style={[styles.card, styles.formCard, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {turnosStatusUnknown ? (
             <View style={[styles.turnosDisabledCard, { backgroundColor: "#f3f4f6", borderColor: "#e5e7eb" }]}>
-              <Text style={[styles.turnosDisabledTitle, { color: "#374151" }]}>Consultando estado de turnos…</Text>
+              <Text style={[styles.turnosDisabledTitle, { color: "#374151" }]}>Consultando estado de turnosâ¬¦</Text>
               <Text style={[styles.turnosDisabledSubtitle, { color: "#6b7280" }]}>Esperá un momento.</Text>
             </View>
           ) : turnosDisabled ? (
@@ -1618,7 +1610,7 @@ export default function TurnosScreen({ route, navigation }) {
           </TouchableOpacity>
           {tipo ? (
             <Text style={{ fontSize: 12, color: '#7f8c8d', marginBottom: 8 }}>
-              🔍 Tipo detectado: {(() => {
+              Tipo detectado: {(() => {
                 const tipoLower = tipo.toLowerCase();
                 const esInsumo = tipoLower.includes('insumo');
                 const esRenovacion = tipoLower.includes('renovación') || tipoLower.includes('renov');
@@ -1632,28 +1624,10 @@ export default function TurnosScreen({ route, navigation }) {
                 <TouchableOpacity key={opt} style={styles.option} onPress={() => {
                   setTipo(opt);
                   setMostrarTipos(false);
-                  if (!opt.toLowerCase().includes('insumo')) setCategoriaInsumo('');
                 }}>
                   <Text>{opt}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          )}
-          {normalizeTipoFromLabel(tipo) === "insumo" && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: '600' }}>CategorÃ­a de insumo a retirar</Text>
-              <View style={styles.dropdown}>
-                {["Arada", "AlmÃ¡cigo", "Transplante", "Cosecha"].map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.option, categoriaInsumo === cat && { backgroundColor: '#f0fdf4' }]}
-                    onPress={() => setCategoriaInsumo(cat)}
-                  >
-                    <Text style={[{ color: '#2c3e50' }, categoriaInsumo === cat && { color: '#166534', fontWeight: '700' }]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {!categoriaInsumo && <Text style={styles.helperText}>SeleccionÃ¡ la categorÃ­a a retirar</Text>}
             </View>
           )}
           {normalizeTipoFromLabel(tipo) === 'otro' ? (
@@ -1693,7 +1667,7 @@ export default function TurnosScreen({ route, navigation }) {
               {historialModal.loading ? (
                 <View style={{ padding: 32, alignItems: 'center' }}>
                   <ActivityIndicator size="large" color="#1e8449" />
-                  <Text style={{ marginTop: 12, color: '#9ca3af', fontSize: 14 }}>Cargando historial…</Text>
+                  <Text style={{ marginTop: 12, color: '#9ca3af', fontSize: 14 }}>Cargando historialâ¬¦</Text>
                 </View>
               ) : historialModal.error ? (
                 <View style={{ padding: 16, backgroundColor: '#fef2f2', borderRadius: 10, borderWidth: 1, borderColor: '#fecaca' }}>
@@ -1916,3 +1890,6 @@ const styles = StyleSheet.create({
     const yyyy = d.getUTCFullYear();
     return `${dd}-${mm}-${yyyy}`;
   };
+
+
+

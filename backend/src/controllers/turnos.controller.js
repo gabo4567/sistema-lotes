@@ -110,52 +110,10 @@ const normalizeRole = (r) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-const normalizeCategoriaInsumo = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-const CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO = new Set(["almacigo", "transplante"]);
-const MENSAJE_LOTE_ARADO_REQUERIDO =
-  "Para solicitar turno de Almácigo o Transplante, primero marcá un lote como tierra arada.";
-
 const INASISTENCIAS_PARA_ADVERTENCIA = 1;
 const INASISTENCIAS_PARA_BLOQUEO = 2;
 const INASISTENCIAS_PARA_RESTRICCION = 3;
 const DIAS_BLOQUEO_INASISTENCIA = 30;
-
-const isRequisitoLoteAradoActivo = (config) =>
-  typeof config?.requiereLoteArado === "boolean" ? config.requiereLoteArado : DEFAULT_REQUIERE_LOTE_ARADO;
-
-const disponibilidadRequiereLoteArado = (disp, categoriaInsumo, config) => {
-  if (!isRequisitoLoteAradoActivo(config)) return false;
-  const categoriaSolicitada = normalizeCategoriaInsumo(categoriaInsumo);
-  if (categoriaSolicitada) {
-    return CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO.has(categoriaSolicitada);
-  }
-
-  const porCategoria = disp?.porCategoria && typeof disp.porCategoria === "object" ? disp.porCategoria : {};
-  return Object.entries(porCategoria).some(([categoria, info]) => {
-    const disponible = Number(info?.disponible || 0);
-    return disponible > 0 && CATEGORIAS_INSUMO_REQUIEREN_LOTE_ARADO.has(normalizeCategoriaInsumo(categoria));
-  });
-};
-
-const productorTieneLoteArado = async ({ productorId, ipt }) => {
-  const iptNorm = String(ipt || "").trim();
-  if (!iptNorm) return false;
-
-  const snap = await db.collection("lotes").where("ipt", "==", iptNorm).where("activo", "==", true).get();
-  const seen = new Set();
-  return snap.docs.some((doc) => {
-    if (seen.has(doc.id)) return false;
-    seen.add(doc.id);
-    const lote = doc.data() || {};
-    return lote.activo !== false && lote.loteArado === true;
-  });
-};
 
 const isAdminRequest = (req) => {
   const role = normalizeRole(req?.user?.role);
@@ -266,7 +224,7 @@ const buildEstadoInasistenciaProductor = ({ total, temporada, hoyYmd }) => {
         tipo: "restriccion_automatica",
         desde: hoyYmd,
         hasta: null,
-        motivo: `RestricciÃ³n automÃ¡tica por ${total} inasistencias en la temporada ${temporada}.`,
+        motivo: `Restricción automática por ${total} inasistencias en la temporada ${temporada}.`,
         updatedAt: Timestamp.now(),
       },
     };
@@ -559,7 +517,7 @@ export const crearTurno = async (req, res) => {
       return res.status(403).json({ message: cfg.mensaje || "Turnos deshabilitados hasta nuevo aviso", estadoActual: false });
     }
 
-    let { tipoTurno, fechaSolicitada, fecha, ipt, categoriaInsumo } = req.body;
+    let { tipoTurno, fechaSolicitada, fecha, ipt } = req.body;
 
     let productorId = req.user.uid;
     let productorNombre = "";
@@ -592,7 +550,7 @@ export const crearTurno = async (req, res) => {
     if (restriccionBloqueante) {
       const hasta = restriccionBloqueante.hasta ? ` hasta el ${restriccionBloqueante.hasta}` : "";
       return res.status(403).json({
-        message: `${restriccionBloqueante.motivo || "El productor tiene una restricciÃ³n activa para solicitar turnos."}${hasta}`,
+        message: `${restriccionBloqueante.motivo || "El productor tiene una restricción activa para solicitar turnos."}${hasta}`,
         estadoActual,
         restriccionTurnos: restriccionBloqueante,
       });
@@ -810,46 +768,9 @@ export const crearTurno = async (req, res) => {
 
     // Si es turno de insumo → verificar asignaciones en ProductorInsumos
     if (tipoTurno === "insumo") {
-      const CATEGORIAS_INSUMO = ["Arada", "Almácigo", "Transplante", "Cosecha"];
-      if (categoriaInsumo !== undefined && categoriaInsumo !== null && categoriaInsumo !== "") {
-        const cat = String(categoriaInsumo).trim();
-        if (!CATEGORIAS_INSUMO.includes(cat)) {
-          return res.status(400).json({ message: `Categoría de insumo inválida. Opciones: ${CATEGORIAS_INSUMO.join(", ")}.`, estadoActual });
-        }
-        categoriaInsumo = cat;
-      } else {
-        categoriaInsumo = null;
-      }
       const disp = await getDisponibilidadInsumos(ipt);
       if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "Usted no tiene insumos disponibles.", estadoActual });
-      }
-      if (disponibilidadRequiereLoteArado(disp, categoriaInsumo, cfg)) {
-        const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
-        if (!tieneLoteArado) {
-          return res.status(400).json({ message: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual });
-        }
-      }
-      // Si se especificó categoría, verificar que esa categoría tiene stock disponible
-      if (categoriaInsumo) {
-        const insumoSnap = await db.collection("insumos").where("nombre", "==", categoriaInsumo).limit(1).get();
-        if (!insumoSnap.empty) {
-          const insumoId = insumoSnap.docs[0].id;
-          const asigSnap = await db.collection("productorInsumos")
-            .where("productorId", "==", String(ipt))
-            .where("insumoId", "==", insumoId)
-            .get();
-          const tieneCategoria = asigSnap.docs.some((d) => {
-            const r = d.data() || {};
-            if (r.activo === false) return false;
-            const asig = Number(r.cantidadAsignada || 0);
-            const ent = Number(r.cantidadEntregada || 0);
-            return asig > 0 && (asig - ent) > 0;
-          });
-          if (!tieneCategoria) {
-            return res.status(400).json({ message: `No tenés insumos disponibles de la categoría "${categoriaInsumo}".`, estadoActual });
-          }
-        }
       }
     }
 
@@ -868,7 +789,6 @@ export const crearTurno = async (req, res) => {
       updatedAt: Timestamp.now(),
       activo: true,
       motivo: motivoTrim,
-      ...(tipoTurno === "insumo" && categoriaInsumo ? { categoriaInsumo } : {}),
     };
 
     const docRef = await db.collection("turnos").add(turno);
@@ -984,13 +904,6 @@ export const crearTurnoManual = async (req, res) => {
       if (!disp?.tieneDisponible) {
         return res.status(400).json({ message: "El productor no tiene insumos disponibles." });
       }
-      const cfg = await getTurnosConfig();
-      if (disponibilidadRequiereLoteArado(disp, null, cfg)) {
-        const tieneLoteArado = await productorTieneLoteArado({ productorId: productor.ipt, ipt: productor.ipt });
-        if (!tieneLoteArado) {
-          return res.status(400).json({ message: MENSAJE_LOTE_ARADO_REQUERIDO });
-        }
-      }
     }
 
     const turno = {
@@ -1048,7 +961,7 @@ export const registrarAsistenciaTurno = async (req, res) => {
     const asistio =
       typeof rawAsistio === "boolean"
         ? rawAsistio
-        : ["true", "1", "si", "sÃ­", "yes", "y"].includes(String(rawAsistio ?? "").toLowerCase().trim());
+        : ["true", "1", "si", "sí", "yes", "y"].includes(String(rawAsistio ?? "").toLowerCase().trim());
 
     if (!ipt) return res.status(400).json({ message: "El IPT es obligatorio." });
     if (!fecha) return res.status(400).json({ message: "La fecha es obligatoria en formato YYYY-MM-DD." });
@@ -1061,7 +974,7 @@ export const registrarAsistenciaTurno = async (req, res) => {
     const productor = await resolveProductorByIdentifier(ipt);
     if (!productor) return res.status(404).json({ message: "Productor no encontrado." });
     if (productor.data?.activo === false) {
-      return res.status(403).json({ message: "El productor no estÃ¡ activo." });
+      return res.status(403).json({ message: "El productor no está activo." });
     }
 
     const docs = await collectTurnoDocsForProductor({ ipt });
@@ -1073,7 +986,7 @@ export const registrarAsistenciaTurno = async (req, res) => {
     });
 
     if (turnosDelDia.length === 0) {
-      return res.status(404).json({ message: "No se encontrÃ³ un turno activo para ese IPT y fecha." });
+      return res.status(404).json({ message: "No se encontró un turno activo para ese IPT y fecha." });
     }
 
     const nuevoEstado = asistio ? "completado" : "ausente";
@@ -1570,7 +1483,7 @@ export const cambiarEstadoTurno = async (req, res) => {
       }
     }
 
-    // Si se confirma/completa turno de insumo → marcar entrega de la categoría correspondiente
+    // Compatibilidad: turnos viejos pueden traer categoriaInsumo.
     try {
       const turno = current;
       if (turno?.tipoTurno === "insumo" && (estado === "confirmado" || estado === "completado")) {
@@ -1579,7 +1492,7 @@ export const cambiarEstadoTurno = async (req, res) => {
         let entregaData = null;
 
         if (turno.categoriaInsumo) {
-          // Ruta preferida: buscar la asignación que corresponde a la categoría del turno
+          // Ruta legacy: buscar la asignacion que corresponde al insumo guardado en el turno.
           const insumoSnap = await db.collection("insumos")
             .where("nombre", "==", String(turno.categoriaInsumo))
             .limit(1)
@@ -1603,7 +1516,7 @@ export const cambiarEstadoTurno = async (req, res) => {
             }
           }
         } else {
-          // Fallback: si no hay categoría, aplicar solo cuando hay exactamente 1 pendiente
+          // Para turnos nuevos, aplicar solo cuando hay exactamente 1 asignacion pendiente.
           const snap = await db.collection("productorInsumos")
             .where("productorId", "==", String(turno.productorId))
             .where("estado", "==", "pendiente")
@@ -1697,7 +1610,7 @@ export const restaurarTurno = async (req, res) => {
     if (!doc.exists) return res.status(404).json({ message: "Turno no encontrado" });
     const turnoRestaurado = doc.data();
     if (!canModifyTurno(req, turnoRestaurado)) {
-      return res.status(403).json({ message: "No tenÃ©s permiso para modificar este turno" });
+      return res.status(403).json({ message: "No tenés permiso para modificar este turno" });
     }
     const bloqueoProductor = await assertTurnoProductorPuedeOperar(req, turnoRestaurado);
     if (bloqueoProductor) {
@@ -1916,7 +1829,7 @@ export const disponibilidadTurno = async (req, res) => {
       return res.json({ disponible: false, motivo, estadoActual: false });
     }
 
-    const { fechaSolicitada, tipoTurno, ipt, categoriaInsumo } = req.query;
+    const { fechaSolicitada, tipoTurno, ipt } = req.query;
     if (!fechaSolicitada || !tipoTurno) {
       return res.status(400).json({ message: "Faltan parámetros", estadoActual: true });
     }
@@ -1983,7 +1896,7 @@ export const disponibilidadTurno = async (req, res) => {
           const hasta = restriccion.hasta ? ` hasta el ${restriccion.hasta}` : "";
           return res.json({
             disponible: false,
-            motivo: `${restriccion.motivo || "El productor tiene una restricciÃ³n activa para solicitar turnos."}${hasta}`,
+            motivo: `${restriccion.motivo || "El productor tiene una restricción activa para solicitar turnos."}${hasta}`,
             estadoActual: true,
             restriccionTurnos: restriccion,
           });
@@ -2012,34 +1925,6 @@ export const disponibilidadTurno = async (req, res) => {
             const disp = await getDisponibilidadInsumos(ipt);
             if (!disp?.tieneDisponible) {
               return res.json({ disponible: false, motivo: "Usted no tiene insumos disponibles.", estadoActual: true });
-            }
-            if (disponibilidadRequiereLoteArado(disp, categoriaInsumo, cfg)) {
-              const tieneLoteArado = await productorTieneLoteArado({ productorId, ipt });
-              if (!tieneLoteArado) {
-                return res.json({ disponible: false, motivo: MENSAJE_LOTE_ARADO_REQUERIDO, estadoActual: true });
-              }
-            }
-            // Si se especificó categoría, verificar disponibilidad de esa categoría en particular
-            if (categoriaInsumo) {
-              const cat = String(categoriaInsumo).trim();
-              const insumoSnap = await db.collection("insumos").where("nombre", "==", cat).limit(1).get();
-              if (!insumoSnap.empty) {
-                const insumoId = insumoSnap.docs[0].id;
-                const asigSnap = await db.collection("productorInsumos")
-                  .where("productorId", "==", String(productorId))
-                  .where("insumoId", "==", insumoId)
-                  .get();
-                const tieneCategoria = asigSnap.docs.some((d) => {
-                  const r = d.data() || {};
-                  if (r.activo === false) return false;
-                  const asig = Number(r.cantidadAsignada || 0);
-                  const ent = Number(r.cantidadEntregada || 0);
-                  return asig > 0 && (asig - ent) > 0;
-                });
-                if (!tieneCategoria) {
-                  return res.json({ disponible: false, motivo: `No tenés insumos disponibles de la categoría "${cat}".`, estadoActual: true });
-                }
-              }
             }
           }
         } catch {}
@@ -2111,7 +1996,7 @@ export const upsertConfigTurnos = async (req, res) => {
         ? prevRequiereLoteArado
         : (hasRequiereLoteArado ? parseBoolOrNull(body.requiereLoteArado) : prevRequiereLoteArado);
     if (requiereLoteAradoParsed === null) {
-      return res.status(400).json({ message: "Campo 'requiereLoteArado' invÃ¡lido. Debe ser boolean." });
+      return res.status(400).json({ message: "Campo 'requiereLoteArado' inválido. Debe ser boolean." });
     }
 
     let payload;

@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { getNotificationPermissionStatus, registerPushToken, setupNotifications } from "./src/services/notifications";
+import { checkAcceptedTurnosFromApi } from "./src/services/turnoAcceptedNotifier";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // ── Error boundary ────────────────────────────────────────────────────────────
@@ -119,6 +120,19 @@ const NotificationPermissionGate = () => {
           setMode("ask");
           setVisible(true);
         }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!cancelled) await checkAcceptedTurnosFromApi();
       } catch {}
     })();
     return () => {

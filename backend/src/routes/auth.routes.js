@@ -1,6 +1,6 @@
 // src/routes/auth.routes.js
 import express from "express";
-import { registerUser, loginUser, loginProductor, cambiarPasswordProductor, resetPasswordLink, registerProductor } from "../controllers/auth.controller.js";
+import { registerUser, loginUser, loginProductor, cambiarPasswordProductor, cambiarEmailProductor, resetPasswordLink, registerProductor } from "../controllers/auth.controller.js";
 import { createRateLimiter } from "../middlewares/rateLimit.js";
 
 const router = express.Router();
@@ -33,6 +33,7 @@ router.post("/register", registerUser);
 router.post("/login", loginRateLimiter, loginUser);
 router.post("/login-productor", productorLoginRateLimiter, loginProductor);
 router.post("/productor/cambiar-password", cambiarPasswordProductor);
+router.post("/productor/cambiar-email", cambiarEmailProductor);
 router.post("/reset-password-link", resetPasswordRateLimiter, resetPasswordLink);
 router.post("/register-productor", registerProductor);
 
