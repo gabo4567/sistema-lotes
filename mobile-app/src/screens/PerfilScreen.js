@@ -7,8 +7,6 @@ import { authFetch, getCurrentAuthContext } from "../api/api";
 const UBIC_TYPES = [
   { key: "entradaDomicilio", label: "Entrada domicilio" },
   { key: "domicilioCasa", label: "Domicilio (Casa)" },
-  { key: "entradaCampo", label: "Entrada campo" },
-  { key: "centroCampo", label: "Centro campo" },
 ];
 
 const normalizeCampos = (productor) => {
@@ -25,6 +23,13 @@ const normalizeCampos = (productor) => {
   }
   return [{ id: "principal", nombre: "Campo principal", ubicaciones: productor?.ubicaciones || {} }];
 };
+
+const ProfileRow = ({ label, value }) => (
+  <View style={styles.profileRow}>
+    <Text style={styles.profileLabel}>{label}:</Text>
+    <Text style={styles.profileValue}>{value ?? "-"}</Text>
+  </View>
+);
 
 export default function PerfilScreen() {
   const [data, setData] = useState(null);
@@ -95,16 +100,18 @@ export default function PerfilScreen() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.item}>Número de IPT: {data?.ipt}</Text>
-            <Text style={styles.item}>Nombre: {data?.nombreCompleto}</Text>
-            <Text style={styles.item}>CUIL: {data?.cuil}</Text>
-            <Text style={styles.item}>Email: {data?.email || "-"}</Text>
-            <Text style={styles.item}>Teléfono: {data?.telefono || "-"}</Text>
-            <Text style={styles.item}>Domicilio: {data?.domicilioCasa || "-"}</Text>
-            <Text style={styles.item}>Estado: {data?.estado}</Text>
-            <Text style={styles.item}>Ingresos app: {data?.historialIngresos ?? 0}</Text>
+            <View style={styles.profileInfo}>
+              <ProfileRow label="Número de IPT" value={data?.ipt} />
+              <ProfileRow label="Nombre" value={data?.nombreCompleto} />
+              <ProfileRow label="CUIL" value={data?.cuil} />
+              <ProfileRow label="Email" value={data?.email || "-"} />
+              <ProfileRow label="Teléfono" value={data?.telefono || "-"} />
+              <ProfileRow label="Domicilio" value={data?.domicilioCasa || "-"} />
+              <ProfileRow label="Estado" value={data?.estado || "-"} />
+              <ProfileRow label="Ingresos app" value={data?.historialIngresos ?? 0} />
+            </View>
 
-            <Text style={[styles.item, styles.section]}>Ubicaciones (solo lectura):</Text>
+            <Text style={styles.sectionTitle}>Ubicaciones (solo lectura):</Text>
 
             <View style={styles.camposContainer}>
               {campos.map((c, idx) => (
@@ -129,6 +136,11 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "#ffffff", borderRadius: 16, padding: 18, marginTop: 10, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)", shadowColor: "#0f172a", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   item: { fontSize: 16, marginBottom: 6, color: "#34495e" },
   section: { marginTop: 10, fontWeight: "bold" },
+  profileInfo: { gap: 7 },
+  profileRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  profileLabel: { flexShrink: 0, fontSize: 16, lineHeight: 22, color: "#243b53", fontWeight: "900" },
+  profileValue: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 22, color: "#34495e", fontWeight: "600" },
+  sectionTitle: { marginTop: 20, fontSize: 16, lineHeight: 22, color: "#243b53", fontWeight: "900" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   error: { color: "#c0392b" },
   camposContainer: { marginTop: 12 },

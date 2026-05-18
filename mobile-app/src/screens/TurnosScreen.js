@@ -13,7 +13,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isTurnosHabilitados } from "../utils/turnos.utils";
 
-export default function TurnosScreen() {
+export default function TurnosScreen({ route, navigation }) {
   const [fechaInput, setFechaInput] = useState("");
   const [tipo, setTipo] = useState("");
   const [mostrarTipos, setMostrarTipos] = useState(false);
@@ -44,6 +44,25 @@ export default function TurnosScreen() {
   const dispReqRef = React.useRef(0);
   const dispTimerRef = React.useRef(null);
   const SIMPLE_TURNO_TYPE = "Insumo";
+
+  useFocusEffect(
+    useCallback(() => {
+      const presetTipo = String(route?.params?.presetTipo || "").toLowerCase();
+      if (presetTipo !== "insumo") return undefined;
+
+      setTurnoEditando(null);
+      setTipo(SIMPLE_TURNO_TYPE);
+      setCategoriaInsumo(String(route?.params?.categoriaInsumo || ""));
+      setMotivo("");
+      setMostrarTipos(false);
+      setError("");
+      setSuccess("");
+      setView("form");
+      navigation?.setParams?.({ presetTipo: undefined, categoriaInsumo: undefined });
+      return undefined;
+    }, [navigation, route?.params?.categoriaInsumo, route?.params?.presetTipo])
+  );
+
   const toYmdLocal = (d) => {
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
     const yyyy = d.getFullYear();

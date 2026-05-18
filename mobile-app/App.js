@@ -137,7 +137,7 @@ const NotificationPermissionGate = () => {
           {mode === "expoGo" ? (
             <>
               <Text style={permStyles.body}>
-                Para recibir notificaciones push, necesitás usar la app instalada (APK/AAB o development build). En Expo Go pueden aparecer avisos en inglés y las notificaciones pueden no funcionar.
+                Para recibir avisos del IPT, instalá la app en el teléfono. En Expo Go las notificaciones pueden no funcionar correctamente.
               </Text>
               <View style={permStyles.actions}>
                 <TouchableOpacity
@@ -156,7 +156,7 @@ const NotificationPermissionGate = () => {
           ) : (
             <>
               <Text style={permStyles.body}>
-                ¿Querés activar las notificaciones? Te vamos a avisar cuando se habiliten o deshabiliten los turnos y con recordatorios importantes.
+                Activá las notificaciones para recibir avisos de turnos, recordatorios y novedades importantes del IPT.
               </Text>
               <View style={permStyles.actions}>
                 <TouchableOpacity
@@ -195,11 +195,11 @@ const NotificationPermissionGate = () => {
 
 const permStyles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "center", alignItems: "center", padding: 20 },
-  card: { width: "100%", maxWidth: 420, backgroundColor: "#fff", borderRadius: 14, padding: 16, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)" },
-  title: { fontSize: 16, fontWeight: "800", color: "#166534", marginBottom: 8, textAlign: "center" },
-  body: { fontSize: 13, color: "#374151", lineHeight: 18, textAlign: "center" },
-  actions: { flexDirection: "row", gap: 10, justifyContent: "center", marginTop: 14 },
-  btn: { minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  card: { width: "100%", maxWidth: 420, backgroundColor: "#fff", borderRadius: 16, padding: 18, borderWidth: 1, borderColor: "rgba(15,23,42,0.10)", shadowColor: "#0f172a", shadowOpacity: 0.14, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
+  title: { fontSize: 18, fontWeight: "900", color: "#166534", marginBottom: 8, textAlign: "center" },
+  body: { fontSize: 14, color: "#374151", lineHeight: 20, textAlign: "center" },
+  actions: { flexDirection: "row", gap: 10, justifyContent: "center", marginTop: 16 },
+  btn: { flex: 1, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   btnPrimary: { backgroundColor: "#16a34a" },
   btnPrimaryText: { color: "#fff", fontWeight: "800" },
   btnSecondary: { backgroundColor: "#e5e7eb" },

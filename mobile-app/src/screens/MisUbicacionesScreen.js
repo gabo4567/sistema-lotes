@@ -9,15 +9,11 @@ import { offlineUbicacionesOperations } from '../utils/offlineOperations';
 const UBIC_TYPES = [
   { key: 'entradaDomicilio', label: 'Entrada del domicilio' },
   { key: 'domicilioCasa', label: 'Domicilio / Casa' },
-  { key: 'entradaCampo', label: 'Entrada al campo' },
-  { key: 'centroCampo', label: 'Centro del campo' },
 ];
 
 const buildEmptyUbicaciones = () => ({
   entradaDomicilio: { activo: false },
   domicilioCasa: { activo: false },
-  entradaCampo: { activo: false },
-  centroCampo: { activo: false },
 });
 
 const ensureUbicacionesShape = (ubicaciones) => {

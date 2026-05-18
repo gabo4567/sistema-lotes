@@ -10,15 +10,11 @@ import { usePermissionPrompt } from '../components/PermissionPromptModal';
 const LABELS = {
   entradaDomicilio: 'Entrada del domicilio',
   domicilioCasa: 'Domicilio / Casa',
-  entradaCampo: 'Entrada al campo',
-  centroCampo: 'Centro del campo',
 };
 
 const buildEmptyUbicaciones = () => ({
   entradaDomicilio: { activo: false },
   domicilioCasa: { activo: false },
-  entradaCampo: { activo: false },
-  centroCampo: { activo: false },
 });
 
 const ensureUbicacionesShape = (ubicaciones) => {
@@ -76,7 +72,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
       setLocationPermissionDenied(true);
       Alert.alert(
         'Permiso de ubicación denegado',
-        'Podés seguir eligiendo la ubicación manualmente en el mapa. Si querés centrar el mapa en tu posición, habilitá el permiso desde la configuración.',
+        'Podés elegir la ubicación manualmente en el mapa. Para centrarlo en tu posición, activá la ubicación desde la configuración del teléfono.',
         [
           { text: 'Entendido', style: 'cancel' },
           {
@@ -108,7 +104,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
 
     const accepted = await askPermission({
       title: 'Activar ubicación',
-      body: 'Necesitamos tu ubicación para centrar el mapa en tu posición y facilitar la carga de la ubicación.',
+      body: 'Necesitamos tu ubicación para centrar el mapa en tu posición y facilitar la carga del punto.',
       acceptText: 'Habilitar',
       cancelText: 'Ahora no',
     });
@@ -203,7 +199,7 @@ export default function EditarUbicacionScreen({ route, navigation }) {
       ) : locationPermissionDenied ? (
         <View style={styles.permissionCard}>
           <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
-          <Text style={styles.info}>Para editar ubicaciones debes habilitar el permiso de ubicación.</Text>
+          <Text style={styles.info}>Podés marcar el punto manualmente. Para usar tu posición actual, activá la ubicación desde la configuración del teléfono.</Text>
           <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={ensureLocationAccess}>
               <Text style={styles.btnText}>Reintentar</Text>
@@ -262,8 +258,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', padding: 12 },
   title: { fontSize: 20, textAlign: 'center', marginBottom: 8, color: '#1e8449', fontWeight: 'bold' },
   map: { flex: 1 },
-  permissionCard: { padding: 16, borderRadius: 12, backgroundColor: '#fff3f3', borderWidth: 1, borderColor: '#f3cccc', marginBottom: 12 },
-  permissionTitle: { fontSize: 16, textAlign: 'center', marginBottom: 8, color: '#8b1e2d', fontWeight: '700' },
+  permissionCard: { padding: 16, borderRadius: 14, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', marginBottom: 12 },
+  permissionTitle: { fontSize: 16, textAlign: 'center', marginBottom: 8, color: '#9a3412', fontWeight: '800' },
   panel: { backgroundColor: '#ffffff', padding: 12, borderRadius: 12, marginTop: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   btn: { backgroundColor: '#1e8449', padding: 10, borderRadius: 8, flexGrow: 1, alignItems: 'center', marginHorizontal: 4 },

@@ -6,6 +6,8 @@ import * as Location from "expo-location";
 import { AuthContext } from "../context/AuthContext";
 import { getNotificationPermissionInfo, registerPushToken } from "../services/notifications";
 import { usePermissionPrompt } from "../components/PermissionPromptModal";
+import { API_URL } from "../utils/constants";
+import { authFetch, getCurrentAuthContext } from "../api/api";
 
 export default function ConfiguracionScreen({ navigation }) {
   const { user, confirmLogout } = useContext(AuthContext);
@@ -27,6 +29,8 @@ export default function ConfiguracionScreen({ navigation }) {
   const [locServicesEnabled, setLocServicesEnabled] = useState(null);
   const [locLoading, setLocLoading] = useState(false);
   const [locActionLoading, setLocActionLoading] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const refreshNotificationStatus = useCallback(async () => {
     try {
@@ -65,12 +69,37 @@ export default function ConfiguracionScreen({ navigation }) {
     }
   }, []);
 
+  const refreshAccountProfile = useCallback(async () => {
+    try {
+      setProfileLoading(true);
+      const { ipt } = await getCurrentAuthContext();
+      if (!ipt) {
+        setProfile(null);
+        return;
+      }
+
+      const resp = await authFetch(`${API_URL}/productores/ipt/${ipt}`);
+      if (!resp.ok) {
+        setProfile(null);
+        return;
+      }
+
+      const data = await resp.json();
+      setProfile(data || null);
+    } catch {
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       refreshNotificationStatus();
       refreshLocationStatus();
+      refreshAccountProfile();
       return () => {};
-    }, [refreshLocationStatus, refreshNotificationStatus])
+    }, [refreshAccountProfile, refreshLocationStatus, refreshNotificationStatus])
   );
 
   const notifLabel = useMemo(() => {
@@ -124,7 +153,7 @@ export default function ConfiguracionScreen({ navigation }) {
 
       const accepted = await askPermission({
         title: "Activar ubicación",
-        body: "Necesitamos tu ubicación para mostrar el mapa y permitir dibujar o medir tus lotes.",
+        body: "Necesitamos tu ubicación para mostrar el mapa y ayudarte a cargar o medir tus lotes.",
         acceptText: "Habilitar",
         cancelText: "Ahora no",
       });
@@ -140,6 +169,12 @@ export default function ConfiguracionScreen({ navigation }) {
 
   const accountName = (user?.displayName || "-").toString();
   const accountEmail = (user?.email || "-").toString();
+  const claims = user?.claims || {};
+  const accountIpt = String(profile?.ipt || claims?.ipt || claims?.productorId || "-");
+  const accountPhone = String(profile?.telefono || "-");
+  const accountLocalidad = String(profile?.localidad || profile?.paraje || "-");
+  const accountEstado = String(profile?.activo === false ? "Inactivo" : profile?.estado || "Activo");
+  const accountIngresos = profile?.historialIngresos ?? claims?.historialIngresos ?? "-";
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
@@ -169,10 +204,10 @@ export default function ConfiguracionScreen({ navigation }) {
             {notifStatus === "unsupported_expo_go" ? (
               <Text style={styles.hint}>No disponible en esta versión.</Text>
             ) : notifStatus === "granted" ? (
-              <Text style={styles.hint}>Recibirás avisos y recordatorios importantes.</Text>
+                <Text style={styles.hint}>Vas a recibir avisos de turnos, recordatorios y novedades importantes.</Text>
             ) : notifCanAskAgain === false ? (
               <>
-                <Text style={styles.hint}>El permiso está bloqueado. Activá notificaciones desde la configuración del sistema.</Text>
+                <Text style={styles.hint}>El permiso está bloqueado. Podés activarlo desde la configuración del teléfono.</Text>
                 <TouchableOpacity style={[styles.btnFull, styles.btnSecondary]} onPress={openSettings} disabled={notifActionLoading}>
                   <Text style={styles.btnSecondaryText}>Abrir configuración</Text>
                 </TouchableOpacity>
@@ -193,7 +228,7 @@ export default function ConfiguracionScreen({ navigation }) {
             {locStatus === "granted" ? (
               locServicesEnabled === false ? (
                 <>
-                  <Text style={styles.hint}>El permiso está concedido, pero el GPS está apagado.</Text>
+                  <Text style={styles.hint}>El permiso está activo, pero la ubicación del teléfono está apagada.</Text>
                   <View style={styles.actionsRow}>
                     <TouchableOpacity style={[styles.btnHalf, styles.btnSecondary]} onPress={refreshLocationStatus} disabled={locActionLoading}>
                       <Text style={styles.btnSecondaryText}>Reintentar</Text>
@@ -204,11 +239,11 @@ export default function ConfiguracionScreen({ navigation }) {
                   </View>
                 </>
               ) : (
-                <Text style={styles.hint}>La ubicación está lista para el mapa y el modo GPS.</Text>
+                <Text style={styles.hint}>La ubicación está lista para usar el mapa y el modo GPS.</Text>
               )
             ) : locCanAskAgain === false ? (
               <>
-                <Text style={styles.hint}>El permiso está bloqueado. Habilitá ubicación desde la configuración del sistema.</Text>
+                <Text style={styles.hint}>El permiso está bloqueado. Podés activarlo desde la configuración del teléfono.</Text>
                 <TouchableOpacity style={[styles.btnFull, styles.btnSecondary]} onPress={openSettings} disabled={locActionLoading}>
                   <Text style={styles.btnSecondaryText}>Abrir configuración</Text>
                 </TouchableOpacity>
@@ -222,12 +257,38 @@ export default function ConfiguracionScreen({ navigation }) {
 
           <Text style={styles.sectionTitle}>Cuenta</Text>
           <View style={styles.box}>
-            <Text style={styles.row}>
-              Nombre: <Text style={styles.value}>{accountName}</Text>
-            </Text>
-            <Text style={styles.row}>
-              Email: <Text style={styles.value}>{accountEmail}</Text>
-            </Text>
+            <View style={styles.accountHeader}>
+              <View style={styles.accountAvatar}>
+                <Text style={styles.accountAvatarText}>{accountName.trim().charAt(0).toUpperCase() || "P"}</Text>
+              </View>
+              <View style={styles.accountHeaderText}>
+                <Text style={styles.accountName}>{accountName}</Text>
+                <Text style={styles.accountEmail}>{accountEmail}</Text>
+              </View>
+            </View>
+
+            <View style={styles.accountGrid}>
+              <View style={styles.accountInfoItem}>
+                <Text style={styles.accountInfoLabel}>IPT</Text>
+                <Text style={styles.accountInfoValue}>{accountIpt}</Text>
+              </View>
+              <View style={styles.accountInfoItem}>
+                <Text style={styles.accountInfoLabel}>Estado</Text>
+                <Text style={styles.accountInfoValue}>{profileLoading ? "Consultando..." : accountEstado}</Text>
+              </View>
+              <View style={styles.accountInfoItem}>
+                <Text style={styles.accountInfoLabel}>Teléfono</Text>
+                <Text style={styles.accountInfoValue}>{profileLoading ? "Consultando..." : accountPhone}</Text>
+              </View>
+              <View style={styles.accountInfoItem}>
+                <Text style={styles.accountInfoLabel}>Localidad</Text>
+                <Text style={styles.accountInfoValue}>{profileLoading ? "Consultando..." : accountLocalidad}</Text>
+              </View>
+              <View style={[styles.accountInfoItem, styles.accountInfoItemWide]}>
+                <Text style={styles.accountInfoLabel}>Ingresos a la app</Text>
+                <Text style={styles.accountInfoValue}>{profileLoading ? "Consultando..." : accountIngresos}</Text>
+              </View>
+            </View>
             <TouchableOpacity style={[styles.btnFull, styles.btnDanger]} onPress={confirmLogout}>
               <Text style={styles.btnPrimaryText}>Cerrar sesión</Text>
             </TouchableOpacity>
@@ -259,6 +320,17 @@ const styles = StyleSheet.create({
   row: { fontSize: 14, color: "#34495e", marginBottom: 6 },
   value: { fontWeight: "800", color: "#111827" },
   hint: { marginTop: 4, fontSize: 13, color: "#6b7280" },
+  accountHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  accountAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#1e8449", alignItems: "center", justifyContent: "center" },
+  accountAvatarText: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
+  accountHeaderText: { flex: 1, minWidth: 0 },
+  accountName: { fontSize: 16, color: "#111827", fontWeight: "900", lineHeight: 20 },
+  accountEmail: { marginTop: 2, fontSize: 13, color: "#64748b", fontWeight: "700", lineHeight: 17 },
+  accountGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  accountInfoItem: { width: "48%", minHeight: 72, padding: 10, borderRadius: 10, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#e5e7eb" },
+  accountInfoItemWide: { width: "100%" },
+  accountInfoLabel: { fontSize: 11, color: "#64748b", fontWeight: "900", textTransform: "uppercase", marginBottom: 5, lineHeight: 14 },
+  accountInfoValue: { fontSize: 14, color: "#111827", fontWeight: "800", lineHeight: 19, flexShrink: 1 },
   actionsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   btnFull: { marginTop: 10, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   btnHalf: { flex: 1, minHeight: 42, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" },

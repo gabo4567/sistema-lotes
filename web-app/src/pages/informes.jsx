@@ -390,7 +390,7 @@ const Informes = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 8 }}>
               <div>{badge(`Lotes: ${formatValue(p.totalLotes ?? 0)}`, 'info')}</div>
               <div>{badge(`Turnos: ${formatValue(p.totalTurnos ?? 0)}`, 'info')}</div>
-              <div>{badge(`Ubicaciones: ${Array.isArray(p.ubicaciones) ? p.ubicaciones.length : 0} de ${Number.isFinite(p.totalCampos) && p.totalCampos > 0 ? p.totalCampos * 4 : 4}`, 'info')}</div>
+              <div>{badge(`Ubicaciones: ${Array.isArray(p.ubicaciones) ? p.ubicaciones.length : 0} de ${Number.isFinite(p.totalCampos) && p.totalCampos > 0 ? p.totalCampos * 2 : 2}`, 'info')}</div>
             </div>
             {p.domicilio && <div style={{ marginBottom: 6 }}><span className="result-label">Domicilio:</span> {formatValue(p.domicilio)}</div>}
             {p.ingreso && <div style={{ marginBottom: 6 }}><span className="result-label">Ingreso:</span> {formatValue(p.ingreso)}</div>}

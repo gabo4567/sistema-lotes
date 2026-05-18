@@ -196,7 +196,7 @@ export default function LotesScreen() {
 
     const accepted = await askPermission({
       title: "Activar ubicación",
-      body: "Necesitamos tu ubicación para mostrar el mapa y permitir dibujar o medir tus lotes.",
+      body: "Necesitamos tu ubicación para mostrar el mapa y ayudarte a cargar o medir tus lotes.",
       acceptText: "Habilitar",
       cancelText: "Ahora no",
     });
@@ -315,7 +315,7 @@ export default function LotesScreen() {
 
         const accepted = await askPermission({
           title: "Activar ubicación",
-          body: "Necesitamos tu ubicación para mostrar el mapa y permitir dibujar o medir tus lotes.",
+          body: "Necesitamos tu ubicación para mostrar el mapa y ayudarte a cargar o medir tus lotes.",
           acceptText: "Habilitar",
           cancelText: "Ahora no",
         });
@@ -796,7 +796,7 @@ export default function LotesScreen() {
         <View style={styles.permissionCard}>
           <Text style={styles.permissionTitle}>Permiso de ubicación denegado</Text>
           <Text style={styles.permissionText}>
-            Para usar el mapa de lotes necesitamos acceso a tu ubicación. Puedes seguir viendo la lista de lotes y volver a habilitar el permiso cuando quieras.
+            Podés seguir viendo tus lotes. Para usar el mapa o el modo GPS, activá la ubicación desde la configuración del teléfono.
           </Text>
           <View style={styles.permissionActions}>
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={ensureLocationAccess}>
@@ -825,7 +825,7 @@ export default function LotesScreen() {
         <View style={styles.locationCard}>
           <Text style={styles.locationTitle}>GPS desactivado</Text>
           <Text style={styles.locationText}>
-            El permiso está concedido, pero la ubicación del teléfono está apagada. Activá el GPS/Ubicación en el dispositivo y volvé a intentar.
+            El permiso está activo, pero la ubicación del teléfono está apagada. Activala y volvé a intentar.
           </Text>
           <View style={styles.permissionActions}>
             <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={requestLocationAccess}>
@@ -873,7 +873,7 @@ export default function LotesScreen() {
         <View style={styles.permissionCard}>
           <Text style={styles.permissionTitle}>Permiso de ubicación requerido</Text>
           <Text style={styles.permissionText}>
-            Para ver el mapa y usar el modo GPS caminando, necesitamos acceder a tu ubicación.
+            Para ver el mapa y usar el modo GPS, necesitamos acceder a tu ubicación.
           </Text>
           <View style={styles.permissionActions}>
             <TouchableOpacity style={[styles.btn, styles.primary]} onPress={ensureLocationAccess}>
@@ -1469,11 +1469,11 @@ const styles = StyleSheet.create({
   modalContent: { width: "90%", backgroundColor: "#fff", borderRadius: 12, padding: 12 },
   loadingContainer: { justifyContent: "center", alignItems: "center", paddingVertical: 40 },
   loadingLocation: { color: "#1e8449", marginTop: 0, textAlign: "center" },
-  permissionCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff3f3", borderWidth: 1, borderColor: "#f3cccc" },
-  permissionTitle: { color: "#8b1e2d", fontWeight: "700", marginBottom: 6, textAlign: "center" },
+  permissionCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 14, backgroundColor: "#fff7ed", borderWidth: 1, borderColor: "#fed7aa" },
+  permissionTitle: { color: "#9a3412", fontWeight: "800", marginBottom: 6, textAlign: "center" },
   permissionText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
   permissionActions: { flexDirection: "row", gap: 10, justifyContent: "center" },
-  locationCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff7ed", borderWidth: 1, borderColor: "#fed7aa" },
+  locationCard: { marginHorizontal: 8, marginBottom: 8, padding: 16, borderRadius: 14, backgroundColor: "#fff7ed", borderWidth: 1, borderColor: "#fed7aa" },
   locationTitle: { color: "#9a3412", fontWeight: "800", marginBottom: 6, textAlign: "center" },
   locationText: { color: "#34495e", textAlign: "center", marginBottom: 12, lineHeight: 20 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },

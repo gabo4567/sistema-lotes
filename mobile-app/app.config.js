@@ -30,10 +30,18 @@ export default {
 
     plugins: [
       [
+        "expo-notifications",
+        {
+          icon: "./assets/icon.png",
+          color: "#1e8449",
+          sounds: []
+        }
+      ],
+      [
         "expo-location",
         {
           locationAlwaysAndWhenInUsePermission:
-            "La app necesita acceder a tu ubicación para mostrar tus lotes en el mapa."
+            "La app necesita acceder a tu ubicación para mostrar el mapa y ayudarte a cargar o medir tus lotes."
         }
       ],
       "@react-native-community/datetimepicker"
@@ -44,7 +52,7 @@ export default {
       bundleIdentifier: "com.jgpared.sistemalotes", // Ajustado al mismo que android
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          "Necesitamos tu ubicación para mostrar tus lotes en el mapa.",
+          "Necesitamos tu ubicación para mostrar el mapa y ayudarte a cargar o medir tus lotes.",
       }
     },
 
@@ -63,6 +71,7 @@ export default {
       permissions: [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
       ]
     },
 

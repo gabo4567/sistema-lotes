@@ -359,8 +359,6 @@ export const obtenerProductoresActivos = async (req, res) => {
       const typeOrder = [
         { key: 'entradaDomicilio', label: 'Entrada del domicilio' },
         { key: 'domicilioCasa', label: 'Domicilio / casa' },
-        { key: 'entradaCampo', label: 'Entrada del campo' },
-        { key: 'centroCampo', label: 'Centro del campo' },
       ];
 
       const multiCampo = campos.length > 1;

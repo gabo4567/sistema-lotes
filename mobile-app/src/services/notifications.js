@@ -113,16 +113,25 @@ export async function registerPushToken() {
 
     let token = null;
     let type = null;
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ||
+      Constants?.easConfig?.projectId ||
+      Constants?.manifest2?.extra?.eas?.projectId ||
+      null;
+
     try {
-      const deviceToken = await Notifications.getDevicePushTokenAsync();
-      token = deviceToken?.data ? String(deviceToken.data) : null;
-      type = deviceToken?.type ? String(deviceToken.type) : null;
+      const expoTokenResult = projectId
+        ? await Notifications.getExpoPushTokenAsync({ projectId })
+        : await Notifications.getExpoPushTokenAsync();
+      token = expoTokenResult?.data ? String(expoTokenResult.data) : null;
+      type = "expo";
     } catch {}
 
     if (!token) {
       try {
-        token = (await Notifications.getExpoPushTokenAsync()).data;
-        type = "expo";
+        const deviceToken = await Notifications.getDevicePushTokenAsync();
+        token = deviceToken?.data ? String(deviceToken.data) : null;
+        type = deviceToken?.type ? String(deviceToken.type) : null;
       } catch {}
     }
 

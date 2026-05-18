@@ -157,21 +157,6 @@ const ProductorDetail = () => {
 
   }, [id]);
 
-  const entradaCampo = (() => {
-
-    const c =
-      prod?.domicilioIngresoCoord ||
-      prod?.domicilioIngresoCampo ||
-      prod?.ubicaciones?.entradaCampo;
-
-    return c &&
-      typeof c.lat === "number" &&
-      typeof c.lng === "number"
-      ? `${c.lat}, ${c.lng}`
-      : "-";
-
-  })();
-
   // nombres lindos de insumos
   const obtenerNombreInsumo = (insumoId) => {
 
@@ -242,12 +227,6 @@ const ProductorDetail = () => {
             <DetailField
               label="Localidad"
               value={prod.domicilioCasa}
-            />
-
-            <DetailField
-              label="Ingreso al campo"
-              value={entradaCampo}
-              wide
             />
 
             {/* tipo productor */}
