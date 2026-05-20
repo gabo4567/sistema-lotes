@@ -21,6 +21,7 @@ import {
   registrarAsistenciaTurno,
   obtenerHistorialTurno,
   obtenerTimelineTurno,
+  importarAsignacionesTurnos,
 } from "../controllers/turnos.controller.js";
 import { idempotency } from "../middlewares/idempotency.js";
 import { createRateLimiter } from "../middlewares/rateLimit.js";
@@ -58,6 +59,8 @@ router.put("/config", idempotency(), upsertConfigTurnos);
 router.get("/capacidad", obtenerCapacidadTurnoDia);
 router.put("/capacidad/:fecha", idempotency(), upsertCapacidadTurnoDia);
 router.post("/asistencia", idempotency(), registrarAsistenciaTurno);
+router.post("/importar-asignaciones", idempotency(), importarAsignacionesTurnos);
+router.post("/importar_asignaciones", idempotency(), importarAsignacionesTurnos);
 router.get("/:id/historial", obtenerHistorialTurno);
 router.get("/:id/timeline", obtenerTimelineTurno);
 router.get("/:id", obtenerTurnoPorId);
