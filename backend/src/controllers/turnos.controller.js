@@ -1,3 +1,148 @@
+// Importar asignaciones de turnos en lote (similar a insumos)
+export const importarAsignacionesTurnos = async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const campania = String(req.body?.campania || req.body?.campaña || getTemporadaActual()).trim() || getTemporadaActual();
+    const fuente = String(req.body?.fuente || "excel").trim() || "excel";
+    if (rows.length === 0) return res.status(400).json({ error: "No se recibieron filas para importar" });
+
+    // Cargar productores existentes
+    const productoresSnap = await db.collection("productores").get();
+    const productoresByIpt = new Map();
+    productoresSnap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      const ipt = String(data.ipt || "").trim();
+      if (ipt) productoresByIpt.set(ipt, { id: doc.id, ref: doc.ref, data });
+    });
+
+    const now = new Date();
+    const productoresToWrite = new Map();
+    const turnosToWrite = new Map();
+    const errores = [];
+    const productoresNoEncontrados = new Set();
+    let filasProcesadas = 0;
+    let filasSinTurnos = 0;
+
+    rows.forEach((row, index) => {
+      const ipt = String(row?.ipt || row?.fet || "").trim();
+      if (!ipt) {
+        errores.push({ fila: index + 1, error: "Fila sin IPT/FET" });
+        return;
+      }
+      let productor = productoresByIpt.get(ipt);
+      if (!productor) {
+        productoresNoEncontrados.add(ipt);
+      }
+
+      // Si el row tiene varios turnos, esperar array en row.turnos, si no, tratar el row como un turno
+      const turnos = Array.isArray(row?.turnos) ? row.turnos : [row];
+      const validos = turnos
+        .map((item) => ({
+          ipt,
+          productorId: ipt,
+          productorNombre: String(row?.productorNombre || row?.nombre || row?.productor || "").trim(),
+          fecha: String(item?.fecha || row?.fecha || "").trim(),
+          hora: String(item?.hora || row?.hora || "").trim(),
+          tipoTurno: normalizeTipoTurno(item?.tipoTurno || row?.tipoTurno || item?.tipo || row?.tipo || "insumo"),
+          estado: normalizeEstado(item?.estado || row?.estado || "pendiente"),
+          motivo: String(item?.motivo || row?.motivo || "").trim(),
+          observacion: String(item?.observacion || row?.observacion || "").trim(),
+        }))
+        .filter((item) => item.fecha && item.hora && item.ipt);
+
+      if (validos.length === 0) {
+        filasSinTurnos += 1;
+        return;
+      }
+
+      filasProcesadas += 1;
+      const productorNombre = String(
+        productor?.data?.nombreCompleto || productor?.data?.nombre || row?.productorNombre || row?.nombre || ""
+      ).trim();
+      if (!productor) {
+        const activoRaw = String(row?.activo || "SI").toLowerCase().trim();
+        productoresToWrite.set(ipt, {
+          ipt,
+          nombreCompleto: productorNombre || `Productor IPT ${ipt}`,
+          nombre: productorNombre || `Productor IPT ${ipt}`,
+          cuil: String(row?.cuil || "").trim(),
+          telefono: String(row?.telefono || "").replace(/[^\d+]/g, ""),
+          email: String(row?.email || "").trim().toLowerCase(),
+          domicilioCasa: String(row?.domicilio || "").trim(),
+          paraje: String(row?.paraje || "").trim(),
+          estado: String(row?.estadoProductor || "Nuevo").trim() || "Nuevo",
+          activo: !["no", "false", "0", "inactivo"].includes(activoRaw),
+          requiereCambioContrasena: true,
+          historialIngresos: 0,
+          fechaRegistro: now,
+          creadoDesdeImportacionTurnos: true,
+          fuenteImportacion: fuente,
+          campaniaImportacion: campania,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      validos.forEach((item) => {
+        // Normalizar fecha y hora
+        const fecha = parseFechaImportOrNull(item.fecha);
+        const hora = normalizeHoraImport(item.hora);
+        if (!fecha || !hora) {
+          errores.push({ fila: index + 1, error: `Fecha u hora inválida: ${item.fecha} ${item.hora}` });
+          return;
+        }
+        // ID único por ipt-fecha-hora-tipoTurno
+        const turnoId = `${ipt}_${fecha}_${hora}_${item.tipoTurno}`.replace(/[^a-zA-Z0-9_\-]/g, "");
+        turnosToWrite.set(turnoId, {
+          ipt,
+          productorId: ipt,
+          productorNombre,
+          fecha,
+          hora,
+          tipoTurno: item.tipoTurno,
+          estado: item.estado,
+          motivo: item.motivo,
+          observacion: item.observacion,
+          campania,
+          fuenteImportacion: fuente,
+          activo: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+    });
+
+    const writes = [];
+    productoresToWrite.forEach((data, ipt) => {
+      writes.push({ ref: db.collection("productores").doc(String(ipt)), data, merge: true });
+    });
+    turnosToWrite.forEach((data, id) => {
+      writes.push({ ref: db.collection("turnos").doc(id), data, merge: true });
+    });
+
+    for (const group of chunkArray(writes, 450)) {
+      const batch = db.batch();
+      group.forEach((w) => batch.set(w.ref, w.data, { merge: w.merge }));
+      await batch.commit();
+    }
+
+    res.json({
+      message: "Importación de turnos procesada",
+      campania,
+      filasRecibidas: rows.length,
+      filasProcesadas,
+      filasSinTurnos,
+      productoresCreados: productoresToWrite.size,
+      turnosCreadosOActualizados: turnosToWrite.size,
+      productoresNoEncontrados: [],
+      productoresDetectadosComoNuevos: Array.from(productoresNoEncontrados),
+      errores,
+    });
+  } catch (e) {
+    console.error("Error al importar asignaciones de turnos:", e);
+    res.status(500).json({ error: "Error al importar asignaciones de turnos" });
+  }
+};
 // src/controllers/turnos.controller.js
 
 import { admin, db } from "../utils/firebase.js";
@@ -11,6 +156,12 @@ import {
 } from "../services/auditoriaTurnos.service.js";
 import { sendExpoPush } from "../utils/expoPush.js";
 import { getProductorBloqueo } from "../utils/productorAccess.js";
+
+const chunkArray = (items, size) => {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+};
 
 const DEFAULT_TURNOS_CAPACIDAD_DIA = 50;
 const TURNOS_CAPACIDAD_COLLECTION = "turnosCapacidad";
@@ -340,6 +491,40 @@ const normalizeYmdOrNull = (v) => {
   const s = String(v ?? "").trim();
   if (!s) return null;
   return isValidYmd(s) ? s : null;
+};
+
+const parseFechaImportOrNull = (v) => {
+  const ymd = normalizeYmdOrNull(v);
+  if (ymd) return ymd;
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const dmY = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmY) {
+    const day = Number(dmY[1]);
+    const month = Number(dmY[2]);
+    const year = Number(dmY[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  return null;
+};
+
+const normalizeHoraImport = (v) => {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
 const isWithinYmdRange = (ymd, desde, hasta) => {

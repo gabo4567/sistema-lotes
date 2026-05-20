@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
-import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig, crearTurnoManual } from '../services/turnos.service'
+import { getTurnos, setEstadoTurno, eliminarTurno, restaurarTurno, getCapacidadTurnoDia, setCapacidadTurnoDia, getTurnosConfig, setTurnosConfig, crearTurnoManual, importarAsignacionesTurnos } from '../services/turnos.service'
 import { insumosService } from '../services/insumos.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import { isTurnosHabilitados } from '../utils/turnos.utils'
@@ -198,6 +198,118 @@ const [cfgHabilitado, setCfgHabilitado] = useState(true)
 const [cfgRequiereLoteArado, setCfgRequiereLoteArado] = useState(true)
 const [cfgEstadoActual, setCfgEstadoActual] = useState(null)
 const [cfgMensaje, setCfgMensaje] = useState('')
+
+// Estados para importar Excel de turnos
+const importTurnosInputRef = React.useRef(null)
+const [importingTurnos, setImportingTurnos] = useState(false)
+const [importTurnosResult, setImportTurnosResult] = useState(null)
+
+const onClickImportTurnos = () => {
+  if (importingTurnos) return
+  importTurnosInputRef.current?.click()
+}
+
+const normalizeHoraExcel = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (!s) return ''
+  const m = s.match(/^(\d{1,2}):(\d{2})/)
+  if (!m) return ''
+  const hour = Number(m[1])
+  const minute = Number(m[2])
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return ''
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+const normalizeFechaExcel = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (!s) return ''
+  if (isValidYmd(s)) return s
+  const dmY = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+  if (dmY) {
+    const day = Number(dmY[1])
+    const month = Number(dmY[2])
+    const year = Number(dmY[3])
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+  }
+  const d = toDateSafe(raw)
+  return d ? toYmdLocal(d) : ''
+}
+
+const onImportTurnosExcel = async (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || importingTurnos) return
+  const lower = String(file.name || '').toLowerCase()
+  if (!lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+    await notify({ title: 'Archivo invalido', text: 'Selecciona un archivo .xls o .xlsx', icon: 'error' })
+    return
+  }
+  setImportingTurnos(true)
+  setImportTurnosResult(null)
+  try {
+    const XLSX = await import('xlsx')
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
+    const headerIndex = rows.findIndex(row => {
+      const first = String(row?.[0] || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return first.includes('ipt') || first.includes('productor') || first.includes('fet')
+    })
+    if (headerIndex < 0) throw new Error('No se encontró encabezado IPT/FET o Productor')
+    const headers = rows[headerIndex].map(h => String(h || '').trim())
+    const headerKeys = headers.map(h => String(h || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim())
+    const col = (...names) => {
+      const keys = names.map(n => String(n).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim())
+      return headerKeys.findIndex(h => keys.includes(h))
+    }
+    const iptCol = col('ipt', 'ipt fet', 'fet')
+    const productorCol = col('productor', 'nombre', 'apellido y nombre')
+    const fechaCol = col('fecha')
+    const horaCol = col('hora')
+    const tipoCol = col('tipo', 'tipo turno')
+    const estadoCol = col('estado')
+    if (iptCol < 0 || fechaCol < 0 || horaCol < 0) {
+      throw new Error('Faltan columnas obligatorias (IPT/FET, Fecha, Hora)')
+    }
+    const parsedRows = rows.slice(headerIndex + 1).map((row, idx) => {
+      const fecha = normalizeFechaExcel(row?.[fechaCol])
+      const hora = normalizeHoraExcel(row?.[horaCol])
+      return {
+        ipt: String(row?.[iptCol] || '').trim(),
+        productorNombre: productorCol >= 0 ? String(row?.[productorCol] || '').trim() : '',
+        fecha,
+        hora,
+        tipoTurno: tipoCol >= 0 ? String(row?.[tipoCol] || '').trim() : 'insumo',
+        estado: estadoCol >= 0 ? String(row?.[estadoCol] || '').trim() : 'pendiente',
+        _fila: headerIndex + idx + 2,
+      }
+    }).filter(row => row.ipt && row.fecha && row.hora)
+    if (parsedRows.length === 0) {
+      throw new Error('No se encontraron turnos válidos. Revisá IPT, Fecha (YYYY-MM-DD o DD/MM/AAAA) y Hora (HH:MM).')
+    }
+    const result = await importarAsignacionesTurnos({
+      fuente: file.name || 'excel',
+      rows: parsedRows,
+    })
+    setImportTurnosResult(result)
+    const creados = result?.turnosCreadosOActualizados ?? 0
+    const errores = Array.isArray(result?.errores) ? result.errores.length : 0
+    await notify({
+      title: 'Importación completada',
+      text: `${creados} turno(s) procesado(s)${errores ? `, ${errores} fila(s) con error` : ''}.`,
+      icon: creados > 0 ? 'success' : 'warning',
+    })
+    await loadData()
+  } catch (e) {
+    const msg = e?.response?.data?.error || e?.response?.data?.message || e?.message || 'No se pudo importar el Excel'
+    await notify({ title: 'Error al importar', text: msg, icon: 'error' })
+  } finally {
+    setImportingTurnos(false)
+  }
+}
 const [cfgDesde, setCfgDesde] = useState('')
 const [cfgHasta, setCfgHasta] = useState('')
 const [draftDesde, setDraftDesde] = useState('')
@@ -1158,7 +1270,22 @@ return (
         <h2 className="users-title" style={{ margin: 0 }}>Gestión de Turnos</h2>
         <p className="section-subtitle">Gestioná y visualizá los turnos asignados.</p>
       </div>
-      <div className="view-tabs" style={{ display: 'flex', gap: 8 }}>
+      <div className="view-tabs" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          className="btn secondary"
+          onClick={onClickImportTurnos}
+          disabled={importingTurnos}
+          style={{ minHeight: 38, padding: '0 14px', marginRight: 10 }}
+        >
+          {importingTurnos ? 'Importando...' : '↑ Importar Excel'}
+        </button>
+        <input
+          ref={importTurnosInputRef}
+          type="file"
+          accept=".xls,.xlsx"
+          style={{ display: 'none' }}
+          onChange={onImportTurnosExcel}
+        />
         <button 
           className={`btn turnos-toggle-btn ${viewMode === 'activos' ? 'turnos-toggle-btn--active' : ''}`} 
           onClick={() => setViewMode('activos')}
@@ -1172,6 +1299,11 @@ return (
       </div>
     </div>
 
+    {importTurnosResult ? (
+      <DismissibleAlert className="users-msg ok" style={{ marginBottom: 12 }}>
+        Importación: {importTurnosResult.count} turnos procesados.
+      </DismissibleAlert>
+    ) : null}
     {error ? (
       <DismissibleAlert className="users-msg err" style={{ marginBottom: 16 }}>
         <span>{error}</span>

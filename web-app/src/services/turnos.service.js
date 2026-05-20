@@ -1,4 +1,10 @@
 import api from '../api/axios'
+
+export const importarAsignacionesTurnos = async (payload) => {
+  const res = await api.post('/turnos/importar-asignaciones', payload, { timeout: 120000, _dedupe: false });
+  return res.data;
+}
+
 export const getTurnos = async (activo, { fechaDesde, fechaHasta, limit } = {})=>{
   const params = {}
   if (activo === true || activo === false) {
