@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { lotesService } from "../services/lotes.service";
-import Layout from "../components/Layout";
+import { confirmDialog } from "../utils/alerts";
 import MapPolygon from "../components/MapPolygon";
 import LoadingState from "../components/LoadingState";
 import DismissibleAlert from "../components/DismissibleAlert";
@@ -12,6 +12,7 @@ const LoteDetail = () => {
   const [obs, setObs] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const formatMetodo = (metodo) => {
     if (!metodo) return "-";
@@ -29,13 +30,38 @@ const LoteDetail = () => {
 
   const setEstado = async (estado) => {
     try {
+      setIsLoading(true);
       await lotesService.cambiarEstado(id, { estado, observacionesTecnico: obs });
       setMsg(`Estado actualizado a ${estado}`);
       setError("");
       setLote({ ...lote, estado, observacionesTecnico: obs });
     } catch (e) {
       setError(e?.response?.data?.error || e.message);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleActionRequest = async (action) => {
+    const isValidAction = action === "validar" || action === "rechazar";
+    if (!isValidAction) return;
+
+    const title = action === "validar" ? "Validar lote" : "Rechazar lote";
+    const text = action === "validar"
+      ? "Estás a punto de validar este lote. El productor será notificado de esto."
+      : "Estás a punto de rechazar este lote. El productor será notificado de este rechazo.";
+    const confirmButtonText = action === "validar" ? "Enviar" : "Rechazar";
+
+    const ok = await confirmDialog({
+      title,
+      text,
+      icon: "warning",
+      confirmButtonText,
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!ok) return;
+    setEstado(action === "validar" ? "Validado" : "Rechazado");
   };
 
   return (
@@ -95,8 +121,20 @@ const LoteDetail = () => {
               />
             </div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button className="btn" onClick={()=>setEstado('Validado')}>Validar</button>
-              <button className="btn" onClick={()=>setEstado('Rechazado')}>Rechazar</button>
+              <button 
+                className="btn" 
+                onClick={() => handleActionRequest("validar")}
+                disabled={isLoading}
+              >
+                Validar
+              </button>
+              <button 
+                className="btn" 
+                onClick={() => handleActionRequest("rechazar")}
+                disabled={isLoading}
+              >
+                Rechazar
+              </button>
             </div>
             {msg && <DismissibleAlert className="users-msg ok">{msg}</DismissibleAlert>}
             {error && <DismissibleAlert className="users-msg err">{error}</DismissibleAlert>}

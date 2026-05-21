@@ -4,6 +4,7 @@ import { getProductores } from '../services/productores.service'
 import { notify, confirmDialog } from '../utils/alerts'
 import LoadingState from '../components/LoadingState'
 import DismissibleAlert from '../components/DismissibleAlert'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 
 const InsumosList = () => {
@@ -35,6 +36,7 @@ const InsumosList = () => {
   const importInputRef = useRef(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [deliveryConfirmDialog, setDeliveryConfirmDialog] = useState({ isOpen: false, asignacion: null })
 
   const resumenProd = useMemo(() => {
     const list = Array.isArray(asignacionesProd) ? asignacionesProd : []
@@ -414,6 +416,54 @@ const InsumosList = () => {
       setAsignacionesProd([])
       load()
     } catch(e){ await notify({ title: e?.response?.data?.error || 'Error al eliminar asignaciones', icon: 'error' }) }
+  }
+
+  const handleOpenDeliveryModal = (asignacion) => {
+    setDeliveryConfirmDialog({ 
+      isOpen: true, 
+      asignacion: {
+        ...asignacion,
+        cantidadEntregadaEdit: asignacion.cantidadEntregada ?? 0
+      } 
+    })
+  }
+
+  const handleConfirmDelivery = async () => {
+    const { asignacion } = deliveryConfirmDialog
+    if (!asignacion) return
+
+    const cantidadAsignada = Number(asignacion.cantidadAsignada || 0)
+    const cantidadEntregada = Number(asignacion.cantidadEntregadaEdit || 0)
+    
+    if (cantidadEntregada < 0) {
+      setError('La cantidad entregada no puede ser negativa')
+      return
+    }
+    if (cantidadEntregada > cantidadAsignada) {
+      setError(`La cantidad entregada (${cantidadEntregada}) no puede ser mayor a la asignada (${cantidadAsignada})`)
+      return
+    }
+
+    try {
+      await insumosService.updateAsignacion(asignacion.id, { cantidadEntregada })
+      setDeliveryConfirmDialog({ isOpen: false, asignacion: null })
+      setError('')
+      const msg = cantidadEntregada === cantidadAsignada 
+        ? 'Entrega completada' 
+        : `Entrega parcial registrada: ${cantidadEntregada}/${cantidadAsignada}`
+      await notify({ title: msg, icon: 'success' })
+      load()
+      if (selectedProd) {
+        const list = await insumosService.asignacionesPorProductor(selectedProd)
+        setAsignacionesProd(Array.isArray(list) ? list : [])
+      }
+    } catch(e) {
+      setError(e?.response?.data?.error || 'Error al registrar entrega')
+    }
+  }
+
+  const handleCancelDelivery = () => {
+    setDeliveryConfirmDialog({ isOpen: false, asignacion: null })
   }
 
   const estadoLabel = (i)=> {
@@ -885,6 +935,7 @@ const InsumosList = () => {
                               <button className="btn-icon" title="Aumentar" onClick={()=>onQuickAdjust(a, +1)} style={{ ...miniBtnStyle }}>+1</button>
                               <button className="btn-icon" title="Disminuir" onClick={()=>onQuickAdjust(a, -1)} style={{ ...miniBtnStyle }}>-1</button>
                               <button className="btn-compact" onClick={()=>setModal({ type:'assign-edit', asign: a })} style={{ ...actionBtnStyle }}>Cantidad</button>
+                              <button className="btn-compact" onClick={()=>handleOpenDeliveryModal(a)} style={{ ...actionBtnStyle, backgroundColor: '#3b82f6', color: 'white' }}>Entrega</button>
                               <button className="btn-compact" onClick={()=>setModal({ type:'assign-desc', asign: a })} style={{ ...actionBtnStyle }}>Nota</button>
                             </div>
                           </td>
@@ -1154,6 +1205,54 @@ const InsumosList = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmación para registrar entregas parciales */}
+      <ConfirmDialog
+        isOpen={deliveryConfirmDialog.isOpen}
+        title="Registrar entrega de insumo"
+        message={
+          deliveryConfirmDialog.asignacion ? (
+            <>
+              <p style={{ marginTop: 0 }}>
+                <strong>Insumo:</strong> {insumoNames[deliveryConfirmDialog.asignacion.insumoId] || 'N/A'}
+              </p>
+              <p>
+                <strong>Cantidad asignada:</strong> {deliveryConfirmDialog.asignacion.cantidadAsignada || 0}
+              </p>
+              <p>
+                <strong>Cantidad actual entregada:</strong> {deliveryConfirmDialog.asignacion.cantidadEntregada || 0}
+              </p>
+              <div className="confirm-dialog-info-card">
+                <label className="confirm-dialog-info-label">
+                  Ingresa cantidad a registrar como entregada:
+                </label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  max={deliveryConfirmDialog.asignacion.cantidadAsignada || 0}
+                  value={deliveryConfirmDialog.asignacion.cantidadEntregadaEdit || 0}
+                  onChange={(e) => setDeliveryConfirmDialog(prev => ({
+                    ...prev,
+                    asignacion: {
+                      ...prev.asignacion,
+                      cantidadEntregadaEdit: e.target.value
+                    }
+                  }))}
+                  className="input-inst"
+                  style={{ width: '100%' }}
+                  placeholder="0"
+                />
+              </div>
+            </>
+          ) : null
+        }
+        confirmText="Confirmar entrega"
+        cancelText="Cancelar"
+        isDangerous={false}
+        isLoading={false}
+        onConfirm={handleConfirmDelivery}
+        onCancel={handleCancelDelivery}
+      />
     </div>
   )
 }

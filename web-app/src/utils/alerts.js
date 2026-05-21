@@ -1,5 +1,10 @@
 import Swal from "sweetalert2";
 
+const getSwalDarkClass = () => {
+  if (typeof document === 'undefined') return undefined;
+  return document.body.classList.contains('dark-mode') ? 'swal2-dark' : undefined;
+};
+
 export async function confirmDialog({ title = '¿Estás seguro?', text = '', icon = 'warning', confirmButtonText = 'Confirmar', cancelButtonText = 'Cancelar' } = {}) {
   const res = await Swal.fire({
     title,
@@ -11,6 +16,7 @@ export async function confirmDialog({ title = '¿Estás seguro?', text = '', ico
     confirmButtonColor: '#2E7D32',
     cancelButtonColor: '#c0392b',
     focusCancel: true,
+    customClass: { popup: getSwalDarkClass() },
   });
   return res.isConfirmed === true;
 }
@@ -28,6 +34,7 @@ export async function promptDialog({ title = 'Ingresar dato', text = '', inputLa
     cancelButtonText,
     confirmButtonColor: '#2E7D32',
     cancelButtonColor: '#c0392b',
+    customClass: { popup: getSwalDarkClass() },
     inputValidator: (value) => {
       if (!value || String(value).trim() === '') return 'Este campo es obligatorio';
       return undefined;
@@ -38,7 +45,14 @@ export async function promptDialog({ title = 'Ingresar dato', text = '', inputLa
 }
 
 export async function notify({ title = '', text = '', icon = 'info', confirmButtonText = 'Cerrar' } = {}) {
-  await Swal.fire({ title, text, icon, confirmButtonText, confirmButtonColor: '#2E7D32' });
+  await Swal.fire({
+    title,
+    text,
+    icon,
+    confirmButtonText,
+    confirmButtonColor: '#2E7D32',
+    customClass: { popup: getSwalDarkClass() },
+  });
 }
 
 // Helper genérico: recibe tipo, mensaje y función a ejecutar si confirma
